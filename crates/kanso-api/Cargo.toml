@@ -1,0 +1,24 @@
+[package]
+name = "kanso-api"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+sqlx = { workspace = true }
+kanso-core = { path = "../kanso-core" }
+
+[dev-dependencies]
+tokio = { workspace = true }
+http-body-util = "0.1"
+kanso-core = { path = "../kanso-core" }

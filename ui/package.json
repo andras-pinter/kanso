@@ -18,6 +18,7 @@
   "dependencies": {
     "@blocksuite/affine": "^0.22.4",
     "@blocksuite/integration-test": "^0.22.4",
+    "@tauri-apps/api": "^2.11.1",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "yjs": "^13.6.31"

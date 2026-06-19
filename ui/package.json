@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild:editor:dev": "node scripts/prebuild-editor-dev.mjs --force",
     "build": "tsc -b && vite build && node scripts/check-bundle-size.mjs",
     "preview": "vite preview",
     "typecheck": "tsc -b",

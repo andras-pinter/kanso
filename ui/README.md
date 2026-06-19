@@ -9,27 +9,46 @@ chunk used by the eventual Tauri app and exposes a tiny imperative API
 ```bash
 nvm use            # node 20.11
 npm install
+npm run dev        # vite dev server on http://localhost:5173 (see below)
 npm run build      # tsc -b && vite build && bundle-size guard
 npm run preview    # serve dist/ on http://localhost:4173
 npm test           # vitest
 npm run lint
 ```
 
-> **`npm run dev` is broken** for BlockSuite right now. See *Known gaps*.
+## Dev loop (`npm run dev`)
+
+Vite dev starts in ~300ms after a one-time **~12 s editor prebuild** on the
+first run (cached under `node_modules/.cache/kanso-editor-dev/`). After that
+the editor opens via the normal lazy import and renders in Chrome and
+Safari.
+
+- HMR is on for everything **outside** `src/editor/*` — the wrapper
+  (`App.tsx`, `EditorDemo.tsx`, plain styles, etc.) hot-reloads as usual.
+- Editing files **inside** `src/editor/*` requires restarting the dev
+  server. The prebuild script is invalidated automatically when those files
+  (or `package-lock.json`) change.
+- Force a rebuild: `node scripts/prebuild-editor-dev.mjs --force`.
+
+### Why the prebuild is needed
+
+BlockSuite ships raw TypeScript via its `exports` field, and
+`@blocksuite/data-view` has a circular import (`core` ↔ `view-presets` via
+`pc/table-view-ui-logic`). Esbuild's dep-optimizer (what `vite dev` uses to
+pre-bundle deps) flattens that cycle into a single chunk that emits
+`viewPresets = { tableViewMeta }` before `var tableViewMeta = …`, so
+`viewPresets.tableViewMeta` is `undefined` at module-init and the editor
+explodes inside `affine-block-database`. Rollup (what `vite build` uses)
+handles the same cycle correctly via live bindings.
+
+Workaround: on dev startup we run a real rollup build of
+`src/editor/internal.ts` into `node_modules/.cache/kanso-editor-dev/`, and a
+small Vite plugin redirects `./internal` imports inside `src/editor/index.ts`
+to that prebuilt artifact. See `scripts/prebuild-editor-dev.mjs` and the
+`prebuildEditor()` plugin in `vite.config.ts`. The prod build is unaffected
+(plugin is `apply: 'serve'`).
 
 ## Known gaps
-
-### ❌ `vite dev` doesn't work
-
-`vite-plugin-vanilla-extract` evaluates BlockSuite's `.css.ts` files via
-`vite-node`, which trips on TypeScript decorators in transitive BlockSuite
-imports. The error surfaces deep in the dep graph and there's no quick
-config flip that fixes it. **Use `npm run build && npm run preview` while
-iterating.**
-
-This is **owned by Wave 2, Session D** — they'll evaluate
-`@vanilla-extract/esbuild-plugin`, a pre-built editor bundle, or whatever
-combination unblocks `tauri dev`. Don't try to fix it from this branch.
 
 ### ⚠️ BlockSuite source isn't typecheck-clean
 

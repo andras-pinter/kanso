@@ -7,9 +7,23 @@ license.workspace = true
 [lints]
 workspace = true
 
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
 [dependencies]
+tauri = { version = "2", features = [] }
+axum = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+hex = "0.4"
+rand = "0.8"
+sqlx = { workspace = true }
 kanso-core = { path = "../kanso-core" }
 kanso-api = { path = "../kanso-api" }
+
+[dev-dependencies]
+tokio = { workspace = true }

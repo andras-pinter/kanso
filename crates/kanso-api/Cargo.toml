@@ -20,5 +20,7 @@ kanso-core = { path = "../kanso-core" }
 
 [dev-dependencies]
 tokio = { workspace = true }
+tower = { workspace = true }
 http-body-util = "0.1"
 kanso-core = { path = "../kanso-core" }
+tempfile = "3"

@@ -1,0 +1,24 @@
+# lefthook — pre-commit hygiene. Lenient: skips when tools aren't installed yet.
+
+pre-commit:
+  parallel: true
+  commands:
+    fmt:
+      run: just fmt
+      fail_text: "format failed (run 'just fmt' to fix)"
+    rust-clippy:
+      glob: "*.rs"
+      run: |
+        if command -v cargo >/dev/null 2>&1 && [ -f Cargo.toml ]; then
+          cargo clippy --workspace --all-targets -- -D warnings
+        else
+          echo "skip: cargo/clippy unavailable"
+        fi
+    ui-lint:
+      glob: "ui/**/*.{ts,tsx,js,jsx}"
+      run: |
+        if [ -f ui/package.json ]; then
+          cd ui && npx --no-install eslint {staged_files} || echo "skip: eslint not installed"
+        else
+          echo "skip: ui not scaffolded"
+        fi

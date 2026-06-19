@@ -1,0 +1,36 @@
+# Rust
+target/
+**/*.rs.bk
+Cargo.lock.bak
+
+# Node
+node_modules/
+dist/
+.vite/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Tauri
+crates/kanso-tauri/gen/
+crates/kanso-tauri/target/
+
+# macOS
+.DS_Store
+
+# Editors
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Coverage / misc
+coverage/
+*.tsbuildinfo
+
+# NOTE: .sqlx/ is intentionally NOT ignored — we commit sqlx offline query metadata.

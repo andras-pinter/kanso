@@ -3,9 +3,9 @@ pub mod card;
 pub mod column;
 pub mod tag;
 
-pub use board::BoardRepo;
-pub use card::CardRepo;
-pub use column::ColumnRepo;
+pub use board::{BoardPatch, BoardRepo};
+pub use card::{CardPatch, CardRepo};
+pub use column::{ColumnPatch, ColumnRepo};
 pub use tag::TagRepo;
 
 pub(crate) fn now_ms() -> i64 {

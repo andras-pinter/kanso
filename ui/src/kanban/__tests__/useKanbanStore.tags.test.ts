@@ -183,4 +183,39 @@ describe('useKanbanStore tag actions', () => {
     expect(s.tags.find((t) => t.id === 't1')).toBeUndefined();
     expect(s.cardTagMap.card1).toEqual([]);
   });
+
+  it('concurrent addCardTag rollback preserves later successful add', async () => {
+    await useKanbanStore.getState().loadTags();
+    // Reset links so card2 starts clean.
+    server.links.card2 = [];
+
+    // Programmable invoker: fail adds for t1, succeed for t2. Resolve t2
+    // first by making t1 wait on a manual gate.
+    let releaseT1Fail!: () => void;
+    const t1Gate = new Promise<void>((res) => {
+      releaseT1Fail = res;
+    });
+    __setInvoker(async (cmd, args) => {
+      if (cmd === 'card_tag_add') {
+        const a = (args ?? {}) as Record<string, unknown>;
+        if (a.tagId === 't1') {
+          await t1Gate;
+          throw new Error('t1 add boom');
+        }
+      }
+      return buildInvoker(server)(cmd, args);
+    });
+
+    const addA = useKanbanStore.getState().addCardTag('card2', 't1');
+    const addB = useKanbanStore.getState().addCardTag('card2', 't2');
+
+    await addB;
+    expect(useKanbanStore.getState().cardTagMap.card2).toEqual(['t1', 't2']);
+
+    releaseT1Fail();
+    await addA;
+
+    // Only t1 should be rolled back; t2 must survive.
+    expect(useKanbanStore.getState().cardTagMap.card2).toEqual(['t2']);
+  });
 });

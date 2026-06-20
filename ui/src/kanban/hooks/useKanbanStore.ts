@@ -76,7 +76,7 @@ interface KanbanState {
   cardTagMap: Record<string, string[]>;
 
   load: () => Promise<void>;
-  switchBoard: (id: string) => Promise<void>;
+  switchBoard: (id: string) => Promise<boolean>;
   setShowArchived: (v: boolean) => Promise<void>;
 
   boardCreate: (name: string) => Promise<BoardDto | null>;
@@ -269,16 +269,18 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
   },
 
   switchBoard: async (id) => {
-    if (get().currentBoardId === id) return;
+    if (get().currentBoardId === id) return true;
     const myVersion = ++loadVersion;
     try {
       const { columns, cardsByColumn } = await fetchBoardContents(id, get().showArchived);
-      if (myVersion !== loadVersion) return;
+      if (myVersion !== loadVersion) return false;
       persistBoardId(id);
       set({ currentBoardId: id, columns, cardsByColumn, selectedCardId: null, error: null });
+      return true;
     } catch (e) {
-      if (myVersion !== loadVersion) return;
+      if (myVersion !== loadVersion) return false;
       set({ error: formatError(e) });
+      return false;
     }
   },
 
@@ -658,10 +660,18 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
 
   openCardOnBoard: async (cardId, boardId) => {
     if (get().currentBoardId !== boardId) {
-      await get().switchBoard(boardId);
+      const committed = await get().switchBoard(boardId);
+      if (!committed) return;
     }
-    // switchBoard clears selectedCardId — set after the await so we win
-    // the race against its store write.
+    // Belt-and-braces: a newer board switch may have committed between our
+    // await and this set; only open the drawer if we're still on the right
+    // board and the card actually exists in the loaded data.
+    const s = get();
+    if (s.currentBoardId !== boardId) return;
+    const present = Object.values(s.cardsByColumn).some((cards) =>
+      cards.some((c) => c.id === cardId),
+    );
+    if (!present) return;
     set({ selectedCardId: cardId });
   },
 
@@ -765,13 +775,19 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
     const prev = get().cardTagMap[cardId] ?? [];
     if (prev.includes(tagId)) return;
     set((s) => ({
-      cardTagMap: { ...s.cardTagMap, [cardId]: [...prev, tagId] },
+      cardTagMap: { ...s.cardTagMap, [cardId]: [...(s.cardTagMap[cardId] ?? []), tagId] },
     }));
     try {
       await cardTagAdd(cardId, tagId);
     } catch (e) {
+      // Per-tag rollback: drop only this tag id from whatever the current
+      // list is, so a concurrent mutation that already settled isn't
+      // clobbered by restoring the pre-call snapshot.
       set((s) => ({
-        cardTagMap: { ...s.cardTagMap, [cardId]: prev },
+        cardTagMap: {
+          ...s.cardTagMap,
+          [cardId]: (s.cardTagMap[cardId] ?? []).filter((id) => id !== tagId),
+        },
         error: formatError(e),
       }));
     }
@@ -783,16 +799,24 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
     set((s) => ({
       cardTagMap: {
         ...s.cardTagMap,
-        [cardId]: prev.filter((id) => id !== tagId),
+        [cardId]: (s.cardTagMap[cardId] ?? []).filter((id) => id !== tagId),
       },
     }));
     try {
       await cardTagRemove(cardId, tagId);
     } catch (e) {
-      set((s) => ({
-        cardTagMap: { ...s.cardTagMap, [cardId]: prev },
-        error: formatError(e),
-      }));
+      // Per-tag rollback: re-add this tag id (idempotent) without touching
+      // concurrent mutations on other tags of the same card.
+      set((s) => {
+        const cur = s.cardTagMap[cardId] ?? [];
+        if (cur.includes(tagId)) {
+          return { error: formatError(e) };
+        }
+        return {
+          cardTagMap: { ...s.cardTagMap, [cardId]: [...cur, tagId] },
+          error: formatError(e),
+        };
+      });
     }
   },
 }));

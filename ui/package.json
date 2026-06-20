@@ -18,13 +18,19 @@
   "dependencies": {
     "@blocksuite/affine": "^0.22.4",
     "@blocksuite/integration-test": "^0.22.4",
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@tauri-apps/api": "^2.11.1",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
-    "yjs": "^13.6.31"
+    "yjs": "^13.6.31",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^24.12.3",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

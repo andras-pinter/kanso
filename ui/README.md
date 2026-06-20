@@ -4,7 +4,28 @@ React 19 + BlockSuite editor wrapper for **kanso**. Bootstraps the editor
 chunk used by the eventual Tauri app and exposes a tiny imperative API
 (`mountEditor`, `extractPlaintext`).
 
-## Quick start
+## Phase 1 UI
+
+The Phase 1 surface is a single-board Kanban view rendered from
+`src/kanban/`. It loads the seeded board ("To Do" / "In Progress" / "Done")
+via the `default_column` / `columns_list` / `cards_list` Tauri commands and
+supports:
+
+- Inline `+ Add card` per column (Enter submits, Esc cancels, blur with
+  content submits).
+- Drag a card up / down within a column or across columns. Drops snap to
+  the position of the card you hover, or append when you drop on empty
+  column space. The reorder is applied optimistically; the backend's
+  fractional position string replaces the optimistic row on success.
+- Clicking a card opens a right-side drawer with editable title + plain
+  `<textarea>` body. Field edits save on blur. The rich editor lands in
+  Phase 2 — the existing `EditorDemo` lazy-load wiring is preserved
+  behind the `DEBUG_EDITOR` flag in `App.tsx`.
+- Archiving a card from the drawer (soft delete) — archived cards stay
+  hidden in Phase 1.
+
+Column reordering, board switching, and the rich-text editor in the
+drawer are out of scope for Phase 1.
 
 ```bash
 nvm use            # node 20.11
@@ -106,7 +127,7 @@ inline extensions stay even if we never expose a latex block.
 | Chunk    | Budget    | Current        |
 | -------- | --------- | -------------- |
 | `editor` | 2 MB gz   | ~1.42 MB gz    |
-| `entry`  | (no cap)  | ~60 KB gz      |
+| `entry`  | (no cap)  | ~78 KB gz      |
 
 `scripts/check-bundle-size.mjs` runs after every `vite build` and fails CI
 if any chunk in `dist/assets/` exceeds 2 MB gzipped. The script prints the

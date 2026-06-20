@@ -15,6 +15,7 @@ use serde_json::{json, Value};
 use tower::ServiceExt;
 
 const TEST_TOKEN: &str = "test-token-roundtrip";
+const TEST_HOST: &str = "127.0.0.1:9999";
 
 async fn setup() -> (axum::Router, sqlx::SqlitePool, tempfile::TempDir) {
     let tmp = tempfile::tempdir().unwrap();
@@ -32,6 +33,7 @@ fn req_json(method: &str, uri: &str, body: Value) -> Request<Body> {
     Request::builder()
         .method(method)
         .uri(uri)
+        .header("host", TEST_HOST)
         .header("content-type", "application/json")
         .header("authorization", format!("Bearer {TEST_TOKEN}"))
         .body(Body::from(body.to_string()))
@@ -42,6 +44,7 @@ fn req(method: &str, uri: &str) -> Request<Body> {
     Request::builder()
         .method(method)
         .uri(uri)
+        .header("host", TEST_HOST)
         .header("authorization", format!("Bearer {TEST_TOKEN}"))
         .body(Body::empty())
         .unwrap()
@@ -51,6 +54,7 @@ fn req_no_auth(method: &str, uri: &str) -> Request<Body> {
     Request::builder()
         .method(method)
         .uri(uri)
+        .header("host", TEST_HOST)
         .body(Body::empty())
         .unwrap()
 }
@@ -75,6 +79,7 @@ async fn healthz_no_auth_still_ok() {
             Request::builder()
                 .method("GET")
                 .uri("/healthz")
+                .header("host", TEST_HOST)
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -103,6 +108,7 @@ async fn boards_list_with_wrong_token_returns_401() {
             Request::builder()
                 .method("GET")
                 .uri("/boards")
+                .header("host", TEST_HOST)
                 .header("authorization", "Bearer not-the-token")
                 .body(Body::empty())
                 .unwrap(),
@@ -129,6 +135,7 @@ async fn boards_list_with_malformed_auth_returns_401() {
             Request::builder()
                 .method("GET")
                 .uri("/boards")
+                .header("host", TEST_HOST)
                 .header("authorization", TEST_TOKEN)
                 .body(Body::empty())
                 .unwrap(),
@@ -146,6 +153,7 @@ async fn boards_create_without_auth_returns_401() {
             Request::builder()
                 .method("POST")
                 .uri("/boards")
+                .header("host", TEST_HOST)
                 .header("content-type", "application/json")
                 .body(Body::from(
                     serde_json::json!({"name": "Should Not Land"}).to_string(),
@@ -1121,4 +1129,191 @@ async fn board_card_tags_requires_auth() {
     assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
     let v = body_json(res).await;
     assert_eq!(v["error"], "unauthorized");
+}
+
+// ---- Wave 3: body limit, pagination, DNS-rebinding guard --------------------
+
+#[tokio::test]
+async fn body_over_limit_returns_413() {
+    let (app, _pool, _tmp) = setup().await;
+    // The global cap is 1 MiB; pad the name well past it.
+    let huge = "x".repeat(2 * 1024 * 1024);
+    let body = serde_json::json!({ "name": huge });
+    let res = app
+        .oneshot(req_json("POST", "/boards", body))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::PAYLOAD_TOO_LARGE);
+}
+
+#[tokio::test]
+async fn card_body_put_above_1mib_still_accepted() {
+    // The /cards/:id/body PUT keeps its own 8 MiB override; verify a payload
+    // bigger than the global 1 MiB cap doesn't get rejected by it.
+    use base64::Engine as _;
+    let (app, pool, _tmp) = setup().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
+
+    let payload = serde_json::json!({
+        "body_blocksuite_b64": base64::engine::general_purpose::STANDARD
+            .encode(vec![0u8; 1_500_000]),
+        "body_text": "x".repeat(1_500_000),
+    });
+    let res = app
+        .oneshot(req_json("PUT", &format!("/cards/{}/body", card.id), payload))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+}
+
+#[tokio::test]
+async fn boards_list_respects_limit_and_offset() {
+    let (app, pool, _tmp) = setup().await;
+    for name in ["A", "B", "C", "D", "E"] {
+        BoardRepo::create(&pool, name).await.unwrap();
+    }
+    let res = app
+        .oneshot(req("GET", "/boards?limit=2&offset=1"))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let v = body_json(res).await;
+    let arr = v.as_array().unwrap();
+    assert_eq!(arr.len(), 2);
+    assert_eq!(arr[0]["name"], "B");
+    assert_eq!(arr[1]["name"], "C");
+}
+
+#[tokio::test]
+async fn boards_list_limit_clamps_to_500() {
+    let (app, pool, _tmp) = setup().await;
+    for i in 0..3 {
+        BoardRepo::create(&pool, &format!("B{i}")).await.unwrap();
+    }
+    let res = app
+        .oneshot(req("GET", "/boards?limit=10000"))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let v = body_json(res).await;
+    assert_eq!(v.as_array().unwrap().len(), 3);
+}
+
+#[tokio::test]
+async fn boards_list_default_pagination_applies() {
+    let (app, pool, _tmp) = setup().await;
+    for i in 0..3 {
+        BoardRepo::create(&pool, &format!("B{i}")).await.unwrap();
+    }
+    let res = app.oneshot(req("GET", "/boards")).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let v = body_json(res).await;
+    let arr = v.as_array().unwrap();
+    assert!(arr.len() <= 100);
+    assert_eq!(arr.len(), 3);
+}
+
+#[tokio::test]
+async fn tag_cards_paginated_smoke() {
+    let (app, pool, _tmp) = setup().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let tag = kanso_core::repo::TagRepo::create(&pool, "t", None)
+        .await
+        .unwrap();
+    for i in 0..4 {
+        let c = CardRepo::create(&pool, &col.id, &format!("c{i}"))
+            .await
+            .unwrap();
+        CardRepo::add_tag(&pool, &c.id, &tag.id).await.unwrap();
+    }
+    let res = app
+        .oneshot(req("GET", &format!("/tags/{}/cards?limit=2", tag.id)))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let v = body_json(res).await;
+    assert_eq!(v.as_array().unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn request_with_attacker_host_returns_403() {
+    let (app, _pool, _tmp) = setup().await;
+    let r = Request::builder()
+        .method("GET")
+        .uri("/boards")
+        .header("host", "evil.com")
+        .header("authorization", format!("Bearer {TEST_TOKEN}"))
+        .body(Body::empty())
+        .unwrap();
+    let res = app.oneshot(r).await.unwrap();
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
+    let v = body_json(res).await;
+    assert_eq!(v["error"], "forbidden_host");
+}
+
+#[tokio::test]
+async fn request_with_loopback_host_passes() {
+    let (app, _pool, _tmp) = setup().await;
+    let r = Request::builder()
+        .method("GET")
+        .uri("/boards")
+        .header("host", "127.0.0.1:9999")
+        .header("authorization", format!("Bearer {TEST_TOKEN}"))
+        .body(Body::empty())
+        .unwrap();
+    let res = app.oneshot(r).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn request_with_localhost_host_passes() {
+    let (app, _pool, _tmp) = setup().await;
+    let r = Request::builder()
+        .method("GET")
+        .uri("/boards")
+        .header("host", "localhost:9999")
+        .header("authorization", format!("Bearer {TEST_TOKEN}"))
+        .body(Body::empty())
+        .unwrap();
+    let res = app.oneshot(r).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn request_missing_host_returns_403() {
+    let (app, _pool, _tmp) = setup().await;
+    let r = Request::builder()
+        .method("GET")
+        .uri("/boards")
+        .header("authorization", format!("Bearer {TEST_TOKEN}"))
+        .body(Body::empty())
+        .unwrap();
+    let res = app.oneshot(r).await.unwrap();
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn healthz_also_host_guarded() {
+    let (app, _pool, _tmp) = setup().await;
+
+    let bad = Request::builder()
+        .method("GET")
+        .uri("/healthz")
+        .header("host", "evil.com")
+        .body(Body::empty())
+        .unwrap();
+    let res = app.clone().oneshot(bad).await.unwrap();
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
+
+    let good = Request::builder()
+        .method("GET")
+        .uri("/healthz")
+        .header("host", "127.0.0.1:9999")
+        .body(Body::empty())
+        .unwrap();
+    let res = app.oneshot(good).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
 }

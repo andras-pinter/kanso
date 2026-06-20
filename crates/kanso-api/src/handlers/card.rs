@@ -12,12 +12,17 @@ use crate::dto::{
     MoveCardBody,
 };
 use crate::error::{require_non_empty, ApiError};
+use crate::handlers::resolve_page;
 use crate::AppState;
 
 #[derive(Debug, Deserialize)]
 struct ListCardsQuery {
     #[serde(default)]
     include_archived: bool,
+    #[serde(default)]
+    limit: Option<u32>,
+    #[serde(default)]
+    offset: Option<u32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -57,7 +62,10 @@ async fn list(
     Path(column_id): Path<String>,
     Query(q): Query<ListCardsQuery>,
 ) -> Result<Json<Vec<CardDto>>, ApiError> {
-    let rows = CardRepo::list_by_column(&state.pool, &column_id, q.include_archived).await?;
+    let (limit, offset) = resolve_page(q.limit, q.offset);
+    let rows =
+        CardRepo::list_by_column_paged(&state.pool, &column_id, q.include_archived, limit, offset)
+            .await?;
     Ok(Json(rows.into_iter().map(CardDto::from).collect()))
 }
 

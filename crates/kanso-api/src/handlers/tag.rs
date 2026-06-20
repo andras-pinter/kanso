@@ -7,10 +7,21 @@ use kanso_core::repo::{CardRepo, TagRepo};
 
 use crate::dto::{CardDto, CreateTagBody, TagDto, TagPatchDto};
 use crate::error::{require_non_empty, ApiError};
+use crate::handlers::resolve_page;
 use crate::AppState;
 
 #[derive(Debug, Deserialize)]
 struct ListTagsQuery {
+    #[serde(default)]
+    include_archived: bool,
+    #[serde(default)]
+    limit: Option<u32>,
+    #[serde(default)]
+    offset: Option<u32>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TagsForCardQuery {
     #[serde(default)]
     include_archived: bool,
 }
@@ -19,6 +30,10 @@ struct ListTagsQuery {
 struct CardsByTagQuery {
     #[serde(default)]
     include_archived: bool,
+    #[serde(default)]
+    limit: Option<u32>,
+    #[serde(default)]
+    offset: Option<u32>,
 }
 
 pub fn routes() -> Router<AppState> {
@@ -42,7 +57,8 @@ async fn list(
     State(state): State<AppState>,
     Query(q): Query<ListTagsQuery>,
 ) -> Result<Json<Vec<TagDto>>, ApiError> {
-    let rows = TagRepo::list(&state.pool, q.include_archived).await?;
+    let (limit, offset) = resolve_page(q.limit, q.offset);
+    let rows = TagRepo::list_paged(&state.pool, q.include_archived, limit, offset).await?;
     Ok(Json(rows.into_iter().map(TagDto::from).collect()))
 }
 
@@ -99,7 +115,7 @@ async fn hard_delete(
 async fn tags_for_card(
     State(state): State<AppState>,
     Path(id): Path<String>,
-    Query(q): Query<CardsByTagQuery>,
+    Query(q): Query<TagsForCardQuery>,
 ) -> Result<Json<Vec<TagDto>>, ApiError> {
     let rows = CardRepo::tags_for_card(&state.pool, &id, q.include_archived).await?;
     Ok(Json(rows.into_iter().map(TagDto::from).collect()))
@@ -126,6 +142,8 @@ async fn cards_with_tag(
     Path(id): Path<String>,
     Query(q): Query<CardsByTagQuery>,
 ) -> Result<Json<Vec<CardDto>>, ApiError> {
-    let rows = CardRepo::cards_with_tag(&state.pool, &id, q.include_archived).await?;
+    let (limit, offset) = resolve_page(q.limit, q.offset);
+    let rows =
+        CardRepo::cards_with_tag_paged(&state.pool, &id, q.include_archived, limit, offset).await?;
     Ok(Json(rows.into_iter().map(CardDto::from).collect()))
 }

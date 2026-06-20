@@ -61,6 +61,26 @@ impl TagRepo {
         Ok(rows)
     }
 
+    pub async fn list_paged(
+        pool: &SqlitePool,
+        include_archived: bool,
+        limit: u32,
+        offset: u32,
+    ) -> Result<Vec<Tag>> {
+        let sql = if include_archived {
+            "SELECT * FROM tags ORDER BY name COLLATE NOCASE ASC LIMIT ?1 OFFSET ?2"
+        } else {
+            "SELECT * FROM tags WHERE archived_at IS NULL \
+             ORDER BY name COLLATE NOCASE ASC LIMIT ?1 OFFSET ?2"
+        };
+        let rows = sqlx::query_as::<_, Tag>(sql)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(pool)
+            .await?;
+        Ok(rows)
+    }
+
     pub async fn get(pool: &SqlitePool, id: &str) -> Result<Tag> {
         sqlx::query_as::<_, Tag>("SELECT * FROM tags WHERE id = ?1")
             .bind(id)

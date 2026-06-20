@@ -269,6 +269,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
       if (myVersion !== loadVersion) return false;
       persistBoardId(id);
       set({ currentBoardId: id, columns, cardsByColumn, selectedCardId: null, error: null });
+      await get().reloadTagMap();
       return true;
     } catch (e) {
       if (myVersion !== loadVersion) return false;
@@ -286,6 +287,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
       const { columns, cardsByColumn } = await fetchBoardContents(id, v);
       if (myVersion !== loadVersion) return;
       set({ columns, cardsByColumn });
+      await get().reloadTagMap();
     } catch (e) {
       if (myVersion !== loadVersion) return;
       set({ error: formatError(e) });

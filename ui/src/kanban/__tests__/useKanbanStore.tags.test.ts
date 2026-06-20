@@ -227,4 +227,59 @@ describe('useKanbanStore tag actions', () => {
     // Only t1 should be rolled back; t2 must survive.
     expect(useKanbanStore.getState().cardTagMap.card2).toEqual(['t2']);
   });
+
+  it('switchBoard refreshes cardTagMap for the new board', async () => {
+    const linksByBoard: Record<string, Record<string, string[]>> = {
+      board1: { card1: ['t1'] },
+      board2: { card2: ['t2'], card3: ['t1', 't2'] },
+    };
+    __setInvoker(async (cmd, args) => {
+      const a = (args ?? {}) as Record<string, unknown>;
+      switch (cmd) {
+        case 'columns_list':
+          return [] as never;
+        case 'boards_list':
+          return [] as never;
+        case 'board_card_tags_list': {
+          const bid = a.boardId as string;
+          const links = linksByBoard[bid] ?? {};
+          const pairs: { card_id: string; tag_id: string }[] = [];
+          for (const [cid, tids] of Object.entries(links)) {
+            for (const tid of tids) pairs.push({ card_id: cid, tag_id: tid });
+          }
+          return pairs as never;
+        }
+        default:
+          return buildInvoker(server)(cmd, args);
+      }
+    });
+
+    useKanbanStore.setState({ currentBoardId: 'board1' });
+    await useKanbanStore.getState().loadTags();
+    expect(useKanbanStore.getState().cardTagMap).toEqual({ card1: ['t1'] });
+
+    const ok = await useKanbanStore.getState().switchBoard('board2');
+    expect(ok).toBe(true);
+    const m = useKanbanStore.getState().cardTagMap;
+    expect(m.card1).toBeUndefined();
+    expect(m.card2).toEqual(['t2']);
+    expect(m.card3?.sort()).toEqual(['t1', 't2']);
+  });
+
+  it('setShowArchived refreshes cardTagMap', async () => {
+    let bulkCalls = 0;
+    __setInvoker(async (cmd, args) => {
+      if (cmd === 'columns_list') return [] as never;
+      if (cmd === 'board_card_tags_list') {
+        bulkCalls += 1;
+        return [] as never;
+      }
+      return buildInvoker(server)(cmd, args);
+    });
+
+    await useKanbanStore.getState().loadTags();
+    const before = bulkCalls;
+    await useKanbanStore.getState().setShowArchived(true);
+    expect(bulkCalls).toBe(before + 1);
+  });
 });

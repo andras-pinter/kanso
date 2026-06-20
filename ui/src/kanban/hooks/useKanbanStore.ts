@@ -15,6 +15,8 @@ import {
   cardArchive,
   cardCreate,
   cardMove,
+  cardTagAdd,
+  cardTagRemove,
   cardUnarchive,
   cardUpdate,
   cardsList,
@@ -25,6 +27,13 @@ import {
   columnUpdate,
   columnsList,
   defaultColumn,
+  tagArchive,
+  tagCardsList,
+  tagCreate,
+  tagDelete,
+  tagUnarchive,
+  tagUpdate,
+  tagsList,
 } from '../api/client';
 import {
   applyColumnReorder,
@@ -36,6 +45,8 @@ import type {
   CardDto,
   CardPatch,
   ColumnDto,
+  TagDto,
+  TagPatch,
 } from '../types';
 
 type Status = 'idle' | 'loading' | 'ready' | 'error';
@@ -57,6 +68,12 @@ interface KanbanState {
   columns: ColumnDto[];
   cardsByColumn: Record<string, CardDto[]>;
   selectedCardId: string | null;
+  tags: TagDto[];
+  tagsLoaded: boolean;
+  // cardId -> tagIds. Refreshed via reloadTagMap whenever links change.
+  // Includes ALL tags (live + archived) so card chips don't blink when a
+  // tag flips archived; picker UIs filter by `tags.archived_at === null`.
+  cardTagMap: Record<string, string[]>;
 
   load: () => Promise<void>;
   switchBoard: (id: string) => Promise<void>;
@@ -77,6 +94,9 @@ interface KanbanState {
   reorderColumn: (resolution: ColumnDragResolution) => Promise<void>;
 
   selectCard: (id: string | null) => void;
+  // Switches to the card's board (if different) then opens its drawer.
+  // No-op if the board isn't reachable. Used by the Cmd+K palette.
+  openCardOnBoard: (cardId: string, boardId: string) => Promise<void>;
   addCard: (columnId: string, title: string) => Promise<void>;
   updateCard: (id: string, patch: CardPatch) => Promise<void>;
   archiveCard: (id: string) => Promise<void>;
@@ -87,6 +107,16 @@ interface KanbanState {
     targetColumnId: string,
     insertIndex: number,
   ) => Promise<void>;
+
+  loadTags: () => Promise<void>;
+  reloadTagMap: () => Promise<void>;
+  tagCreate: (name: string, color?: string | null) => Promise<TagDto | null>;
+  tagUpdate: (id: string, patch: TagPatch) => Promise<void>;
+  tagArchive: (id: string) => Promise<void>;
+  tagUnarchive: (id: string) => Promise<void>;
+  tagDelete: (id: string) => Promise<void>;
+  addCardTag: (cardId: string, tagId: string) => Promise<void>;
+  removeCardTag: (cardId: string, tagId: string) => Promise<void>;
 }
 
 function formatError(e: unknown): string {
@@ -155,6 +185,30 @@ async function fetchBoardContents(
   return { columns, cardsByColumn };
 }
 
+// Build a `cardId -> tagIds[]` map by walking the live tag list and
+// asking the backend which cards reference each tag. Round-trip count
+// is `1 + N_tags` (typical: 5-20 tags), which is fine for personal-app
+// scale. If this gets painful Phase 4 can collapse it into a single
+// JOIN endpoint.
+async function fetchCardTagMap(tags: readonly TagDto[]): Promise<Record<string, string[]>> {
+  if (tags.length === 0) return {};
+  const perTag = await Promise.all(
+    tags.map(async (t) => ({
+      tagId: t.id,
+      cards: await tagCardsList(t.id, true),
+    })),
+  );
+  const map: Record<string, string[]> = {};
+  for (const { tagId, cards } of perTag) {
+    for (const c of cards) {
+      const list = map[c.id];
+      if (list) list.push(tagId);
+      else map[c.id] = [tagId];
+    }
+  }
+  return map;
+}
+
 export const useKanbanStore = create<KanbanState>((set, get) => ({
   status: 'idle',
   error: null,
@@ -164,6 +218,9 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
   columns: [],
   cardsByColumn: {},
   selectedCardId: null,
+  tags: [],
+  tagsLoaded: false,
+  cardTagMap: {},
 
   selectCard: (id) => set({ selectedCardId: id }),
 
@@ -596,6 +653,146 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
         if (snapshotTo) restored[targetColumnId] = snapshotTo;
         return { cardsByColumn: restored, error: formatError(e) };
       });
+    }
+  },
+
+  openCardOnBoard: async (cardId, boardId) => {
+    if (get().currentBoardId !== boardId) {
+      await get().switchBoard(boardId);
+    }
+    // switchBoard clears selectedCardId — set after the await so we win
+    // the race against its store write.
+    set({ selectedCardId: cardId });
+  },
+
+  loadTags: async () => {
+    try {
+      const tags = await tagsList(true);
+      set({ tags, tagsLoaded: true });
+      const map = await fetchCardTagMap(tags);
+      set({ cardTagMap: map });
+    } catch (e) {
+      set({ error: formatError(e) });
+    }
+  },
+
+  reloadTagMap: async () => {
+    try {
+      const map = await fetchCardTagMap(get().tags);
+      set({ cardTagMap: map });
+    } catch (e) {
+      set({ error: formatError(e) });
+    }
+  },
+
+  tagCreate: async (name, color) => {
+    const trimmed = name.trim();
+    if (!trimmed) return null;
+    try {
+      const created = await tagCreate(trimmed, color ?? undefined);
+      set((s) => ({ tags: [...s.tags, created] }));
+      return created;
+    } catch (e) {
+      set({ error: formatError(e) });
+      return null;
+    }
+  },
+
+  tagUpdate: async (id, patch) => {
+    const prev = get().tags.find((t) => t.id === id);
+    if (!prev) return;
+    // Optimistic rename / recolor.
+    set((s) => ({
+      tags: s.tags.map((t) =>
+        t.id === id
+          ? {
+              ...t,
+              name: patch.name ?? t.name,
+              color: patch.color === undefined ? t.color : patch.color,
+            }
+          : t,
+      ),
+    }));
+    try {
+      const fresh = await tagUpdate(id, patch);
+      set((s) => ({ tags: s.tags.map((t) => (t.id === id ? fresh : t)) }));
+    } catch (e) {
+      set((s) => ({
+        tags: s.tags.map((t) => (t.id === id ? prev : t)),
+        error: formatError(e),
+      }));
+    }
+  },
+
+  tagArchive: async (id) => {
+    try {
+      await tagArchive(id);
+      const fresh = await tagsList(true);
+      set({ tags: fresh });
+    } catch (e) {
+      set({ error: formatError(e) });
+    }
+  },
+
+  tagUnarchive: async (id) => {
+    try {
+      await tagUnarchive(id);
+      const fresh = await tagsList(true);
+      set({ tags: fresh });
+    } catch (e) {
+      set({ error: formatError(e) });
+    }
+  },
+
+  tagDelete: async (id) => {
+    try {
+      await tagDelete(id);
+      set((s) => ({
+        tags: s.tags.filter((t) => t.id !== id),
+        cardTagMap: Object.fromEntries(
+          Object.entries(s.cardTagMap).map(([cid, ids]) => [
+            cid,
+            ids.filter((tid) => tid !== id),
+          ]),
+        ),
+      }));
+    } catch (e) {
+      set({ error: formatError(e) });
+    }
+  },
+
+  addCardTag: async (cardId, tagId) => {
+    const prev = get().cardTagMap[cardId] ?? [];
+    if (prev.includes(tagId)) return;
+    set((s) => ({
+      cardTagMap: { ...s.cardTagMap, [cardId]: [...prev, tagId] },
+    }));
+    try {
+      await cardTagAdd(cardId, tagId);
+    } catch (e) {
+      set((s) => ({
+        cardTagMap: { ...s.cardTagMap, [cardId]: prev },
+        error: formatError(e),
+      }));
+    }
+  },
+
+  removeCardTag: async (cardId, tagId) => {
+    const prev = get().cardTagMap[cardId] ?? [];
+    if (!prev.includes(tagId)) return;
+    set((s) => ({
+      cardTagMap: {
+        ...s.cardTagMap,
+        [cardId]: prev.filter((id) => id !== tagId),
+      },
+    }));
+    try {
+      await cardTagRemove(cardId, tagId);
+    } catch (e) {
+      set((s) => ({
+        cardTagMap: { ...s.cardTagMap, [cardId]: prev },
+        error: formatError(e),
+      }));
     }
   },
 }));

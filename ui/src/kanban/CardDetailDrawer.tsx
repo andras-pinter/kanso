@@ -2,6 +2,8 @@ import { lazy, Suspense, useRef, useState } from 'react';
 import { useKanbanStore } from './hooks/useKanbanStore';
 import type { CardDto } from './types';
 import type { CardBodyEditorHandle } from './CardBodyEditor';
+import TagPickerPopover from './TagPickerPopover';
+import DueDateEditor from './DueDateEditor';
 
 // Lazy boundary: keep ALL @blocksuite/* imports out of the entry chunk.
 const CardBodyEditor = lazy(() => import('./CardBodyEditor'));
@@ -113,6 +115,14 @@ export default function CardDetailDrawer({ card }: Props) {
               onChange={(e) => setTitle(e.target.value)}
               onBlur={onTitleBlur}
             />
+          </div>
+          <div className="kanso-field">
+            <span className="kanso-label">Tags</span>
+            <TagPickerPopover cardId={card.id} />
+          </div>
+          <div className="kanso-field">
+            <span className="kanso-label">Due date</span>
+            <DueDateEditor card={card} />
           </div>
           <div className="kanso-field">
             <span className="kanso-label">Body</span>

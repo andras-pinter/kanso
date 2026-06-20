@@ -19,6 +19,9 @@ import ColumnList from './ColumnList';
 import CardDetailDrawer from './CardDetailDrawer';
 import { CardOverlay } from './Card';
 import { useKanbanStore } from './hooks/useKanbanStore';
+import { useCmdK } from './hooks/useCmdK';
+import ManageTagsDrawer from './ManageTagsDrawer';
+import SearchPalette from './SearchPalette';
 import { resolveDragEnd } from './dragEnd';
 import { COLUMN_DRAG_PREFIX, filterCollidersForActive, parseColumnDragId, resolveColumnDragEnd } from './columnDragEnd';
 import type { CardDto } from './types';
@@ -28,6 +31,7 @@ export default function KanbanBoard() {
   const status = useKanbanStore((s) => s.status);
   const error = useKanbanStore((s) => s.error);
   const load = useKanbanStore((s) => s.load);
+  const loadTags = useKanbanStore((s) => s.loadTags);
   const cardsByColumn = useKanbanStore((s) => s.cardsByColumn);
   const moveCard = useKanbanStore((s) => s.moveCard);
   const reorderColumn = useKanbanStore((s) => s.reorderColumn);
@@ -38,11 +42,16 @@ export default function KanbanBoard() {
   const setShowArchived = useKanbanStore((s) => s.setShowArchived);
 
   const [draggingCardId, setDraggingCardId] = useState<string | null>(null);
+  const [manageTagsOpen, setManageTagsOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  useCmdK(useCallback(() => setPaletteOpen(true), []));
 
   useEffect(() => {
     if (!isTauri()) return;
     void load();
-  }, [load]);
+    void loadTags();
+  }, [load, loadTags]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -136,6 +145,22 @@ export default function KanbanBoard() {
           />
           <span>Show archived</span>
         </label>
+        <button
+          type="button"
+          className="kanso-btn"
+          onClick={() => setManageTagsOpen(true)}
+          title="Manage tags"
+        >
+          🏷 Manage tags
+        </button>
+        <button
+          type="button"
+          className="kanso-btn"
+          onClick={() => setPaletteOpen(true)}
+          title="Search (⌘K)"
+        >
+          🔍 Search
+        </button>
       </div>
       <DndContext
         sensors={sensors}
@@ -170,6 +195,8 @@ export default function KanbanBoard() {
         <DragOverlay>{draggingCard ? <CardOverlay card={draggingCard} /> : null}</DragOverlay>
       </DndContext>
       {selectedCard && <CardDetailDrawer key={selectedCard.id} card={selectedCard} />}
+      {manageTagsOpen && <ManageTagsDrawer onClose={() => setManageTagsOpen(false)} />}
+      {paletteOpen && <SearchPalette onClose={() => setPaletteOpen(false)} />}
       {error && status === 'ready' && (
         <div className="kanso-error" role="status">
           {error}

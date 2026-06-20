@@ -5,6 +5,8 @@ import { invoke } from '@tauri-apps/api/core';
 import type {
   BoardDto,
   BoardPatch,
+  CardBody,
+  CardBodySet,
   CardDto,
   CardPatch,
   ColumnDto,
@@ -92,3 +94,8 @@ export const cardMove = (id: string, args: CardMoveArgs): Promise<CardDto> =>
 export const cardArchive = (id: string): Promise<void> => invoker('card_archive', { id });
 
 export const cardUnarchive = (id: string): Promise<void> => invoker('card_unarchive', { id });
+
+export const cardBodyGet = (id: string): Promise<CardBody> => invoker('card_body_get', { id });
+
+export const cardBodySet = (id: string, body: CardBodySet): Promise<void> =>
+  invoker('card_body_set', { id, body });

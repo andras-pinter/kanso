@@ -453,3 +453,90 @@ async fn test_archive_missing_id_returns_not_found() {
         Err(KansoError::NotFound { entity: "card", .. })
     ));
 }
+
+// ---------- Phase 2: body get/set + FTS keep-in-sync ----------
+
+#[tokio::test]
+async fn test_card_body_get_returns_none_on_fresh_card() {
+    let pool = fixture_pool().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let card = CardRepo::create(&pool, &col.id, "Fresh").await.unwrap();
+
+    let body = CardRepo::get_body(&pool, &card.id).await.unwrap();
+    assert!(body.body_blocksuite.is_none());
+    assert!(body.body_text.is_none());
+    assert_eq!(body.updated_at, card.updated_at);
+}
+
+#[tokio::test]
+async fn test_card_body_set_roundtrips_bytes() {
+    let pool = fixture_pool().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
+
+    let blob: Vec<u8> = (0..=255u8).chain([0u8, 0, 0, 0xff, 0xfe]).collect();
+    CardRepo::set_body(&pool, &card.id, &blob, "carrots and beans")
+        .await
+        .unwrap();
+
+    let body = CardRepo::get_body(&pool, &card.id).await.unwrap();
+    assert_eq!(body.body_blocksuite.as_deref(), Some(&blob[..]));
+    assert_eq!(body.body_text.as_deref(), Some("carrots and beans"));
+    assert!(
+        body.updated_at >= card.updated_at,
+        "updated_at must advance: was {}, became {}",
+        card.updated_at,
+        body.updated_at
+    );
+}
+
+#[tokio::test]
+async fn test_card_body_set_updates_fts() {
+    let pool = fixture_pool().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let card = CardRepo::create(&pool, &col.id, "Lunch").await.unwrap();
+
+    CardRepo::set_body(&pool, &card.id, b"binary-doesnt-matter", "find me with carrots")
+        .await
+        .unwrap();
+
+    let hits = CardRepo::search(&pool, "carrots").await.unwrap();
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0].id, card.id);
+
+    // Overwriting body with a string that lacks the keyword must drop the hit.
+    CardRepo::set_body(&pool, &card.id, b"new-blob", "now it talks about beans")
+        .await
+        .unwrap();
+    let still_carrots = CardRepo::search(&pool, "carrots").await.unwrap();
+    assert!(
+        still_carrots.is_empty(),
+        "old keyword should not be findable after overwrite"
+    );
+    let beans = CardRepo::search(&pool, "beans").await.unwrap();
+    assert_eq!(beans.len(), 1);
+    assert_eq!(beans[0].id, card.id);
+}
+
+#[tokio::test]
+async fn test_card_body_set_returns_not_found_for_unknown_id() {
+    use kanso_core::KansoError;
+    let pool = fixture_pool().await;
+    assert!(matches!(
+        CardRepo::set_body(&pool, "00000000000000000000000000", b"x", "y").await,
+        Err(KansoError::NotFound { entity: "card", .. })
+    ));
+}
+
+#[tokio::test]
+async fn test_card_body_get_returns_not_found_for_unknown_id() {
+    use kanso_core::KansoError;
+    let pool = fixture_pool().await;
+    assert!(matches!(
+        CardRepo::get_body(&pool, "00000000000000000000000000").await,
+        Err(KansoError::NotFound { entity: "card", .. })
+    ));
+}

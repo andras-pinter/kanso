@@ -1,6 +1,10 @@
-import { useRef, useState } from 'react';
+import { lazy, Suspense, useRef, useState } from 'react';
 import { useKanbanStore } from './hooks/useKanbanStore';
 import type { CardDto } from './types';
+import type { CardBodyEditorHandle } from './CardBodyEditor';
+
+// Lazy boundary: keep ALL @blocksuite/* imports out of the entry chunk.
+const CardBodyEditor = lazy(() => import('./CardBodyEditor'));
 
 interface Props {
   card: CardDto;
@@ -15,9 +19,10 @@ export default function CardDetailDrawer({ card }: Props) {
   const selectCard = useKanbanStore((s) => s.selectCard);
 
   const [title, setTitle] = useState(card.title);
-  const [body, setBody] = useState(card.body_text ?? '');
   const [saved, setSaved] = useState(false);
+  const [closeBlocked, setCloseBlocked] = useState(false);
   const savedTimer = useRef<number | null>(null);
+  const editorRef = useRef<CardBodyEditorHandle | null>(null);
 
   const flashSaved = () => {
     setSaved(true);
@@ -35,23 +40,33 @@ export default function CardDetailDrawer({ card }: Props) {
     void updateCard(card.id, { title: trimmed }).then(flashSaved);
   };
 
-  const onBodyBlur = () => {
-    const next = body.length === 0 ? null : body;
-    if ((card.body_text ?? null) === next) return;
-    void updateCard(card.id, { body_text: next }).then(flashSaved);
-  };
-
   const onArchive = () => {
     void archiveCard(card.id);
   };
 
-  const close = () => selectCard(null);
+  // H4: Close must await the editor's pending save. If the save fails the
+  // editor surfaces a "Save failed — retry" pill; we keep the drawer open
+  // (and show a brief banner) so the user can resolve it.
+  const close = async (): Promise<void> => {
+    try {
+      await editorRef.current?.flush();
+    } catch {
+      setCloseBlocked(true);
+      return;
+    }
+    selectCard(null);
+  };
+
+  // Sync wrapper for JSX onClick handlers (React ignores the returned promise).
+  const onClose = (): void => {
+    void close();
+  };
 
   return (
     <>
       <div
         className="kanso-drawer-backdrop"
-        onClick={close}
+        onClick={onClose}
         aria-hidden="true"
         role="presentation"
       />
@@ -64,11 +79,16 @@ export default function CardDetailDrawer({ card }: Props) {
           >
             Saved
           </span>
-          <button type="button" className="kanso-btn" onClick={close}>
+          <button type="button" className="kanso-btn" onClick={onClose}>
             Close
           </button>
         </header>
         <div className="kanso-drawer-body">
+          {closeBlocked && (
+            <div className="kanso-editor-banner" role="alert">
+              Can’t close yet — your last edit hasn’t saved. Retry above, then try again.
+            </div>
+          )}
           <div className="kanso-field">
             <label className="kanso-label" htmlFor="kanso-card-title">
               Title
@@ -82,17 +102,10 @@ export default function CardDetailDrawer({ card }: Props) {
             />
           </div>
           <div className="kanso-field">
-            <label className="kanso-label" htmlFor="kanso-card-body">
-              Body
-            </label>
-            <textarea
-              id="kanso-card-body"
-              className="kanso-body-textarea"
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              onBlur={onBodyBlur}
-              placeholder="Notes… (rich editor coming in Phase 2)"
-            />
+            <span className="kanso-label">Body</span>
+            <Suspense fallback={<div className="kanso-editor-loading">Loading editor…</div>}>
+              <CardBodyEditor cardId={card.id} ref={editorRef} />
+            </Suspense>
           </div>
         </div>
         <footer className="kanso-drawer-footer">

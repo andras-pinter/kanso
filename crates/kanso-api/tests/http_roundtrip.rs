@@ -439,3 +439,126 @@ async fn archive_missing_card_returns_404() {
         .unwrap();
     assert_eq!(res.status(), StatusCode::NOT_FOUND);
 }
+
+#[tokio::test]
+async fn card_body_put_get_roundtrip_via_http() {
+    use base64::engine::general_purpose::STANDARD as B64;
+    use base64::Engine as _;
+
+    let (app, pool, _tmp) = setup().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let card = CardRepo::create(&pool, &col.id, "Body").await.unwrap();
+
+    // Fresh card: both blob fields null.
+    let res = app
+        .clone()
+        .oneshot(req("GET", &format!("/cards/{}/body", card.id)))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let fresh: kanso_api::CardBodyDto = serde_json::from_value(body_json(res).await).unwrap();
+    assert!(fresh.body_blocksuite_b64.is_none());
+    assert!(fresh.body_text.is_none());
+
+    // Round-trip a real-ish blob with bytes a JSON string cannot hold.
+    let blob: Vec<u8> = (0..=255u8).collect();
+    let blob_b64 = B64.encode(&blob);
+    let res = app
+        .clone()
+        .oneshot(req_json(
+            "PUT",
+            &format!("/cards/{}/body", card.id),
+            json!({
+                "body_blocksuite_b64": blob_b64,
+                "body_text": "the answer is carrots",
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+
+    let res = app
+        .clone()
+        .oneshot(req("GET", &format!("/cards/{}/body", card.id)))
+        .await
+        .unwrap();
+    let got: kanso_api::CardBodyDto = serde_json::from_value(body_json(res).await).unwrap();
+    assert_eq!(got.body_blocksuite_b64.as_deref(), Some(blob_b64.as_str()));
+    assert_eq!(got.body_text.as_deref(), Some("the answer is carrots"));
+    assert!(got.updated_at >= card.updated_at);
+
+    // FTS must see the new body_text.
+    let hits = CardRepo::search(&pool, "carrots").await.unwrap();
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0].id, card.id);
+}
+
+#[tokio::test]
+async fn card_body_get_unknown_returns_404() {
+    let (app, _pool, _tmp) = setup().await;
+    let res = app
+        .oneshot(req("GET", "/cards/00000000000000000000000000/body"))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn card_body_put_invalid_base64_returns_400() {
+    let (app, pool, _tmp) = setup().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
+
+    let res = app
+        .oneshot(req_json(
+            "PUT",
+            &format!("/cards/{}/body", card.id),
+            json!({"body_blocksuite_b64": "not!base64!@#$", "body_text": "x"}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn card_body_put_under_limit_succeeds() {
+    let (app, pool, _tmp) = setup().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
+
+    // ~7 MiB of valid base64 ("A" decodes to a single zero byte; padded to a multiple of 4).
+    let mut b64 = "A".repeat(7 * 1024 * 1024);
+    while b64.len() % 4 != 0 {
+        b64.push('=');
+    }
+
+    let body = json!({"body_blocksuite_b64": b64, "body_text": "x"});
+    let res = app
+        .oneshot(req_json("PUT", &format!("/cards/{}/body", card.id), body))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+}
+
+#[tokio::test]
+async fn card_body_put_over_limit_returns_413() {
+    let (app, pool, _tmp) = setup().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
+
+    let mut b64 = "A".repeat(9 * 1024 * 1024);
+    while b64.len() % 4 != 0 {
+        b64.push('=');
+    }
+
+    let body = json!({"body_blocksuite_b64": b64, "body_text": "x"});
+    let res = app
+        .oneshot(req_json("PUT", &format!("/cards/{}/body", card.id), body))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::PAYLOAD_TOO_LARGE);
+}

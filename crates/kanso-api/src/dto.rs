@@ -204,3 +204,25 @@ pub struct MoveCardBody {
     #[serde(default)]
     pub after: Option<String>,
 }
+
+// ---------- Card body (BlockSuite blob) ----------
+
+/// Response shape for `GET /cards/:id/body`. Mirrors the Tauri command
+/// `card_body_get`. Both blob fields are `None` until the card has been
+/// edited for the first time.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CardBodyDto {
+    /// Yjs `encodeStateAsUpdate` snapshot, base64 (STANDARD, padded).
+    pub body_blocksuite_b64: Option<String>,
+    /// Plaintext mirror used by FTS5.
+    pub body_text: Option<String>,
+    pub updated_at: i64,
+}
+
+/// Request shape for `PUT /cards/:id/body`. Always sets both columns
+/// atomically — there is no patch semantics here.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CardBodySetDto {
+    pub body_blocksuite_b64: String,
+    pub body_text: String,
+}

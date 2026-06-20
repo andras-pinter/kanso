@@ -445,6 +445,53 @@ body {
   line-height: 1.55;
 }
 
+.kanso-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kanso-editor-status {
+  min-height: 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted, #6b7280);
+}
+
+.kanso-editor-loading {
+  font-size: 12px;
+  color: var(--text-muted, #6b7280);
+}
+
+.kanso-editor-banner {
+  font-size: 12px;
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.kanso-editor-host {
+  min-height: 240px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  padding: 8px 10px;
+}
+
+.kanso-save-error {
+  font-size: 12px;
+  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
 .kanso-drawer-footer {
   border-top: 1px solid var(--border);
   padding: 12px 24px;

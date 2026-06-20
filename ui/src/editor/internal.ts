@@ -61,7 +61,7 @@ function createWorkspace(): Workspace {
   return ws;
 }
 
-function seedDoc(workspace: Workspace): Store {
+function seedDoc(workspace: Workspace, initialText?: string): Store {
   workspace.meta.initialize();
   const doc = workspace.createDoc(DOC_ID);
   const store = doc.getStore({ id: DOC_ID });
@@ -69,7 +69,12 @@ function seedDoc(workspace: Workspace): Store {
     const rootId = store.addBlock('affine:page', { title: new Text('Untitled') });
     store.addBlock('affine:surface', {}, rootId);
     const noteId = store.addBlock('affine:note', {}, rootId);
-    store.addBlock('affine:paragraph', { text: new Text('') }, noteId);
+    // Auto-convert legacy plaintext bodies (Wave 5 textarea era) into a
+    // single paragraph block. Single block round-trips the text verbatim
+    // through extractPlaintext — splitting on '\n\n' would lose blank-line
+    // separators on the way back out, so we keep it whole.
+    const seed = initialText && initialText.length > 0 ? initialText : '';
+    store.addBlock('affine:paragraph', { text: new Text(seed) }, noteId);
   });
   return store;
 }
@@ -96,7 +101,9 @@ export async function mountEditor(
   opts: EditorOptions = {}
 ): Promise<EditorHandle> {
   const workspace = createWorkspace();
-  const store = opts.initialDoc ? hydrateDoc(workspace, opts.initialDoc) : seedDoc(workspace);
+  const store = opts.initialDoc
+    ? hydrateDoc(workspace, opts.initialDoc)
+    : seedDoc(workspace, opts.initialText);
 
   const viewManager = getViewManager();
   const runtimeExts = buildRuntimeExtensions();

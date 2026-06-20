@@ -4,7 +4,7 @@ pub mod column;
 pub mod tag;
 
 pub use board::{BoardPatch, BoardRepo};
-pub use card::{CardBody, CardPatch, CardRepo};
+pub use card::{CardBody, CardPatch, CardRepo, CardSearchHit};
 pub use column::{ColumnPatch, ColumnRepo};
 pub use tag::{TagPatch, TagRepo};
 

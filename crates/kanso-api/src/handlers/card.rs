@@ -8,7 +8,8 @@ use serde::Deserialize;
 use kanso_core::repo::CardRepo;
 
 use crate::dto::{
-    CardBodyDto, CardBodySetDto, CardDto, CardPatchDto, CreateCardBody, MoveCardBody,
+    CardBodyDto, CardBodySetDto, CardDto, CardPatchDto, CardSearchHitDto, CreateCardBody,
+    MoveCardBody,
 };
 use crate::error::{require_non_empty, ApiError};
 use crate::AppState;
@@ -142,7 +143,7 @@ async fn put_body(
 async fn search(
     State(state): State<AppState>,
     Query(q): Query<SearchCardsQuery>,
-) -> Result<Json<Vec<CardDto>>, ApiError> {
-    let rows = CardRepo::search(&state.pool, &q.q, q.include_archived).await?;
-    Ok(Json(rows.into_iter().map(CardDto::from).collect()))
+) -> Result<Json<Vec<CardSearchHitDto>>, ApiError> {
+    let rows = CardRepo::search_with_context(&state.pool, &q.q, q.include_archived).await?;
+    Ok(Json(rows.into_iter().map(CardSearchHitDto::from).collect()))
 }

@@ -1,11 +1,13 @@
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::{Json, Router};
+use base64::engine::general_purpose::STANDARD as B64;
+use base64::Engine as _;
 use serde::Deserialize;
 
 use kanso_core::repo::CardRepo;
 
-use crate::dto::{CardDto, CardPatchDto, CreateCardBody, MoveCardBody};
+use crate::dto::{CardBodyDto, CardBodySetDto, CardDto, CardPatchDto, CreateCardBody, MoveCardBody};
 use crate::error::{require_non_empty, ApiError};
 use crate::AppState;
 
@@ -25,6 +27,10 @@ pub fn routes() -> Router<AppState> {
         .route("/cards/:id/move", axum::routing::post(move_card))
         .route("/cards/:id/archive", axum::routing::post(archive))
         .route("/cards/:id/unarchive", axum::routing::post(unarchive))
+        .route(
+            "/cards/:id/body",
+            axum::routing::get(get_body).put(put_body),
+        )
 }
 
 async fn list(
@@ -85,4 +91,30 @@ async fn unarchive(
 ) -> Result<StatusCode, ApiError> {
     CardRepo::unarchive(&state.pool, &id).await?;
     Ok(StatusCode::OK)
+}
+
+async fn get_body(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<CardBodyDto>, ApiError> {
+    let body = CardRepo::get_body(&state.pool, &id).await?;
+    Ok(Json(CardBodyDto {
+        body_blocksuite_b64: body.body_blocksuite.as_deref().map(|b| B64.encode(b)),
+        body_text: body.body_text,
+        updated_at: body.updated_at,
+    }))
+}
+
+async fn put_body(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<CardBodySetDto>,
+) -> Result<StatusCode, ApiError> {
+    let blob = B64.decode(body.body_blocksuite_b64.as_bytes()).map_err(|e| {
+        ApiError(kanso_core::KansoError::InvalidInput(format!(
+            "body_blocksuite_b64 is not valid base64: {e}"
+        )))
+    })?;
+    CardRepo::set_body(&state.pool, &id, &blob, &body.body_text).await?;
+    Ok(StatusCode::NO_CONTENT)
 }

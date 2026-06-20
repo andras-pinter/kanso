@@ -1,4 +1,6 @@
-use kanso_api::{CardDto, CardPatchDto};
+use base64::engine::general_purpose::STANDARD as B64;
+use base64::Engine as _;
+use kanso_api::{CardBodyDto, CardBodySetDto, CardDto, CardPatchDto};
 use kanso_core::repo::CardRepo;
 use tauri::State;
 
@@ -67,6 +69,32 @@ pub async fn card_archive(state: State<'_, RuntimeState>, id: String) -> Result<
 #[tauri::command]
 pub async fn card_unarchive(state: State<'_, RuntimeState>, id: String) -> Result<(), AppError> {
     CardRepo::unarchive(&state.pool, &id).await?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn card_body_get(
+    state: State<'_, RuntimeState>,
+    id: String,
+) -> Result<CardBodyDto, AppError> {
+    let body = CardRepo::get_body(&state.pool, &id).await?;
+    Ok(CardBodyDto {
+        body_blocksuite_b64: body.body_blocksuite.as_deref().map(|b| B64.encode(b)),
+        body_text: body.body_text,
+        updated_at: body.updated_at,
+    })
+}
+
+#[tauri::command]
+pub async fn card_body_set(
+    state: State<'_, RuntimeState>,
+    id: String,
+    body: CardBodySetDto,
+) -> Result<(), AppError> {
+    let blob = B64
+        .decode(body.body_blocksuite_b64.as_bytes())
+        .map_err(|e| AppError::invalid(format!("body_blocksuite_b64 is not valid base64: {e}")))?;
+    CardRepo::set_body(&state.pool, &id, &blob, &body.body_text).await?;
     Ok(())
 }
 

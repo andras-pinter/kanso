@@ -8,6 +8,8 @@ import {
   boardUpdate,
   boardsList,
   cardArchive,
+  cardBodyGet,
+  cardBodySet,
   cardCreate,
   cardMove,
   cardUnarchive,
@@ -115,6 +117,19 @@ describe('kanban api client', () => {
       {
         cmd: 'card_move',
         args: { id: 'k1', targetColumnId: 'c2', before: undefined, after: 'k3' },
+      },
+    ]);
+  });
+
+  it('forwards card body get / set with the canonical arg shape', async () => {
+    await cardBodyGet('k1');
+    await cardBodySet('k1', { body_blocksuite_b64: 'AAA=', body_text: 'hi' });
+
+    expect(calls).toEqual([
+      { cmd: 'card_body_get', args: { id: 'k1' } },
+      {
+        cmd: 'card_body_set',
+        args: { id: 'k1', body: { body_blocksuite_b64: 'AAA=', body_text: 'hi' } },
       },
     ]);
   });

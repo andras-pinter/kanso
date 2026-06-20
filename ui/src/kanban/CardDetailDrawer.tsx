@@ -1,6 +1,9 @@
-import { useRef, useState } from 'react';
+import { lazy, Suspense, useRef, useState } from 'react';
 import { useKanbanStore } from './hooks/useKanbanStore';
 import type { CardDto } from './types';
+
+// Lazy boundary: keep ALL @blocksuite/* imports out of the entry chunk.
+const CardBodyEditor = lazy(() => import('./CardBodyEditor'));
 
 interface Props {
   card: CardDto;
@@ -15,7 +18,6 @@ export default function CardDetailDrawer({ card }: Props) {
   const selectCard = useKanbanStore((s) => s.selectCard);
 
   const [title, setTitle] = useState(card.title);
-  const [body, setBody] = useState(card.body_text ?? '');
   const [saved, setSaved] = useState(false);
   const savedTimer = useRef<number | null>(null);
 
@@ -33,12 +35,6 @@ export default function CardDetailDrawer({ card }: Props) {
     }
     if (trimmed === card.title) return;
     void updateCard(card.id, { title: trimmed }).then(flashSaved);
-  };
-
-  const onBodyBlur = () => {
-    const next = body.length === 0 ? null : body;
-    if ((card.body_text ?? null) === next) return;
-    void updateCard(card.id, { body_text: next }).then(flashSaved);
   };
 
   const onArchive = () => {
@@ -82,17 +78,10 @@ export default function CardDetailDrawer({ card }: Props) {
             />
           </div>
           <div className="kanso-field">
-            <label className="kanso-label" htmlFor="kanso-card-body">
-              Body
-            </label>
-            <textarea
-              id="kanso-card-body"
-              className="kanso-body-textarea"
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              onBlur={onBodyBlur}
-              placeholder="Notes… (rich editor coming in Phase 2)"
-            />
+            <span className="kanso-label">Body</span>
+            <Suspense fallback={<div className="kanso-editor-loading">Loading editor…</div>}>
+              <CardBodyEditor cardId={card.id} />
+            </Suspense>
           </div>
         </div>
         <footer className="kanso-drawer-footer">

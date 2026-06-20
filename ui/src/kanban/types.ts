@@ -33,6 +33,17 @@ export interface CardDto {
   archived_at: number | null;
 }
 
+export interface CardBody {
+  body_blocksuite_b64: string | null;
+  body_text: string | null;
+  updated_at: number;
+}
+
+export interface CardBodySet {
+  body_blocksuite_b64: string;
+  body_text: string;
+}
+
 export interface SeedIds {
   board_id: string;
   column_id: string;

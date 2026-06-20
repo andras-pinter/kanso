@@ -115,6 +115,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             cmd_card::card_move,
             cmd_card::card_archive,
             cmd_card::card_unarchive,
+            cmd_card::card_body_get,
+            cmd_card::card_body_set,
             // Legacy aliases — keep until Wave 5 migrates the UI.
             cmd_card::create_card,
             cmd_card::list_cards,

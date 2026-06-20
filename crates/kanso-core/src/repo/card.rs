@@ -18,6 +18,15 @@ pub struct CardPatch {
     pub due_at: Option<Option<i64>>,
 }
 
+/// Snapshot of a card's body columns. `None` blobs mean the card has never
+/// had its body set; callers should mount an empty editor in that case.
+#[derive(Debug, Clone)]
+pub struct CardBody {
+    pub body_blocksuite: Option<Vec<u8>>,
+    pub body_text: Option<String>,
+    pub updated_at: i64,
+}
+
 pub struct CardRepo;
 
 impl CardRepo {
@@ -264,19 +273,25 @@ impl CardRepo {
         })
     }
 
+    /// Atomically write both columns of a card body and bump `updated_at`.
+    /// Returns `NotFound` if `id` does not exist.
     pub async fn set_body(
         pool: &SqlitePool,
         id: &str,
         body_blocksuite: &[u8],
         body_text: &str,
     ) -> Result<()> {
+        let now = now_ms();
+        let mut tx = pool.begin().await?;
         let res = sqlx::query(
-            "UPDATE cards SET body_blocksuite = ?1, body_text = ?2 WHERE id = ?3",
+            "UPDATE cards SET body_blocksuite = ?1, body_text = ?2, updated_at = ?3 \
+             WHERE id = ?4",
         )
         .bind(body_blocksuite)
         .bind(body_text)
+        .bind(now)
         .bind(id)
-        .execute(pool)
+        .execute(&mut *tx)
         .await?;
 
         if res.rows_affected() == 0 {
@@ -285,7 +300,31 @@ impl CardRepo {
                 id: id.to_string(),
             });
         }
+        tx.commit().await?;
         Ok(())
+    }
+
+    /// Read the raw Yjs blob, plaintext, and current `updated_at` for `id`.
+    /// `NotFound` if the card doesn't exist; both blob columns may be `None`
+    /// on a card that has never had its body set.
+    pub async fn get_body(pool: &SqlitePool, id: &str) -> Result<CardBody> {
+        let row: Option<(Option<Vec<u8>>, Option<String>, i64)> = sqlx::query_as(
+            "SELECT body_blocksuite, body_text, updated_at FROM cards WHERE id = ?1",
+        )
+        .bind(id)
+        .fetch_optional(pool)
+        .await?;
+        match row {
+            Some((blob, text, updated_at)) => Ok(CardBody {
+                body_blocksuite: blob,
+                body_text: text,
+                updated_at,
+            }),
+            None => Err(KansoError::NotFound {
+                entity: "card",
+                id: id.to_string(),
+            }),
+        }
     }
 
     pub async fn search(pool: &SqlitePool, query: &str) -> Result<Vec<Card>> {

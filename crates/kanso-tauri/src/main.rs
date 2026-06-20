@@ -1,9 +1,8 @@
-use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
 
-use kanso_api::{AppState, CardDto};
-use kanso_core::repo::{BoardRepo, CardRepo, ColumnRepo};
+use kanso_api::AppState;
+use kanso_core::repo::{BoardRepo, ColumnRepo};
 use rand::RngCore;
 use serde::Serialize;
 use sqlx::SqlitePool;
@@ -11,45 +10,27 @@ use tauri::{Manager, State};
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 
+mod commands;
 mod error;
-use error::AppError;
+
+use commands::{board as cmd_board, card as cmd_card, column as cmd_column};
 
 #[derive(Clone)]
-struct RuntimeState {
-    pool: SqlitePool,
-    seed: Arc<SeedIds>,
-    api_port: u16,
+pub struct RuntimeState {
+    pub pool: SqlitePool,
+    pub seed: Arc<SeedIds>,
+    pub api_port: u16,
+}
+
+struct Bootstrap {
+    state: RuntimeState,
+    listener: TcpListener,
 }
 
 #[derive(Debug, Clone, Serialize)]
-struct SeedIds {
-    board_id: String,
-    column_id: String,
-}
-
-#[tauri::command]
-async fn create_card(
-    state: State<'_, RuntimeState>,
-    title: String,
-    column_id: Option<String>,
-) -> Result<CardDto, AppError> {
-    let title = title.trim();
-    if title.is_empty() {
-        return Err(AppError::invalid("title must not be empty"));
-    }
-    let column_id = column_id.unwrap_or_else(|| state.seed.column_id.clone());
-    let card = CardRepo::create(&state.pool, &column_id, title).await?;
-    Ok(CardDto::from(card))
-}
-
-#[tauri::command]
-async fn list_cards(
-    state: State<'_, RuntimeState>,
-    column_id: Option<String>,
-) -> Result<Vec<CardDto>, AppError> {
-    let column_id = column_id.unwrap_or_else(|| state.seed.column_id.clone());
-    let cards = CardRepo::list_by_column(&state.pool, &column_id).await?;
-    Ok(cards.into_iter().map(CardDto::from).collect())
+pub struct SeedIds {
+    pub board_id: String,
+    pub column_id: String,
 }
 
 #[tauri::command]
@@ -90,26 +71,24 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             let port_path = data_dir.join("port");
 
             let handle = app.handle().clone();
-            let runtime_state =
-                tauri::async_runtime::block_on(
-                    async move { bootstrap(&db_path, &port_path).await },
-                )
-                .map_err(|e| format!("bootstrap: {e}"))?;
+            let Bootstrap {
+                state: runtime_state,
+                listener,
+            } = tauri::async_runtime::block_on(
+                async move { bootstrap(&db_path, &port_path).await },
+            )
+            .map_err(|e| format!("bootstrap: {e}"))?;
 
             let api_state = AppState {
                 pool: runtime_state.pool.clone(),
             };
-            let port = runtime_state.api_port;
+            let bound = listener
+                .local_addr()
+                .map_err(|e| format!("local_addr: {e}"))?;
             tauri::async_runtime::spawn(async move {
-                let addr = SocketAddr::from(([127, 0, 0, 1], port));
-                match TcpListener::bind(addr).await {
-                    Ok(listener) => {
-                        tracing::info!(?addr, "kanso-api listening");
-                        if let Err(e) = axum::serve(listener, kanso_api::router(api_state)).await {
-                            tracing::error!(error = ?e, "axum serve failed");
-                        }
-                    }
-                    Err(e) => tracing::error!(error = ?e, "bind {addr} failed"),
+                tracing::info!(addr = ?bound, "kanso-api listening");
+                if let Err(e) = axum::serve(listener, kanso_api::router(api_state)).await {
+                    tracing::error!(error = ?e, "axum serve failed");
                 }
             });
 
@@ -117,10 +96,28 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            create_card,
-            list_cards,
             default_column,
-            api_port
+            api_port,
+            cmd_board::boards_list,
+            cmd_board::board_create,
+            cmd_board::board_update,
+            cmd_board::board_archive,
+            cmd_board::board_unarchive,
+            cmd_board::board_delete,
+            cmd_column::columns_list,
+            cmd_column::column_create,
+            cmd_column::column_update,
+            cmd_column::column_archive,
+            cmd_column::column_unarchive,
+            cmd_card::cards_list,
+            cmd_card::card_create,
+            cmd_card::card_update,
+            cmd_card::card_move,
+            cmd_card::card_archive,
+            cmd_card::card_unarchive,
+            // Legacy aliases — keep until Wave 5 migrates the UI.
+            cmd_card::create_card,
+            cmd_card::list_cards,
         ])
         .run(tauri::generate_context!())?;
     Ok(())
@@ -129,27 +126,31 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 async fn bootstrap(
     db_path: &Path,
     port_path: &Path,
-) -> Result<RuntimeState, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<Bootstrap, Box<dyn std::error::Error + Send + Sync>> {
     let pool = kanso_core::db::open(db_path).await?;
     kanso_core::db::migrate(&pool).await?;
     let seed = Arc::new(ensure_seed(&pool).await?);
 
-    // Bind a TCP listener up front so we know the port before writing the
-    // port file. The listener is dropped and rebound inside the spawned
-    // axum task. Loopback-only, so the TOCTOU window is harmless.
+    // Bind once and hand the listener straight to axum — no drop/rebind
+    // window where another process could grab the port.
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let port = listener.local_addr()?.port();
-    drop(listener);
 
     write_port_file(port_path, port).await?;
 
-    Ok(RuntimeState {
-        pool,
-        seed,
-        api_port: port,
+    Ok(Bootstrap {
+        state: RuntimeState {
+            pool,
+            seed,
+            api_port: port,
+        },
+        listener,
     })
 }
 
+/// On a truly empty DB seed one board "My Board" with three columns
+/// "To Do" / "In Progress" / "Done". After first launch this is a no-op even
+/// if the user later deletes any of the seeded rows.
 async fn ensure_seed(
     pool: &SqlitePool,
 ) -> Result<SeedIds, Box<dyn std::error::Error + Send + Sync>> {
@@ -169,10 +170,12 @@ async fn ensure_seed(
     }
 
     let board = BoardRepo::create(pool, "My Board").await?;
-    let column = ColumnRepo::create(pool, &board.id, "Todo").await?;
+    let todo = ColumnRepo::create(pool, &board.id, "To Do", Some("#7aa2f7")).await?;
+    let _wip = ColumnRepo::create(pool, &board.id, "In Progress", Some("#e0af68")).await?;
+    let _done = ColumnRepo::create(pool, &board.id, "Done", Some("#9ece6a")).await?;
     Ok(SeedIds {
         board_id: board.id,
-        column_id: column.id,
+        column_id: todo.id,
     })
 }
 

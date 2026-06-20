@@ -23,6 +23,7 @@ impl From<KansoError> for AppError {
         let kind = match &e {
             KansoError::NotFound { .. } => "not_found",
             KansoError::InvalidInput(_) => "invalid_input",
+            KansoError::InvalidMove(_) => "invalid_move",
             KansoError::Conflict(_) => "conflict",
             KansoError::Db(_) | KansoError::Migrate(_) => "db",
         };

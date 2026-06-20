@@ -16,6 +16,9 @@ pub enum KansoError {
 
     #[error("invalid input: {0}")]
     InvalidInput(String),
+
+    #[error("invalid move: {0}")]
+    InvalidMove(String),
 }
 
 pub type Result<T> = std::result::Result<T, KansoError>;

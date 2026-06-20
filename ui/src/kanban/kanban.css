@@ -1160,3 +1160,34 @@ body {
   color: var(--text-muted);
   font-size: 13px;
 }
+
+/* ---------- Error boundary fallback ---------- */
+.kanso-error-fallback {
+  margin: 32px auto;
+  max-width: 520px;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-md);
+  color: var(--text);
+}
+
+.kanso-error-fallback-title {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  color: var(--danger);
+}
+
+.kanso-error-fallback-message {
+  margin: 0 0 16px 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.kanso-error-fallback-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}

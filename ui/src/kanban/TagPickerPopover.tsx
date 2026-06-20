@@ -13,6 +13,12 @@ interface Props {
   cardId: string;
 }
 
+// Stable reference for cards that have no tags yet. Returning a fresh
+// `[]` from a Zustand 5 selector would fail its strict-equality check
+// and trigger a re-render loop -> "Maximum update depth exceeded" ->
+// uncaught throw -> the whole app blanks (Wave 8b hot-fix).
+const EMPTY_TAG_IDS: readonly string[] = [];
+
 export default function TagPickerPopover({ cardId }: Props) {
   const tags = useKanbanStore((s) => s.tags);
   const tagsLoaded = useKanbanStore((s) => s.tagsLoaded);
@@ -20,7 +26,7 @@ export default function TagPickerPopover({ cardId }: Props) {
   const addCardTag = useKanbanStore((s) => s.addCardTag);
   const removeCardTag = useKanbanStore((s) => s.removeCardTag);
   const createTag = useKanbanStore((s) => s.tagCreate);
-  const cardTagIds = useKanbanStore((s) => s.cardTagMap[cardId] ?? []);
+  const cardTagIds = useKanbanStore((s) => s.cardTagMap[cardId] ?? EMPTY_TAG_IDS);
 
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState('');

@@ -17,6 +17,7 @@ import {
 import { isTauri } from './api/client';
 import ColumnList from './ColumnList';
 import CardDetailDrawer from './CardDetailDrawer';
+import ErrorBoundary from '../ErrorBoundary';
 import { CardOverlay } from './Card';
 import { useKanbanStore } from './hooks/useKanbanStore';
 import { useCmdK } from './hooks/useCmdK';
@@ -194,7 +195,11 @@ export default function KanbanBoard() {
         {status === 'ready' && currentBoardId !== null && <ColumnList />}
         <DragOverlay>{draggingCard ? <CardOverlay card={draggingCard} /> : null}</DragOverlay>
       </DndContext>
-      {selectedCard && <CardDetailDrawer key={selectedCard.id} card={selectedCard} />}
+      {selectedCard && (
+        <ErrorBoundary onReset={() => useKanbanStore.getState().selectCard(null)}>
+          <CardDetailDrawer key={selectedCard.id} card={selectedCard} />
+        </ErrorBoundary>
+      )}
       {manageTagsOpen && <ManageTagsDrawer onClose={() => setManageTagsOpen(false)} />}
       {paletteOpen && <SearchPalette onClose={() => setPaletteOpen(false)} />}
       {error && status === 'ready' && (

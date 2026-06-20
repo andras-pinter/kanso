@@ -26,7 +26,13 @@ export default function TagPickerPopover({ cardId }: Props) {
   const addCardTag = useKanbanStore((s) => s.addCardTag);
   const removeCardTag = useKanbanStore((s) => s.removeCardTag);
   const createTag = useKanbanStore((s) => s.tagCreate);
-  const cardTagIds = useKanbanStore((s) => s.cardTagMap[cardId] ?? EMPTY_TAG_IDS);
+  // Subscribe to the top-level cardTagMap reference (stable until any
+  // tag link changes) and look up this card outside the selector so the
+  // selector never has to mint a fresh fallback array. Returning a fresh
+  // `?? []` from the selector tripped Zustand 5's strict-equality check
+  // and triggered an infinite re-render loop -> blank app (Wave 8b).
+  const cardTagMap = useKanbanStore((s) => s.cardTagMap);
+  const cardTagIds = cardTagMap[cardId] ?? EMPTY_TAG_IDS;
 
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState('');

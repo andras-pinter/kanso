@@ -200,12 +200,20 @@ async fn test_column_crud_and_archive() {
     assert!(updated.color.is_none());
 
     ColumnRepo::archive(&pool, &c2.id).await.unwrap();
-    let active = ColumnRepo::list_by_board(&pool, &board.id).await.unwrap();
+    let active = ColumnRepo::list_by_board(&pool, &board.id, false)
+        .await
+        .unwrap();
     assert_eq!(active.len(), 1);
     assert_eq!(active[0].id, c1.id);
+    let all = ColumnRepo::list_by_board(&pool, &board.id, true)
+        .await
+        .unwrap();
+    assert_eq!(all.len(), 2, "include_archived must surface archived columns");
 
     ColumnRepo::unarchive(&pool, &c2.id).await.unwrap();
-    let active = ColumnRepo::list_by_board(&pool, &board.id).await.unwrap();
+    let active = ColumnRepo::list_by_board(&pool, &board.id, false)
+        .await
+        .unwrap();
     assert_eq!(active.len(), 2);
 }
 
@@ -367,4 +375,81 @@ async fn test_card_list_include_archived_toggle() {
         CardRepo::list_by_column(&pool, &col.id, false).await.unwrap().len(),
         2
     );
+}
+
+#[tokio::test]
+async fn test_card_patch_body_text_clear() {
+    use kanso_core::repo::CardPatch;
+    let pool = fixture_pool().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
+
+    let with_body = CardRepo::update(
+        &pool,
+        &card.id,
+        CardPatch {
+            body_text: Some(Some("notes go here".into())),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(with_body.body_text.as_deref(), Some("notes go here"));
+
+    let untouched = CardRepo::update(
+        &pool,
+        &card.id,
+        CardPatch {
+            title: Some("T2".into()),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(untouched.body_text.as_deref(), Some("notes go here"));
+
+    let cleared = CardRepo::update(
+        &pool,
+        &card.id,
+        CardPatch {
+            body_text: Some(None),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert!(cleared.body_text.is_none());
+}
+
+#[tokio::test]
+async fn test_archive_missing_id_returns_not_found() {
+    use kanso_core::KansoError;
+    let pool = fixture_pool().await;
+
+    let missing = "00000000000000000000000000";
+    assert!(matches!(
+        BoardRepo::archive(&pool, missing).await,
+        Err(KansoError::NotFound { entity: "board", .. })
+    ));
+    assert!(matches!(
+        BoardRepo::unarchive(&pool, missing).await,
+        Err(KansoError::NotFound { entity: "board", .. })
+    ));
+    assert!(matches!(
+        ColumnRepo::archive(&pool, missing).await,
+        Err(KansoError::NotFound { entity: "column", .. })
+    ));
+    assert!(matches!(
+        ColumnRepo::unarchive(&pool, missing).await,
+        Err(KansoError::NotFound { entity: "column", .. })
+    ));
+    assert!(matches!(
+        CardRepo::archive(&pool, missing).await,
+        Err(KansoError::NotFound { entity: "card", .. })
+    ));
+    assert!(matches!(
+        CardRepo::unarchive(&pool, missing).await,
+        Err(KansoError::NotFound { entity: "card", .. })
+    ));
 }

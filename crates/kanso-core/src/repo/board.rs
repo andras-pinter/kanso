@@ -94,21 +94,34 @@ impl BoardRepo {
 
     pub async fn archive(pool: &SqlitePool, id: &str) -> Result<()> {
         let now = now_ms();
-        sqlx::query("UPDATE boards SET archived_at = ?1, updated_at = ?1 WHERE id = ?2")
+        let res = sqlx::query("UPDATE boards SET archived_at = ?1, updated_at = ?1 WHERE id = ?2")
             .bind(now)
             .bind(id)
             .execute(pool)
             .await?;
+        if res.rows_affected() == 0 {
+            return Err(KansoError::NotFound {
+                entity: "board",
+                id: id.to_string(),
+            });
+        }
         Ok(())
     }
 
     pub async fn unarchive(pool: &SqlitePool, id: &str) -> Result<()> {
         let now = now_ms();
-        sqlx::query("UPDATE boards SET archived_at = NULL, updated_at = ?1 WHERE id = ?2")
-            .bind(now)
-            .bind(id)
-            .execute(pool)
-            .await?;
+        let res =
+            sqlx::query("UPDATE boards SET archived_at = NULL, updated_at = ?1 WHERE id = ?2")
+                .bind(now)
+                .bind(id)
+                .execute(pool)
+                .await?;
+        if res.rows_affected() == 0 {
+            return Err(KansoError::NotFound {
+                entity: "board",
+                id: id.to_string(),
+            });
+        }
         Ok(())
     }
 

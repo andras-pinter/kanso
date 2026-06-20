@@ -65,15 +65,22 @@ impl ColumnRepo {
         Ok(row)
     }
 
-    pub async fn list_by_board(pool: &SqlitePool, board_id: &str) -> Result<Vec<Column>> {
-        let rows = sqlx::query_as::<_, Column>(
+    pub async fn list_by_board(
+        pool: &SqlitePool,
+        board_id: &str,
+        include_archived: bool,
+    ) -> Result<Vec<Column>> {
+        let sql = if include_archived {
+            "SELECT * FROM columns WHERE board_id = ?1 ORDER BY position ASC"
+        } else {
             "SELECT * FROM columns \
              WHERE board_id = ?1 AND archived_at IS NULL \
-             ORDER BY position ASC",
-        )
-        .bind(board_id)
-        .fetch_all(pool)
-        .await?;
+             ORDER BY position ASC"
+        };
+        let rows = sqlx::query_as::<_, Column>(sql)
+            .bind(board_id)
+            .fetch_all(pool)
+            .await?;
         Ok(rows)
     }
 
@@ -105,21 +112,34 @@ impl ColumnRepo {
 
     pub async fn archive(pool: &SqlitePool, id: &str) -> Result<()> {
         let now = now_ms();
-        sqlx::query("UPDATE columns SET archived_at = ?1, updated_at = ?1 WHERE id = ?2")
+        let res = sqlx::query("UPDATE columns SET archived_at = ?1, updated_at = ?1 WHERE id = ?2")
             .bind(now)
             .bind(id)
             .execute(pool)
             .await?;
+        if res.rows_affected() == 0 {
+            return Err(KansoError::NotFound {
+                entity: "column",
+                id: id.to_string(),
+            });
+        }
         Ok(())
     }
 
     pub async fn unarchive(pool: &SqlitePool, id: &str) -> Result<()> {
         let now = now_ms();
-        sqlx::query("UPDATE columns SET archived_at = NULL, updated_at = ?1 WHERE id = ?2")
-            .bind(now)
-            .bind(id)
-            .execute(pool)
-            .await?;
+        let res =
+            sqlx::query("UPDATE columns SET archived_at = NULL, updated_at = ?1 WHERE id = ?2")
+                .bind(now)
+                .bind(id)
+                .execute(pool)
+                .await?;
+        if res.rows_affected() == 0 {
+            return Err(KansoError::NotFound {
+                entity: "column",
+                id: id.to_string(),
+            });
+        }
         Ok(())
     }
 }

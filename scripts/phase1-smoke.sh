@@ -54,12 +54,32 @@ expect "$(c -XPOST "$BASE/columns/${COLUMN_ID}/cards" -H 'content-type: applicat
 CARD_ID=$(python3 -c 'import json;print(json.load(open("/tmp/kanso-smoke.body"))["id"])')
 expect "$(c -XPATCH "$BASE/cards/${CARD_ID}" -H 'content-type: application/json' -d '{"title":"Smoke Card v2","due_at":1700000000000}')" 200 "PATCH /cards/:id (set due_at)"
 expect "$(c -XPATCH "$BASE/cards/${CARD_ID}" -H 'content-type: application/json' -d '{"due_at":null}')" 200 "PATCH /cards/:id (clear due_at)"
+expect "$(c -XPATCH "$BASE/cards/${CARD_ID}" -H 'content-type: application/json' -d '{"body_text":"scratch"}')" 200 "PATCH /cards/:id (set body_text)"
+expect "$(c -XPATCH "$BASE/cards/${CARD_ID}" -H 'content-type: application/json' -d '{"body_text":null}')" 200 "PATCH /cards/:id (clear body_text)"
 expect "$(c -XPOST "$BASE/cards/${CARD_ID}/move" -H 'content-type: application/json' -d "{\"target_column_id\":\"${COLUMN_B}\"}")" 200 "POST /cards/:id/move (append)"
 expect "$(c -XPOST "$BASE/cards/${CARD_ID}/archive")" 200 "POST /cards/:id/archive"
 expect "$(c -XPOST "$BASE/cards/${CARD_ID}/unarchive")" 200 "POST /cards/:id/unarchive"
 
+echo "==> include_archived (columns + cards)"
+# Archive a third column and verify the include_archived flag surfaces it.
+expect "$(c -XPOST "$BASE/boards/${BOARD_ID}/columns" -H 'content-type: application/json' -d '{"name":"Stash"}')" 201 "POST third column"
+COLUMN_C=$(python3 -c 'import json;print(json.load(open("/tmp/kanso-smoke.body"))["id"])')
+expect "$(c -XPOST "$BASE/columns/${COLUMN_C}/archive")" 200 "archive third column"
+expect "$(c "$BASE/boards/${BOARD_ID}/columns")" 200 "GET columns (default excludes archived)"
+ACTIVE_COUNT=$(python3 -c 'import json;print(len(json.load(open("/tmp/kanso-smoke.body"))))')
+expect "$(c "$BASE/boards/${BOARD_ID}/columns?include_archived=true")" 200 "GET columns?include_archived=true"
+ALL_COUNT=$(python3 -c 'import json;print(len(json.load(open("/tmp/kanso-smoke.body"))))')
+if [[ "$ALL_COUNT" -le "$ACTIVE_COUNT" ]]; then
+  echo "FAIL include_archived must add at least one column (active=$ACTIVE_COUNT all=$ALL_COUNT)" >&2
+  exit 1
+fi
+echo "  include_archived verified: active=$ACTIVE_COUNT all=$ALL_COUNT"
+
 echo "==> negative cases"
 expect "$(c -XPOST "$BASE/columns/${COLUMN_ID}/cards" -H 'content-type: application/json' -d '{"title":"  "}')" 400 "blank title -> 400"
+expect "$(c -XPOST "$BASE/cards/00000000000000000000000000/archive")" 404 "archive missing card -> 404"
+expect "$(c -XPOST "$BASE/columns/00000000000000000000000000/archive")" 404 "archive missing column -> 404"
+expect "$(c -XPATCH "$BASE/cards/00000000000000000000000000" -H 'content-type: application/json' -d '{"title":"x"}')" 404 "patch missing card -> 404"
 expect "$(c "$BASE/boards/${BOARD_ID}/columns")" 200 "GET columns for board (sanity)"
 
 echo "==> cascade delete"

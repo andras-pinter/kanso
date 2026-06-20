@@ -170,8 +170,13 @@ pub struct CreateCardBody {
 pub struct CardPatchDto {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub body_text: Option<String>,
+    /// Outer absent => leave untouched. Present `null` => clear. Present value => set.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "double_option"
+    )]
+    pub body_text: Option<Option<String>>,
     /// Outer absent => leave untouched. Present `null` => clear. Present value => set.
     #[serde(
         default,

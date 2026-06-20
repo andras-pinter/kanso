@@ -351,3 +351,91 @@ async fn move_card_non_adjacent_returns_400() {
         .unwrap();
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
 }
+
+#[tokio::test]
+async fn card_body_text_clear_via_http() {
+    let (app, pool, _tmp) = setup().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
+
+    // Set body_text via PATCH.
+    let res = app
+        .clone()
+        .oneshot(req_json(
+            "PATCH",
+            &format!("/cards/{}", card.id),
+            json!({"body_text": "scratch"}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let after: CardDto = serde_json::from_value(body_json(res).await).unwrap();
+    assert_eq!(after.body_text.as_deref(), Some("scratch"));
+
+    // Omitting body_text leaves it untouched.
+    let res = app
+        .clone()
+        .oneshot(req_json(
+            "PATCH",
+            &format!("/cards/{}", card.id),
+            json!({"title": "T2"}),
+        ))
+        .await
+        .unwrap();
+    let after: CardDto = serde_json::from_value(body_json(res).await).unwrap();
+    assert_eq!(after.body_text.as_deref(), Some("scratch"), "omit must leave body_text untouched");
+
+    // Explicit null clears it.
+    let res = app
+        .clone()
+        .oneshot(req_json(
+            "PATCH",
+            &format!("/cards/{}", card.id),
+            json!({"body_text": null}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let after: CardDto = serde_json::from_value(body_json(res).await).unwrap();
+    assert!(after.body_text.is_none(), "null must clear body_text");
+}
+
+#[tokio::test]
+async fn list_columns_include_archived_via_http() {
+    let (app, pool, _tmp) = setup().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let c1 = ColumnRepo::create(&pool, &board.id, "Active", None).await.unwrap();
+    let c2 = ColumnRepo::create(&pool, &board.id, "Hidden", None).await.unwrap();
+    ColumnRepo::archive(&pool, &c2.id).await.unwrap();
+
+    let res = app
+        .clone()
+        .oneshot(req("GET", &format!("/boards/{}/columns", board.id)))
+        .await
+        .unwrap();
+    let active: Vec<ColumnDto> = serde_json::from_value(body_json(res).await).unwrap();
+    assert_eq!(active.len(), 1);
+    assert_eq!(active[0].id, c1.id);
+
+    let res = app
+        .clone()
+        .oneshot(req(
+            "GET",
+            &format!("/boards/{}/columns?include_archived=true", board.id),
+        ))
+        .await
+        .unwrap();
+    let all: Vec<ColumnDto> = serde_json::from_value(body_json(res).await).unwrap();
+    assert_eq!(all.len(), 2);
+}
+
+#[tokio::test]
+async fn archive_missing_card_returns_404() {
+    let (app, _pool, _tmp) = setup().await;
+    let res = app
+        .oneshot(req("POST", "/cards/00000000000000000000000000/archive"))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+}

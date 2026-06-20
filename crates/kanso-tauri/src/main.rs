@@ -1,4 +1,3 @@
-use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -21,6 +20,11 @@ pub struct RuntimeState {
     pub pool: SqlitePool,
     pub seed: Arc<SeedIds>,
     pub api_port: u16,
+}
+
+struct Bootstrap {
+    state: RuntimeState,
+    listener: TcpListener,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -67,26 +71,24 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             let port_path = data_dir.join("port");
 
             let handle = app.handle().clone();
-            let runtime_state =
-                tauri::async_runtime::block_on(
-                    async move { bootstrap(&db_path, &port_path).await },
-                )
-                .map_err(|e| format!("bootstrap: {e}"))?;
+            let Bootstrap {
+                state: runtime_state,
+                listener,
+            } = tauri::async_runtime::block_on(
+                async move { bootstrap(&db_path, &port_path).await },
+            )
+            .map_err(|e| format!("bootstrap: {e}"))?;
 
             let api_state = AppState {
                 pool: runtime_state.pool.clone(),
             };
-            let port = runtime_state.api_port;
+            let bound = listener
+                .local_addr()
+                .map_err(|e| format!("local_addr: {e}"))?;
             tauri::async_runtime::spawn(async move {
-                let addr = SocketAddr::from(([127, 0, 0, 1], port));
-                match TcpListener::bind(addr).await {
-                    Ok(listener) => {
-                        tracing::info!(?addr, "kanso-api listening");
-                        if let Err(e) = axum::serve(listener, kanso_api::router(api_state)).await {
-                            tracing::error!(error = ?e, "axum serve failed");
-                        }
-                    }
-                    Err(e) => tracing::error!(error = ?e, "bind {addr} failed"),
+                tracing::info!(addr = ?bound, "kanso-api listening");
+                if let Err(e) = axum::serve(listener, kanso_api::router(api_state)).await {
+                    tracing::error!(error = ?e, "axum serve failed");
                 }
             });
 
@@ -124,23 +126,25 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 async fn bootstrap(
     db_path: &Path,
     port_path: &Path,
-) -> Result<RuntimeState, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<Bootstrap, Box<dyn std::error::Error + Send + Sync>> {
     let pool = kanso_core::db::open(db_path).await?;
     kanso_core::db::migrate(&pool).await?;
     let seed = Arc::new(ensure_seed(&pool).await?);
 
-    // Bind once up front so we know the port before writing the port file;
-    // axum re-binds the same loopback port inside the spawned task.
+    // Bind once and hand the listener straight to axum — no drop/rebind
+    // window where another process could grab the port.
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let port = listener.local_addr()?.port();
-    drop(listener);
 
     write_port_file(port_path, port).await?;
 
-    Ok(RuntimeState {
-        pool,
-        seed,
-        api_port: port,
+    Ok(Bootstrap {
+        state: RuntimeState {
+            pool,
+            seed,
+            api_port: port,
+        },
+        listener,
     })
 }
 

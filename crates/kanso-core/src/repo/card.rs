@@ -10,7 +10,9 @@ use crate::Result;
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CardPatch {
     pub title: Option<String>,
-    pub body_text: Option<String>,
+    /// Outer `None` = leave untouched. Inner `None` = clear to NULL.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub body_text: Option<Option<String>>,
     /// Outer `None` = leave untouched. Inner `None` = clear to NULL.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub due_at: Option<Option<i64>>,
@@ -90,7 +92,7 @@ impl CardRepo {
             qb.push(", title = ").push_bind(title);
         }
         if let Some(body_text) = &patch.body_text {
-            qb.push(", body_text = ").push_bind(body_text);
+            qb.push(", body_text = ").push_bind(body_text.as_ref());
         }
         if let Some(due_at) = patch.due_at {
             qb.push(", due_at = ").push_bind(due_at);
@@ -301,21 +303,33 @@ impl CardRepo {
 
     pub async fn archive(pool: &SqlitePool, id: &str) -> Result<()> {
         let now = now_ms();
-        sqlx::query("UPDATE cards SET archived_at = ?1, updated_at = ?1 WHERE id = ?2")
+        let res = sqlx::query("UPDATE cards SET archived_at = ?1, updated_at = ?1 WHERE id = ?2")
             .bind(now)
             .bind(id)
             .execute(pool)
             .await?;
+        if res.rows_affected() == 0 {
+            return Err(KansoError::NotFound {
+                entity: "card",
+                id: id.to_string(),
+            });
+        }
         Ok(())
     }
 
     pub async fn unarchive(pool: &SqlitePool, id: &str) -> Result<()> {
         let now = now_ms();
-        sqlx::query("UPDATE cards SET archived_at = NULL, updated_at = ?1 WHERE id = ?2")
+        let res = sqlx::query("UPDATE cards SET archived_at = NULL, updated_at = ?1 WHERE id = ?2")
             .bind(now)
             .bind(id)
             .execute(pool)
             .await?;
+        if res.rows_affected() == 0 {
+            return Err(KansoError::NotFound {
+                entity: "card",
+                id: id.to_string(),
+            });
+        }
         Ok(())
     }
 }

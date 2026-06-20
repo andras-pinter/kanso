@@ -9,8 +9,9 @@ use crate::RuntimeState;
 pub async fn columns_list(
     state: State<'_, RuntimeState>,
     board_id: String,
+    include_archived: bool,
 ) -> Result<Vec<ColumnDto>, AppError> {
-    let rows = ColumnRepo::list_by_board(&state.pool, &board_id).await?;
+    let rows = ColumnRepo::list_by_board(&state.pool, &board_id, include_archived).await?;
     Ok(rows.into_iter().map(ColumnDto::from).collect())
 }
 

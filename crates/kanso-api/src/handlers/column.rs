@@ -1,12 +1,19 @@
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::{Json, Router};
+use serde::Deserialize;
 
 use kanso_core::repo::ColumnRepo;
 
 use crate::dto::{ColumnDto, ColumnPatchDto, CreateColumnBody};
 use crate::error::{require_non_empty, ApiError};
 use crate::AppState;
+
+#[derive(Debug, Deserialize)]
+struct ListColumnsQuery {
+    #[serde(default)]
+    include_archived: bool,
+}
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -22,8 +29,9 @@ pub fn routes() -> Router<AppState> {
 async fn list(
     State(state): State<AppState>,
     Path(board_id): Path<String>,
+    Query(q): Query<ListColumnsQuery>,
 ) -> Result<Json<Vec<ColumnDto>>, ApiError> {
-    let rows = ColumnRepo::list_by_board(&state.pool, &board_id).await?;
+    let rows = ColumnRepo::list_by_board(&state.pool, &board_id, q.include_archived).await?;
     Ok(Json(rows.into_iter().map(ColumnDto::from).collect()))
 }
 

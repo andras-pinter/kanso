@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 
-use crate::domain::Card;
+use crate::domain::{Card, Tag};
 use crate::error::KansoError;
 use crate::positioning;
 use crate::repo::{new_id, now_ms};
@@ -267,9 +267,7 @@ impl CardRepo {
                 .fetch_optional(&mut **tx)
                 .await?;
         row.map(|(p,)| p).ok_or_else(|| {
-            KansoError::InvalidMove(format!(
-                "neighbour {id} not found in column {column_id}"
-            ))
+            KansoError::InvalidMove(format!("neighbour {id} not found in column {column_id}"))
         })
     }
 
@@ -327,17 +325,108 @@ impl CardRepo {
         }
     }
 
-    pub async fn search(pool: &SqlitePool, query: &str) -> Result<Vec<Card>> {
-        let cards = sqlx::query_as::<_, Card>(
+    pub async fn search(
+        pool: &SqlitePool,
+        query: &str,
+        include_archived: bool,
+    ) -> Result<Vec<Card>> {
+        let trimmed = query.trim();
+        if trimmed.is_empty() {
+            return Ok(Vec::new());
+        }
+        let match_expr = fts5_quote(trimmed);
+        let sql = if include_archived {
+            "SELECT c.* FROM cards c \
+             JOIN cards_fts f ON f.rowid = c.rowid \
+             WHERE cards_fts MATCH ?1 \
+             ORDER BY rank"
+        } else {
             "SELECT c.* FROM cards c \
              JOIN cards_fts f ON f.rowid = c.rowid \
              WHERE cards_fts MATCH ?1 AND c.archived_at IS NULL \
-             ORDER BY rank",
-        )
-        .bind(query)
-        .fetch_all(pool)
-        .await?;
+             ORDER BY rank"
+        };
+        let cards = sqlx::query_as::<_, Card>(sql)
+            .bind(match_expr)
+            .fetch_all(pool)
+            .await?;
         Ok(cards)
+    }
+
+    /// Idempotently associate `card_id` with `tag_id`. Both entities must
+    /// exist; otherwise returns `NotFound`. Re-linking is a no-op.
+    pub async fn add_tag(pool: &SqlitePool, card_id: &str, tag_id: &str) -> Result<()> {
+        let mut tx = pool.begin().await?;
+        ensure_exists(&mut tx, "cards", "card", card_id).await?;
+        ensure_exists(&mut tx, "tags", "tag", tag_id).await?;
+        sqlx::query("INSERT OR IGNORE INTO card_tags (card_id, tag_id) VALUES (?1, ?2)")
+            .bind(card_id)
+            .bind(tag_id)
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    /// Idempotently drop the (card, tag) link. Returns `NotFound` only when
+    /// `card_id` or `tag_id` themselves do not exist; missing links succeed.
+    pub async fn remove_tag(pool: &SqlitePool, card_id: &str, tag_id: &str) -> Result<()> {
+        let mut tx = pool.begin().await?;
+        ensure_exists(&mut tx, "cards", "card", card_id).await?;
+        ensure_exists(&mut tx, "tags", "tag", tag_id).await?;
+        sqlx::query("DELETE FROM card_tags WHERE card_id = ?1 AND tag_id = ?2")
+            .bind(card_id)
+            .bind(tag_id)
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    /// Tags currently linked to `card_id`, alphabetised. `NotFound` if the
+    /// card does not exist.
+    pub async fn tags_for_card(pool: &SqlitePool, card_id: &str) -> Result<Vec<Tag>> {
+        let mut tx = pool.begin().await?;
+        ensure_exists(&mut tx, "cards", "card", card_id).await?;
+        let rows = sqlx::query_as::<_, Tag>(
+            "SELECT t.* FROM tags t \
+             JOIN card_tags ct ON ct.tag_id = t.id \
+             WHERE ct.card_id = ?1 \
+             ORDER BY t.name COLLATE NOCASE ASC",
+        )
+        .bind(card_id)
+        .fetch_all(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(rows)
+    }
+
+    /// Cards linked to `tag_id`, ordered by column then position. `NotFound`
+    /// if the tag does not exist.
+    pub async fn cards_with_tag(
+        pool: &SqlitePool,
+        tag_id: &str,
+        include_archived: bool,
+    ) -> Result<Vec<Card>> {
+        let mut tx = pool.begin().await?;
+        ensure_exists(&mut tx, "tags", "tag", tag_id).await?;
+        let sql = if include_archived {
+            "SELECT c.* FROM cards c \
+             JOIN card_tags ct ON ct.card_id = c.id \
+             WHERE ct.tag_id = ?1 \
+             ORDER BY c.column_id ASC, c.position ASC"
+        } else {
+            "SELECT c.* FROM cards c \
+             JOIN card_tags ct ON ct.card_id = c.id \
+             WHERE ct.tag_id = ?1 AND c.archived_at IS NULL \
+             ORDER BY c.column_id ASC, c.position ASC"
+        };
+        let rows = sqlx::query_as::<_, Card>(sql)
+            .bind(tag_id)
+            .fetch_all(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        Ok(rows)
     }
 
     pub async fn archive(pool: &SqlitePool, id: &str) -> Result<()> {
@@ -371,4 +460,33 @@ impl CardRepo {
         }
         Ok(())
     }
+}
+
+async fn ensure_exists(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    table: &str,
+    entity: &'static str,
+    id: &str,
+) -> Result<()> {
+    let sql = format!("SELECT 1 FROM {table} WHERE id = ?1");
+    let row: Option<(i64,)> = sqlx::query_as(&sql)
+        .bind(id)
+        .fetch_optional(&mut **tx)
+        .await?;
+    if row.is_none() {
+        return Err(KansoError::NotFound {
+            entity,
+            id: id.to_string(),
+        });
+    }
+    Ok(())
+}
+
+/// Wrap user input as a single FTS5 quoted phrase. FTS5 strings are escaped
+/// by doubling embedded double quotes. This neutralises FTS5 operators
+/// (`AND`, `OR`, `NOT`, `NEAR`, `*`, parens, column filters) so callers get
+/// substring-style matching of the typed phrase.
+fn fts5_quote(s: &str) -> String {
+    let escaped = s.replace('"', "\"\"");
+    format!("\"{escaped}\"")
 }

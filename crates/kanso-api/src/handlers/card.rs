@@ -7,12 +7,22 @@ use serde::Deserialize;
 
 use kanso_core::repo::CardRepo;
 
-use crate::dto::{CardBodyDto, CardBodySetDto, CardDto, CardPatchDto, CreateCardBody, MoveCardBody};
+use crate::dto::{
+    CardBodyDto, CardBodySetDto, CardDto, CardPatchDto, CreateCardBody, MoveCardBody,
+};
 use crate::error::{require_non_empty, ApiError};
 use crate::AppState;
 
 #[derive(Debug, Deserialize)]
 struct ListCardsQuery {
+    #[serde(default)]
+    include_archived: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct SearchCardsQuery {
+    #[serde(default)]
+    q: String,
     #[serde(default)]
     include_archived: bool,
 }
@@ -24,6 +34,7 @@ const BODY_PUT_LIMIT_BYTES: usize = 8 * 1024 * 1024;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
+        .route("/cards/search", axum::routing::get(search))
         .route(
             "/columns/:column_id/cards",
             axum::routing::get(list).post(create),
@@ -117,11 +128,21 @@ async fn put_body(
     Path(id): Path<String>,
     Json(body): Json<CardBodySetDto>,
 ) -> Result<StatusCode, ApiError> {
-    let blob = B64.decode(body.body_blocksuite_b64.as_bytes()).map_err(|e| {
-        ApiError(kanso_core::KansoError::InvalidInput(format!(
-            "body_blocksuite_b64 is not valid base64: {e}"
-        )))
-    })?;
+    let blob = B64
+        .decode(body.body_blocksuite_b64.as_bytes())
+        .map_err(|e| {
+            ApiError(kanso_core::KansoError::InvalidInput(format!(
+                "body_blocksuite_b64 is not valid base64: {e}"
+            )))
+        })?;
     CardRepo::set_body(&state.pool, &id, &blob, &body.body_text).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+async fn search(
+    State(state): State<AppState>,
+    Query(q): Query<SearchCardsQuery>,
+) -> Result<Json<Vec<CardDto>>, ApiError> {
+    let rows = CardRepo::search(&state.pool, &q.q, q.include_archived).await?;
+    Ok(Json(rows.into_iter().map(CardDto::from).collect()))
 }

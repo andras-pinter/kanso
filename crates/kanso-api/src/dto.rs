@@ -15,8 +15,8 @@ where
     Option::<T>::deserialize(de).map(Some)
 }
 
-use kanso_core::domain::{Board, Card, Column};
-use kanso_core::repo::{BoardPatch, CardPatch, ColumnPatch};
+use kanso_core::domain::{Board, Card, Column, Tag};
+use kanso_core::repo::{BoardPatch, CardPatch, ColumnPatch, TagPatch};
 
 // ---------- Board ----------
 
@@ -225,4 +225,68 @@ pub struct CardBodyDto {
 pub struct CardBodySetDto {
     pub body_blocksuite_b64: String,
     pub body_text: String,
+}
+
+// ---------- Tag ----------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TagDto {
+    pub id: String,
+    pub name: String,
+    pub color: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub archived_at: Option<i64>,
+}
+
+impl From<Tag> for TagDto {
+    fn from(t: Tag) -> Self {
+        Self {
+            id: t.id,
+            name: t.name,
+            color: t.color,
+            created_at: t.created_at,
+            updated_at: t.updated_at,
+            archived_at: t.archived_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CreateTagBody {
+    pub name: String,
+    #[serde(default)]
+    pub color: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct TagPatchDto {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Outer absent => leave untouched. Present `null` => clear. Present value => set.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "double_option"
+    )]
+    pub color: Option<Option<String>>,
+}
+
+impl From<TagPatchDto> for TagPatch {
+    fn from(d: TagPatchDto) -> Self {
+        Self {
+            name: d.name,
+            color: d.color,
+        }
+    }
+}
+
+// ---------- Column reorder ----------
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct MoveColumnBody {
+    #[serde(default)]
+    pub before: Option<String>,
+    #[serde(default)]
+    pub after: Option<String>,
 }

@@ -6,7 +6,7 @@ pub mod tag;
 pub use board::{BoardPatch, BoardRepo};
 pub use card::{CardBody, CardPatch, CardRepo};
 pub use column::{ColumnPatch, ColumnRepo};
-pub use tag::TagRepo;
+pub use tag::{TagPatch, TagRepo};
 
 pub(crate) fn now_ms() -> i64 {
     use std::time::{SystemTime, UNIX_EPOCH};

@@ -27,7 +27,9 @@ pub async fn card_create(
     if title.is_empty() {
         return Err(AppError::invalid("title must not be empty"));
     }
-    Ok(CardRepo::create(&state.pool, &column_id, title).await?.into())
+    Ok(CardRepo::create(&state.pool, &column_id, title)
+        .await?
+        .into())
 }
 
 #[tauri::command]
@@ -121,4 +123,14 @@ pub async fn list_cards(
 ) -> Result<Vec<CardDto>, AppError> {
     let column_id = column_id.unwrap_or_else(|| state.seed.column_id.clone());
     cards_list(state, column_id, false).await
+}
+
+#[tauri::command]
+pub async fn card_search(
+    state: State<'_, RuntimeState>,
+    query: String,
+    include_archived: Option<bool>,
+) -> Result<Vec<CardDto>, AppError> {
+    let rows = CardRepo::search(&state.pool, &query, include_archived.unwrap_or(false)).await?;
+    Ok(rows.into_iter().map(CardDto::from).collect())
 }

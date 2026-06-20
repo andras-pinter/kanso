@@ -13,7 +13,9 @@ async fn fixture_pool() -> sqlx::SqlitePool {
 async fn test_card_create_and_fetch() {
     let pool = fixture_pool().await;
     let board = BoardRepo::create(&pool, "Inbox").await.unwrap();
-    let col = ColumnRepo::create(&pool, &board.id, "Todo", None).await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "Todo", None)
+        .await
+        .unwrap();
     let card = CardRepo::create(&pool, &col.id, "Write tests")
         .await
         .unwrap();
@@ -25,7 +27,9 @@ async fn test_card_create_and_fetch() {
     assert!(fetched.body_text.is_none());
     assert!(fetched.archived_at.is_none());
 
-    let listed = CardRepo::list_by_column(&pool, &col.id, false).await.unwrap();
+    let listed = CardRepo::list_by_column(&pool, &col.id, false)
+        .await
+        .unwrap();
     assert_eq!(listed.len(), 1);
     assert_eq!(listed[0].id, card.id);
 }
@@ -34,23 +38,25 @@ async fn test_card_create_and_fetch() {
 async fn test_card_body_fts_roundtrip() {
     let pool = fixture_pool().await;
     let board = BoardRepo::create(&pool, "B").await.unwrap();
-    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
     let card = CardRepo::create(&pool, &col.id, "Hello").await.unwrap();
 
     CardRepo::set_body(&pool, &card.id, b"\x00\x01\x02", "hello world rust")
         .await
         .unwrap();
 
-    let hits = CardRepo::search(&pool, "rust").await.unwrap();
+    let hits = CardRepo::search(&pool, "rust", false).await.unwrap();
     assert_eq!(hits.len(), 1);
     assert_eq!(hits[0].id, card.id);
     assert_eq!(hits[0].body_text.as_deref(), Some("hello world rust"));
     assert_eq!(hits[0].body_blocksuite.as_deref(), Some(&[0u8, 1, 2][..]));
 
-    let miss = CardRepo::search(&pool, "python").await.unwrap();
+    let miss = CardRepo::search(&pool, "python", false).await.unwrap();
     assert!(miss.is_empty());
 
-    let title_hit = CardRepo::search(&pool, "Hello").await.unwrap();
+    let title_hit = CardRepo::search(&pool, "Hello", false).await.unwrap();
     assert_eq!(title_hit.len(), 1);
 }
 
@@ -58,7 +64,9 @@ async fn test_card_body_fts_roundtrip() {
 async fn test_updated_at_trigger() {
     let pool = fixture_pool().await;
     let board = BoardRepo::create(&pool, "B").await.unwrap();
-    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
     let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
     let before = card.updated_at;
 
@@ -81,13 +89,17 @@ async fn test_updated_at_trigger() {
 async fn test_soft_delete_excluded_from_list() {
     let pool = fixture_pool().await;
     let board = BoardRepo::create(&pool, "B").await.unwrap();
-    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
     let a = CardRepo::create(&pool, &col.id, "A").await.unwrap();
     let b = CardRepo::create(&pool, &col.id, "B").await.unwrap();
 
     CardRepo::archive(&pool, &a.id).await.unwrap();
 
-    let listed = CardRepo::list_by_column(&pool, &col.id, false).await.unwrap();
+    let listed = CardRepo::list_by_column(&pool, &col.id, false)
+        .await
+        .unwrap();
     assert_eq!(listed.len(), 1);
     assert_eq!(listed[0].id, b.id);
 
@@ -97,7 +109,7 @@ async fn test_soft_delete_excluded_from_list() {
     CardRepo::set_body(&pool, &b.id, b"", "another needle here")
         .await
         .unwrap();
-    let hits = CardRepo::search(&pool, "needle").await.unwrap();
+    let hits = CardRepo::search(&pool, "needle", false).await.unwrap();
     assert_eq!(hits.len(), 1);
     assert_eq!(hits[0].id, b.id);
 }
@@ -106,7 +118,9 @@ async fn test_soft_delete_excluded_from_list() {
 async fn test_cascade_delete_column_removes_cards() {
     let pool = fixture_pool().await;
     let board = BoardRepo::create(&pool, "B").await.unwrap();
-    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
     CardRepo::create(&pool, &col.id, "T").await.unwrap();
 
     sqlx::query("DELETE FROM columns WHERE id = ?1")
@@ -115,7 +129,9 @@ async fn test_cascade_delete_column_removes_cards() {
         .await
         .unwrap();
 
-    let listed = CardRepo::list_by_column(&pool, &col.id, false).await.unwrap();
+    let listed = CardRepo::list_by_column(&pool, &col.id, false)
+        .await
+        .unwrap();
     assert!(listed.is_empty());
 }
 
@@ -161,7 +177,9 @@ async fn test_board_full_crud() {
 async fn test_board_cascade_delete_wipes_columns_and_cards() {
     let pool = fixture_pool().await;
     let board = BoardRepo::create(&pool, "B").await.unwrap();
-    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
     let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
     CardRepo::set_body(&pool, &card.id, b"", "needle text")
         .await
@@ -172,7 +190,7 @@ async fn test_board_cascade_delete_wipes_columns_and_cards() {
     assert!(BoardRepo::get(&pool, &board.id).await.unwrap().is_none());
     assert!(ColumnRepo::get(&pool, &col.id).await.unwrap().is_none());
     assert!(CardRepo::get(&pool, &card.id).await.unwrap().is_none());
-    let hits = CardRepo::search(&pool, "needle").await.unwrap();
+    let hits = CardRepo::search(&pool, "needle", false).await.unwrap();
     assert!(hits.is_empty(), "FTS row leaked after cascade delete");
 }
 
@@ -183,7 +201,9 @@ async fn test_column_crud_and_archive() {
     let c1 = ColumnRepo::create(&pool, &board.id, "Todo", Some("#aaa"))
         .await
         .unwrap();
-    let c2 = ColumnRepo::create(&pool, &board.id, "Done", None).await.unwrap();
+    let c2 = ColumnRepo::create(&pool, &board.id, "Done", None)
+        .await
+        .unwrap();
     assert!(c1.position < c2.position);
 
     let updated = ColumnRepo::update(
@@ -208,7 +228,11 @@ async fn test_column_crud_and_archive() {
     let all = ColumnRepo::list_by_board(&pool, &board.id, true)
         .await
         .unwrap();
-    assert_eq!(all.len(), 2, "include_archived must surface archived columns");
+    assert_eq!(
+        all.len(),
+        2,
+        "include_archived must surface archived columns"
+    );
 
     ColumnRepo::unarchive(&pool, &c2.id).await.unwrap();
     let active = ColumnRepo::list_by_board(&pool, &board.id, false)
@@ -221,7 +245,9 @@ async fn test_column_crud_and_archive() {
 async fn test_card_patch_partial_and_due_at_clear() {
     let pool = fixture_pool().await;
     let board = BoardRepo::create(&pool, "B").await.unwrap();
-    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
     let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
 
     let with_due = CardRepo::update(
@@ -268,7 +294,9 @@ async fn test_card_patch_partial_and_due_at_clear() {
 async fn test_card_move_within_column_to_end() {
     let pool = fixture_pool().await;
     let board = BoardRepo::create(&pool, "B").await.unwrap();
-    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
     let a = CardRepo::create(&pool, &col.id, "a").await.unwrap();
     let b = CardRepo::create(&pool, &col.id, "b").await.unwrap();
     let c = CardRepo::create(&pool, &col.id, "c").await.unwrap();
@@ -292,7 +320,9 @@ async fn test_card_move_within_column_to_end() {
 async fn test_card_move_between_adjacent_neighbours() {
     let pool = fixture_pool().await;
     let board = BoardRepo::create(&pool, "B").await.unwrap();
-    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
     let a = CardRepo::create(&pool, &col.id, "a").await.unwrap();
     let b = CardRepo::create(&pool, &col.id, "b").await.unwrap();
     let c = CardRepo::create(&pool, &col.id, "c").await.unwrap();
@@ -315,7 +345,9 @@ async fn test_card_move_between_adjacent_neighbours() {
 async fn test_card_move_rejects_non_adjacent_neighbours() {
     let pool = fixture_pool().await;
     let board = BoardRepo::create(&pool, "B").await.unwrap();
-    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
     let a = CardRepo::create(&pool, &col.id, "a").await.unwrap();
     let _b = CardRepo::create(&pool, &col.id, "b").await.unwrap();
     let c = CardRepo::create(&pool, &col.id, "c").await.unwrap();
@@ -323,18 +355,19 @@ async fn test_card_move_rejects_non_adjacent_neighbours() {
 
     // a and c are NOT adjacent (b is between them).
     let res = CardRepo::move_card(&pool, &d.id, &col.id, Some(&a.id), Some(&c.id)).await;
-    assert!(matches!(
-        res,
-        Err(kanso_core::KansoError::InvalidMove(_))
-    ));
+    assert!(matches!(res, Err(kanso_core::KansoError::InvalidMove(_))));
 }
 
 #[tokio::test]
 async fn test_card_move_cross_column() {
     let pool = fixture_pool().await;
     let board = BoardRepo::create(&pool, "B").await.unwrap();
-    let src = ColumnRepo::create(&pool, &board.id, "Src", None).await.unwrap();
-    let dst = ColumnRepo::create(&pool, &board.id, "Dst", None).await.unwrap();
+    let src = ColumnRepo::create(&pool, &board.id, "Src", None)
+        .await
+        .unwrap();
+    let dst = ColumnRepo::create(&pool, &board.id, "Dst", None)
+        .await
+        .unwrap();
     let card = CardRepo::create(&pool, &src.id, "T").await.unwrap();
     CardRepo::create(&pool, &dst.id, "X").await.unwrap();
 
@@ -347,7 +380,9 @@ async fn test_card_move_cross_column() {
         .await
         .unwrap()
         .is_empty());
-    let dst_cards = CardRepo::list_by_column(&pool, &dst.id, false).await.unwrap();
+    let dst_cards = CardRepo::list_by_column(&pool, &dst.id, false)
+        .await
+        .unwrap();
     assert_eq!(dst_cards.len(), 2);
     assert_eq!(dst_cards[1].id, card.id);
 }
@@ -356,23 +391,34 @@ async fn test_card_move_cross_column() {
 async fn test_card_list_include_archived_toggle() {
     let pool = fixture_pool().await;
     let board = BoardRepo::create(&pool, "B").await.unwrap();
-    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
     let a = CardRepo::create(&pool, &col.id, "a").await.unwrap();
     let _b = CardRepo::create(&pool, &col.id, "b").await.unwrap();
     CardRepo::archive(&pool, &a.id).await.unwrap();
 
     assert_eq!(
-        CardRepo::list_by_column(&pool, &col.id, false).await.unwrap().len(),
+        CardRepo::list_by_column(&pool, &col.id, false)
+            .await
+            .unwrap()
+            .len(),
         1
     );
     assert_eq!(
-        CardRepo::list_by_column(&pool, &col.id, true).await.unwrap().len(),
+        CardRepo::list_by_column(&pool, &col.id, true)
+            .await
+            .unwrap()
+            .len(),
         2
     );
 
     CardRepo::unarchive(&pool, &a.id).await.unwrap();
     assert_eq!(
-        CardRepo::list_by_column(&pool, &col.id, false).await.unwrap().len(),
+        CardRepo::list_by_column(&pool, &col.id, false)
+            .await
+            .unwrap()
+            .len(),
         2
     );
 }
@@ -382,7 +428,9 @@ async fn test_card_patch_body_text_clear() {
     use kanso_core::repo::CardPatch;
     let pool = fixture_pool().await;
     let board = BoardRepo::create(&pool, "B").await.unwrap();
-    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
     let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
 
     let with_body = CardRepo::update(
@@ -430,19 +478,31 @@ async fn test_archive_missing_id_returns_not_found() {
     let missing = "00000000000000000000000000";
     assert!(matches!(
         BoardRepo::archive(&pool, missing).await,
-        Err(KansoError::NotFound { entity: "board", .. })
+        Err(KansoError::NotFound {
+            entity: "board",
+            ..
+        })
     ));
     assert!(matches!(
         BoardRepo::unarchive(&pool, missing).await,
-        Err(KansoError::NotFound { entity: "board", .. })
+        Err(KansoError::NotFound {
+            entity: "board",
+            ..
+        })
     ));
     assert!(matches!(
         ColumnRepo::archive(&pool, missing).await,
-        Err(KansoError::NotFound { entity: "column", .. })
+        Err(KansoError::NotFound {
+            entity: "column",
+            ..
+        })
     ));
     assert!(matches!(
         ColumnRepo::unarchive(&pool, missing).await,
-        Err(KansoError::NotFound { entity: "column", .. })
+        Err(KansoError::NotFound {
+            entity: "column",
+            ..
+        })
     ));
     assert!(matches!(
         CardRepo::archive(&pool, missing).await,
@@ -460,7 +520,9 @@ async fn test_archive_missing_id_returns_not_found() {
 async fn test_card_body_get_returns_none_on_fresh_card() {
     let pool = fixture_pool().await;
     let board = BoardRepo::create(&pool, "B").await.unwrap();
-    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
     let card = CardRepo::create(&pool, &col.id, "Fresh").await.unwrap();
 
     let body = CardRepo::get_body(&pool, &card.id).await.unwrap();
@@ -473,7 +535,9 @@ async fn test_card_body_get_returns_none_on_fresh_card() {
 async fn test_card_body_set_roundtrips_bytes() {
     let pool = fixture_pool().await;
     let board = BoardRepo::create(&pool, "B").await.unwrap();
-    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
     let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
 
     let blob: Vec<u8> = (0..=255u8).chain([0u8, 0, 0, 0xff, 0xfe]).collect();
@@ -496,14 +560,21 @@ async fn test_card_body_set_roundtrips_bytes() {
 async fn test_card_body_set_updates_fts() {
     let pool = fixture_pool().await;
     let board = BoardRepo::create(&pool, "B").await.unwrap();
-    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
-    let card = CardRepo::create(&pool, &col.id, "Lunch").await.unwrap();
-
-    CardRepo::set_body(&pool, &card.id, b"binary-doesnt-matter", "find me with carrots")
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
         .await
         .unwrap();
+    let card = CardRepo::create(&pool, &col.id, "Lunch").await.unwrap();
 
-    let hits = CardRepo::search(&pool, "carrots").await.unwrap();
+    CardRepo::set_body(
+        &pool,
+        &card.id,
+        b"binary-doesnt-matter",
+        "find me with carrots",
+    )
+    .await
+    .unwrap();
+
+    let hits = CardRepo::search(&pool, "carrots", false).await.unwrap();
     assert_eq!(hits.len(), 1);
     assert_eq!(hits[0].id, card.id);
 
@@ -511,12 +582,12 @@ async fn test_card_body_set_updates_fts() {
     CardRepo::set_body(&pool, &card.id, b"new-blob", "now it talks about beans")
         .await
         .unwrap();
-    let still_carrots = CardRepo::search(&pool, "carrots").await.unwrap();
+    let still_carrots = CardRepo::search(&pool, "carrots", false).await.unwrap();
     assert!(
         still_carrots.is_empty(),
         "old keyword should not be findable after overwrite"
     );
-    let beans = CardRepo::search(&pool, "beans").await.unwrap();
+    let beans = CardRepo::search(&pool, "beans", false).await.unwrap();
     assert_eq!(beans.len(), 1);
     assert_eq!(beans[0].id, card.id);
 }
@@ -539,4 +610,405 @@ async fn test_card_body_get_returns_not_found_for_unknown_id() {
         CardRepo::get_body(&pool, "00000000000000000000000000").await,
         Err(KansoError::NotFound { entity: "card", .. })
     ));
+}
+
+// ---------- Phase 3: tags + card-tag links ----------
+
+use kanso_core::repo::{TagPatch, TagRepo};
+
+#[tokio::test]
+async fn test_tag_create_and_list_ordering() {
+    let pool = fixture_pool().await;
+    TagRepo::create(&pool, "zeta", None).await.unwrap();
+    TagRepo::create(&pool, "Alpha", Some("#fff")).await.unwrap();
+    TagRepo::create(&pool, "beta", None).await.unwrap();
+
+    let all = TagRepo::list(&pool, false).await.unwrap();
+    assert_eq!(
+        all.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(),
+        vec!["Alpha", "beta", "zeta"]
+    );
+}
+
+#[tokio::test]
+async fn test_tag_duplicate_name_conflicts() {
+    use kanso_core::KansoError;
+    let pool = fixture_pool().await;
+    TagRepo::create(&pool, "bug", None).await.unwrap();
+    let res = TagRepo::create(&pool, "bug", None).await;
+    assert!(matches!(res, Err(KansoError::Conflict(_))), "got {res:?}");
+}
+
+#[tokio::test]
+async fn test_tag_patch_clears_and_sets_color() {
+    let pool = fixture_pool().await;
+    let t = TagRepo::create(&pool, "ops", Some("#aaa")).await.unwrap();
+
+    let renamed = TagRepo::update(
+        &pool,
+        &t.id,
+        TagPatch {
+            name: Some("Ops".into()),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(renamed.name, "Ops");
+    assert_eq!(renamed.color.as_deref(), Some("#aaa"));
+
+    let recoloured = TagRepo::update(
+        &pool,
+        &t.id,
+        TagPatch {
+            color: Some(Some("#bbb".into())),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(recoloured.color.as_deref(), Some("#bbb"));
+
+    let cleared = TagRepo::update(
+        &pool,
+        &t.id,
+        TagPatch {
+            color: Some(None),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert!(cleared.color.is_none());
+}
+
+#[tokio::test]
+async fn test_tag_update_unique_violation_conflicts() {
+    use kanso_core::KansoError;
+    let pool = fixture_pool().await;
+    let a = TagRepo::create(&pool, "a", None).await.unwrap();
+    let _b = TagRepo::create(&pool, "b", None).await.unwrap();
+    let res = TagRepo::update(
+        &pool,
+        &a.id,
+        TagPatch {
+            name: Some("b".into()),
+            ..Default::default()
+        },
+    )
+    .await;
+    assert!(matches!(res, Err(KansoError::Conflict(_))));
+}
+
+#[tokio::test]
+async fn test_tag_archive_unarchive_and_404() {
+    use kanso_core::KansoError;
+    let pool = fixture_pool().await;
+    let t = TagRepo::create(&pool, "x", None).await.unwrap();
+    TagRepo::archive(&pool, &t.id).await.unwrap();
+    assert_eq!(TagRepo::list(&pool, false).await.unwrap().len(), 0);
+    assert_eq!(TagRepo::list(&pool, true).await.unwrap().len(), 1);
+    TagRepo::unarchive(&pool, &t.id).await.unwrap();
+    assert_eq!(TagRepo::list(&pool, false).await.unwrap().len(), 1);
+
+    let missing = "00000000000000000000000000";
+    assert!(matches!(
+        TagRepo::archive(&pool, missing).await,
+        Err(KansoError::NotFound { entity: "tag", .. })
+    ));
+    assert!(matches!(
+        TagRepo::unarchive(&pool, missing).await,
+        Err(KansoError::NotFound { entity: "tag", .. })
+    ));
+    assert!(matches!(
+        TagRepo::get(&pool, missing).await,
+        Err(KansoError::NotFound { entity: "tag", .. })
+    ));
+    assert!(matches!(
+        TagRepo::delete(&pool, missing).await,
+        Err(KansoError::NotFound { entity: "tag", .. })
+    ));
+}
+
+#[tokio::test]
+async fn test_tag_delete_cascades_card_tags() {
+    let pool = fixture_pool().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
+    let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
+    let tag = TagRepo::create(&pool, "ops", None).await.unwrap();
+
+    CardRepo::add_tag(&pool, &card.id, &tag.id).await.unwrap();
+    assert_eq!(
+        CardRepo::tags_for_card(&pool, &card.id)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+
+    TagRepo::delete(&pool, &tag.id).await.unwrap();
+    assert!(CardRepo::tags_for_card(&pool, &card.id)
+        .await
+        .unwrap()
+        .is_empty());
+}
+
+#[tokio::test]
+async fn test_card_tag_link_idempotent_and_unlink_idempotent() {
+    use kanso_core::KansoError;
+    let pool = fixture_pool().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
+    let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
+    let tag = TagRepo::create(&pool, "ops", None).await.unwrap();
+
+    CardRepo::add_tag(&pool, &card.id, &tag.id).await.unwrap();
+    CardRepo::add_tag(&pool, &card.id, &tag.id).await.unwrap();
+    assert_eq!(
+        CardRepo::tags_for_card(&pool, &card.id)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+
+    CardRepo::remove_tag(&pool, &card.id, &tag.id)
+        .await
+        .unwrap();
+    CardRepo::remove_tag(&pool, &card.id, &tag.id)
+        .await
+        .unwrap();
+    assert!(CardRepo::tags_for_card(&pool, &card.id)
+        .await
+        .unwrap()
+        .is_empty());
+
+    let missing = "00000000000000000000000000";
+    assert!(matches!(
+        CardRepo::add_tag(&pool, missing, &tag.id).await,
+        Err(KansoError::NotFound { entity: "card", .. })
+    ));
+    assert!(matches!(
+        CardRepo::add_tag(&pool, &card.id, missing).await,
+        Err(KansoError::NotFound { entity: "tag", .. })
+    ));
+    assert!(matches!(
+        CardRepo::tags_for_card(&pool, missing).await,
+        Err(KansoError::NotFound { entity: "card", .. })
+    ));
+    assert!(matches!(
+        CardRepo::cards_with_tag(&pool, missing, false).await,
+        Err(KansoError::NotFound { entity: "tag", .. })
+    ));
+}
+
+#[tokio::test]
+async fn test_card_delete_cascades_card_tags() {
+    let pool = fixture_pool().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
+    let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
+    let tag = TagRepo::create(&pool, "ops", None).await.unwrap();
+    CardRepo::add_tag(&pool, &card.id, &tag.id).await.unwrap();
+
+    sqlx::query("DELETE FROM cards WHERE id = ?1")
+        .bind(&card.id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM card_tags WHERE tag_id = ?1")
+        .bind(&tag.id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
+}
+
+#[tokio::test]
+async fn test_cards_with_tag_orders_and_filters_archived() {
+    let pool = fixture_pool().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
+    let a = CardRepo::create(&pool, &col.id, "a").await.unwrap();
+    let b = CardRepo::create(&pool, &col.id, "b").await.unwrap();
+    let tag = TagRepo::create(&pool, "ops", None).await.unwrap();
+    CardRepo::add_tag(&pool, &a.id, &tag.id).await.unwrap();
+    CardRepo::add_tag(&pool, &b.id, &tag.id).await.unwrap();
+    CardRepo::archive(&pool, &a.id).await.unwrap();
+
+    let active = CardRepo::cards_with_tag(&pool, &tag.id, false)
+        .await
+        .unwrap();
+    assert_eq!(active.len(), 1);
+    assert_eq!(active[0].id, b.id);
+    let all = CardRepo::cards_with_tag(&pool, &tag.id, true)
+        .await
+        .unwrap();
+    assert_eq!(all.len(), 2);
+}
+
+// ---------- Phase 3: FTS5 search hardening ----------
+
+#[tokio::test]
+async fn test_search_empty_query_returns_empty() {
+    let pool = fixture_pool().await;
+    assert!(CardRepo::search(&pool, "", false).await.unwrap().is_empty());
+    assert!(CardRepo::search(&pool, "   ", false)
+        .await
+        .unwrap()
+        .is_empty());
+}
+
+#[tokio::test]
+async fn test_search_treats_fts_operators_as_literals() {
+    let pool = fixture_pool().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
+    let with_quote = CardRepo::create(&pool, &col.id, "needs \"quote\" here")
+        .await
+        .unwrap();
+    let _other = CardRepo::create(&pool, &col.id, "totally separate")
+        .await
+        .unwrap();
+
+    // FTS5 operators should NOT be parsed: querying with parens / NEAR shouldn't error.
+    let star = CardRepo::search(&pool, "OR NEAR (", false).await.unwrap();
+    assert!(
+        star.is_empty(),
+        "fts operators must not panic or match everything"
+    );
+
+    // Embedded double quotes in input must round-trip safely.
+    let hit = CardRepo::search(&pool, "\"quote\"", false).await.unwrap();
+    assert_eq!(hit.len(), 1);
+    assert_eq!(hit[0].id, with_quote.id);
+}
+
+#[tokio::test]
+async fn test_search_include_archived_toggle() {
+    let pool = fixture_pool().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
+    let a = CardRepo::create(&pool, &col.id, "carrot").await.unwrap();
+    CardRepo::archive(&pool, &a.id).await.unwrap();
+
+    assert!(CardRepo::search(&pool, "carrot", false)
+        .await
+        .unwrap()
+        .is_empty());
+    let all = CardRepo::search(&pool, "carrot", true).await.unwrap();
+    assert_eq!(all.len(), 1);
+    assert_eq!(all[0].id, a.id);
+}
+
+#[tokio::test]
+async fn test_search_roundtrips_via_card_body() {
+    let pool = fixture_pool().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
+    let card = CardRepo::create(&pool, &col.id, "Plain title")
+        .await
+        .unwrap();
+
+    CardRepo::set_body(&pool, &card.id, b"y", "deeply buried tangerine word")
+        .await
+        .unwrap();
+    let hits = CardRepo::search(&pool, "tangerine", false).await.unwrap();
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0].id, card.id);
+}
+
+// ---------- Phase 3: column reorder ----------
+
+#[tokio::test]
+async fn test_column_move_to_end_and_between_neighbours() {
+    use kanso_core::KansoError;
+    let pool = fixture_pool().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let a = ColumnRepo::create(&pool, &board.id, "a", None)
+        .await
+        .unwrap();
+    let b = ColumnRepo::create(&pool, &board.id, "b", None)
+        .await
+        .unwrap();
+    let c = ColumnRepo::create(&pool, &board.id, "c", None)
+        .await
+        .unwrap();
+
+    ColumnRepo::move_column(&pool, &b.id, None, None)
+        .await
+        .unwrap();
+    let order: Vec<String> = ColumnRepo::list_by_board(&pool, &board.id, false)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|c| c.name)
+        .collect();
+    assert_eq!(order, vec!["a", "c", "b"]);
+
+    ColumnRepo::move_column(&pool, &c.id, Some(&b.id), None)
+        .await
+        .unwrap();
+    let order: Vec<String> = ColumnRepo::list_by_board(&pool, &board.id, false)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|c| c.name)
+        .collect();
+    assert_eq!(order, vec!["a", "b", "c"]);
+
+    let res = ColumnRepo::move_column(&pool, &a.id, Some(&c.id), Some(&b.id)).await;
+    assert!(matches!(res, Err(KansoError::InvalidMove(_))));
+}
+
+#[tokio::test]
+async fn test_column_patch_color_and_move_via_repo() {
+    let pool = fixture_pool().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let a = ColumnRepo::create(&pool, &board.id, "a", None)
+        .await
+        .unwrap();
+    let b = ColumnRepo::create(&pool, &board.id, "b", Some("#aaa"))
+        .await
+        .unwrap();
+
+    let recoloured = ColumnRepo::update(
+        &pool,
+        &a.id,
+        ColumnPatch {
+            color: Some(Some("#bbb".into())),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(recoloured.color.as_deref(), Some("#bbb"));
+
+    // Reorder: move b before a.
+    ColumnRepo::move_column(&pool, &b.id, None, Some(&a.id))
+        .await
+        .unwrap();
+    let order: Vec<String> = ColumnRepo::list_by_board(&pool, &board.id, false)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|c| c.name)
+        .collect();
+    assert_eq!(order, vec!["b", "a"]);
 }

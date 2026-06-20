@@ -17,6 +17,7 @@ serde_json = { workspace = true }
 tracing = { workspace = true }
 sqlx = { workspace = true }
 base64 = { workspace = true }
+subtle = { workspace = true }
 kanso-core = { path = "../kanso-core" }
 
 [dev-dependencies]

@@ -1,20 +1,23 @@
 import { lazy, Suspense, useState } from 'react';
 import KanbanBoard from './kanban/KanbanBoard';
+import BoardSwitcher from './kanban/BoardSwitcher';
+import ManageBoardsDrawer from './kanban/ManageBoardsDrawer';
 
 const EditorDemo = lazy(() => import('./editor/EditorDemo'));
 
-// Phase 2 will re-mount BlockSuite inside the card detail panel. We keep
-// the lazy-import wiring exercised behind a debug flag so the editor chunk
-// path doesn't bit-rot.
+// Phase 2 wired BlockSuite into the card drawer. We keep the lazy-import
+// boundary exercised behind a debug flag so the editor chunk path doesn't
+// bit-rot if no card is opened during a session.
 const DEBUG_EDITOR = false;
 
 export default function App() {
   const [showEditor, setShowEditor] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
 
   return (
     <div className="kanso-app">
       <header className="kanso-header">
-        <h1 className="kanso-wordmark">kanso</h1>
+        <BoardSwitcher onOpenManage={() => setManageOpen(true)} />
         {DEBUG_EDITOR && (
           <button
             type="button"
@@ -32,6 +35,7 @@ export default function App() {
       ) : (
         <KanbanBoard />
       )}
+      {manageOpen && <ManageBoardsDrawer onClose={() => setManageOpen(false)} />}
     </div>
   );
 }

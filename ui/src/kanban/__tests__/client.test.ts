@@ -12,15 +12,28 @@ import {
   cardBodySet,
   cardCreate,
   cardMove,
+  cardSearch,
+  cardTagAdd,
+  cardTagRemove,
+  cardTagsList,
   cardUnarchive,
   cardUpdate,
   cardsList,
   columnArchive,
   columnCreate,
+  columnMove,
   columnUnarchive,
   columnUpdate,
   columnsList,
   defaultColumn,
+  tagArchive,
+  tagCardsList,
+  tagCreate,
+  tagDelete,
+  tagGet,
+  tagUnarchive,
+  tagUpdate,
+  tagsList,
   type InvokeFn,
 } from '../api/client';
 import { invoke as realInvoke } from '@tauri-apps/api/core';
@@ -29,7 +42,6 @@ describe('kanban api client', () => {
   const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
   const fakeInvoker: InvokeFn = vi.fn(async (cmd, args) => {
     calls.push({ cmd, args });
-    // Return shape-shifting placeholder; consumers ignore it in these tests.
     return undefined as unknown as never;
   });
 
@@ -71,6 +83,9 @@ describe('kanban api client', () => {
     await columnUpdate('c1', { color: null });
     await columnArchive('c1');
     await columnUnarchive('c1');
+    await columnMove('c1', { before: 'c2' });
+    await columnMove('c1', { after: 'c3' });
+    await columnMove('c1');
 
     expect(calls).toEqual([
       { cmd: 'columns_list', args: { boardId: 'b1', includeArchived: false } },
@@ -78,6 +93,9 @@ describe('kanban api client', () => {
       { cmd: 'column_update', args: { id: 'c1', patch: { color: null } } },
       { cmd: 'column_archive', args: { id: 'c1' } },
       { cmd: 'column_unarchive', args: { id: 'c1' } },
+      { cmd: 'column_move', args: { id: 'c1', before: 'c2', after: undefined } },
+      { cmd: 'column_move', args: { id: 'c1', before: undefined, after: 'c3' } },
+      { cmd: 'column_move', args: { id: 'c1', before: undefined, after: undefined } },
     ]);
   });
 
@@ -131,6 +149,36 @@ describe('kanban api client', () => {
         cmd: 'card_body_set',
         args: { id: 'k1', body: { body_blocksuite_b64: 'AAA=', body_text: 'hi' } },
       },
+    ]);
+  });
+
+  it('serializes tag + search commands', async () => {
+    await tagsList(true);
+    await tagGet('t1');
+    await tagCreate('Important', '#f00');
+    await tagUpdate('t1', { color: null });
+    await tagArchive('t1');
+    await tagUnarchive('t1');
+    await tagDelete('t1');
+    await tagCardsList('t1');
+    await cardTagsList('k1', true);
+    await cardTagAdd('k1', 't1');
+    await cardTagRemove('k1', 't1');
+    await cardSearch('foo');
+
+    expect(calls).toEqual([
+      { cmd: 'tags_list', args: { includeArchived: true } },
+      { cmd: 'tag_get', args: { id: 't1' } },
+      { cmd: 'tag_create', args: { body: { name: 'Important', color: '#f00' } } },
+      { cmd: 'tag_update', args: { id: 't1', patch: { color: null } } },
+      { cmd: 'tag_archive', args: { id: 't1' } },
+      { cmd: 'tag_unarchive', args: { id: 't1' } },
+      { cmd: 'tag_delete', args: { id: 't1' } },
+      { cmd: 'tag_cards_list', args: { tagId: 't1', includeArchived: false } },
+      { cmd: 'card_tags_list', args: { cardId: 'k1', includeArchived: true } },
+      { cmd: 'card_tag_add', args: { cardId: 'k1', tagId: 't1' } },
+      { cmd: 'card_tag_remove', args: { cardId: 'k1', tagId: 't1' } },
+      { cmd: 'card_search', args: { query: 'foo', includeArchived: false } },
     ]);
   });
 });

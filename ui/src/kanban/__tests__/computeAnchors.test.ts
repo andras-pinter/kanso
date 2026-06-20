@@ -19,13 +19,25 @@ function card(id: string): CardDto {
 describe('computeAnchors', () => {
   const cards = [card('a'), card('b'), card('c')];
 
-  it('returns before:<id> when inserting in front of a card', () => {
-    expect(computeAnchors(cards, 0)).toEqual({ before: 'a' });
-    expect(computeAnchors(cards, 1)).toEqual({ before: 'b' });
+  it('returns {after} when inserting at the start', () => {
+    expect(computeAnchors(cards, 0)).toEqual({ after: 'a' });
   });
 
-  it('returns empty when appending at end', () => {
-    expect(computeAnchors(cards, 3)).toEqual({});
+  it('returns {before, after} when inserting in the middle', () => {
+    expect(computeAnchors(cards, 1)).toEqual({ before: 'a', after: 'b' });
+    expect(computeAnchors(cards, 2)).toEqual({ before: 'b', after: 'c' });
+  });
+
+  it('returns {before} when appending to the end', () => {
+    expect(computeAnchors(cards, 3)).toEqual({ before: 'c' });
+  });
+
+  it('returns {} for an empty list', () => {
     expect(computeAnchors([], 0)).toEqual({});
+  });
+
+  it('clamps an out-of-range insertIndex', () => {
+    expect(computeAnchors(cards, 99)).toEqual({ before: 'c' });
+    expect(computeAnchors(cards, -5)).toEqual({ after: 'a' });
   });
 });

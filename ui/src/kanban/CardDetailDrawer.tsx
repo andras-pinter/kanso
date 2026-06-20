@@ -40,8 +40,21 @@ export default function CardDetailDrawer({ card }: Props) {
     void updateCard(card.id, { title: trimmed }).then(flashSaved);
   };
 
-  const onArchive = () => {
-    void archiveCard(card.id);
+  const onArchive = (): void => {
+    void archive();
+  };
+
+  // M4: Archive must await pending editor saves like Close does — otherwise
+  // the drawer unmounts mid-flush and a failed cleanup save would silently
+  // lose edits.
+  const archive = async (): Promise<void> => {
+    try {
+      await editorRef.current?.flush();
+    } catch {
+      setCloseBlocked(true);
+      return;
+    }
+    await archiveCard(card.id);
   };
 
   // H4: Close must await the editor's pending save. If the save fails the

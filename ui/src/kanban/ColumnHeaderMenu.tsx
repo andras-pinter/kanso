@@ -41,7 +41,14 @@ export default function ColumnHeaderMenu({ column, onStartRename }: Props) {
   }, [open]);
 
   return (
-    <div className="kanso-column-menu-root" ref={rootRef}>
+    <div
+      className="kanso-column-menu-root"
+      ref={rootRef}
+      // L2: the column header carries the drag listeners. Stop pointer
+      // events here so opening the menu (or interacting with anything
+      // inside it) never starts a column drag.
+      onPointerDown={(e) => e.stopPropagation()}
+    >
       <button
         type="button"
         className="kanso-column-menu-btn"

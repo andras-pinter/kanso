@@ -50,9 +50,13 @@ export default function Column({ column, cards }: Props) {
   );
 
   // Column body is a droppable so empty-list / end-of-list card drops resolve.
+  // Archived columns do NOT accept drops — otherwise a live card could be
+  // dragged into an archived column and disappear from the live view without
+  // actually being archived.
   const { setNodeRef: setBodyRef } = useDroppable({
     id: `column:${column.id}`,
     data: { type: 'column', columnId: column.id },
+    disabled: isArchived,
   });
 
   const [renaming, setRenaming] = useState(false);
@@ -148,7 +152,10 @@ export default function Column({ column, cards }: Props) {
           />
         )}
       </header>
-      <SortableContext items={liveCards.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+      <SortableContext
+        items={isArchived ? [] : liveCards.map((c) => c.id)}
+        strategy={verticalListSortingStrategy}
+      >
         <div
           ref={setBodyRef}
           className={`kanso-cards${liveCards.length === 0 ? ' kanso-cards--empty' : ''}`}

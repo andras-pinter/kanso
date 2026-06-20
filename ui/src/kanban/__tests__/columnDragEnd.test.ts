@@ -3,12 +3,13 @@ import {
   applyColumnReorder,
   columnDragId,
   computeColumnAnchors,
+  filterCollidersForActive,
   parseColumnDragId,
   resolveColumnDragEnd,
 } from '../columnDragEnd';
 import type { ColumnDto } from '../types';
 
-function col(id: string, position: string): ColumnDto {
+function col(id: string, position: string, archived = false): ColumnDto {
   return {
     id,
     board_id: 'b',
@@ -17,7 +18,7 @@ function col(id: string, position: string): ColumnDto {
     color: null,
     created_at: 0,
     updated_at: 0,
-    archived_at: null,
+    archived_at: archived ? 1 : null,
   };
 }
 
@@ -41,66 +42,120 @@ describe('resolveColumnDragEnd', () => {
     expect(resolveColumnDragEnd('col:a', 'card1', { columns })).toBeNull();
   });
 
-  it('returns null on same-slot drop', () => {
+  it('returns null on a drop on self', () => {
     expect(resolveColumnDragEnd('col:a', 'col:a', { columns })).toBeNull();
   });
 
-  it('returns null on adjacent forward drop that would not move it', () => {
-    // Moving b rightward over c: post-removal effective insert at idx 1,
-    // which is b's original idx — so this is a no-op.
-    expect(resolveColumnDragEnd('col:b', 'col:c', { columns })).toBeNull();
+  it('returns null when active or over column is not present', () => {
+    expect(resolveColumnDragEnd('col:z', 'col:a', { columns })).toBeNull();
+    expect(resolveColumnDragEnd('col:a', 'col:z', { columns })).toBeNull();
   });
 
-  it('resolves moving forward: a -> over c, inserts at idx 1 after removal', () => {
-    // Original [a,b,c,d]; remove a -> [b,c,d]. Over c (orig idx 2). a was
-    // at idx 0 < 2 so effective insert = 2 - 1 = 1 in [b,c,d] → between b
-    // and c → final order [b, a, c, d].
+  it('resolves adjacent forward drop (b over c)', () => {
+    const r = resolveColumnDragEnd('col:b', 'col:c', { columns });
+    expect(r?.columnId).toBe('b');
+    expect(r?.reordered.map((c) => c.id)).toEqual(['a', 'c', 'b', 'd']);
+  });
+
+  it('resolves drop over a non-adjacent later column (a over c)', () => {
     const r = resolveColumnDragEnd('col:a', 'col:c', { columns });
-    expect(r).toEqual({ columnId: 'a', insertIndex: 1 });
+    expect(r?.reordered.map((c) => c.id)).toEqual(['b', 'c', 'a', 'd']);
   });
 
-  it('resolves moving backward: d -> over a, inserts at idx 0', () => {
-    const r = resolveColumnDragEnd('col:d', 'col:a', { columns });
-    expect(r).toEqual({ columnId: 'd', insertIndex: 0 });
-  });
-
-  it('handles drop at the very end (moving forward to last)', () => {
-    // a -> over d: post-removal [b,c,d]; effective = 3 - 1 = 2 (index of d
-    // in post-removal list) → insert at idx 2 → [b,c,a,d]. That's NOT the
-    // very end, but is the slot the user dropped on.
+  it('resolves drop on the LAST column reaches the end (a over d)', () => {
     const r = resolveColumnDragEnd('col:a', 'col:d', { columns });
-    expect(r).toEqual({ columnId: 'a', insertIndex: 2 });
+    expect(r?.reordered.map((c) => c.id)).toEqual(['b', 'c', 'd', 'a']);
+  });
+
+  it('resolves drop on the FIRST column reaches the start (d over a)', () => {
+    const r = resolveColumnDragEnd('col:d', 'col:a', { columns });
+    expect(r?.reordered.map((c) => c.id)).toEqual(['d', 'a', 'b', 'c']);
+  });
+
+  it('ignores archived columns when computing the live order', () => {
+    const withArchived = [
+      col('a', 'a0'),
+      col('b', 'b0', true),
+      col('c', 'c0'),
+      col('d', 'd0'),
+    ];
+    const r = resolveColumnDragEnd('col:a', 'col:d', { columns: withArchived });
+    // Live list pre-move = [a, c, d]; a over d → [c, d, a].
+    expect(r?.reordered.map((c) => c.id)).toEqual(['c', 'd', 'a']);
   });
 });
 
 describe('computeColumnAnchors', () => {
-  it('returns before:<id> when inserting in front of a column', () => {
-    const withoutMoved = [col('b', 'b0'), col('c', 'c0'), col('d', 'd0')];
-    expect(computeColumnAnchors(withoutMoved, 0)).toEqual({ before: 'b' });
-    expect(computeColumnAnchors(withoutMoved, 1)).toEqual({ before: 'c' });
-    expect(computeColumnAnchors(withoutMoved, 2)).toEqual({ before: 'd' });
+  const live = [col('b', 'b0'), col('a', 'a0'), col('c', 'c0'), col('d', 'd0')];
+
+  it('returns {after} for the first slot', () => {
+    expect(computeColumnAnchors([col('a', 'a0'), col('b', 'b0')], 'a')).toEqual({
+      after: 'b',
+    });
   });
 
-  it('returns empty when appending to end', () => {
-    const withoutMoved = [col('b', 'b0'), col('c', 'c0')];
-    expect(computeColumnAnchors(withoutMoved, 2)).toEqual({});
-    expect(computeColumnAnchors([], 0)).toEqual({});
+  it('returns {before, after} for a middle slot', () => {
+    expect(computeColumnAnchors(live, 'a')).toEqual({ before: 'b', after: 'c' });
+  });
+
+  it('returns {before} for the last slot', () => {
+    expect(computeColumnAnchors(live, 'd')).toEqual({ before: 'c' });
+  });
+
+  it('returns {} for a single-item list', () => {
+    expect(computeColumnAnchors([col('only', 'x')], 'only')).toEqual({});
+  });
+
+  it('returns {} when the column is missing', () => {
+    expect(computeColumnAnchors(live, 'ghost')).toEqual({});
   });
 });
 
 describe('applyColumnReorder', () => {
-  it('reorders columns optimistically', () => {
-    const next = applyColumnReorder(columns, { columnId: 'a', insertIndex: 1 });
-    expect(next.map((c) => c.id)).toEqual(['b', 'a', 'c', 'd']);
-  });
-
-  it('appends to end when insertIndex >= length-1', () => {
-    const next = applyColumnReorder(columns, { columnId: 'a', insertIndex: 99 });
+  it('reorders live columns according to the resolution', () => {
+    const r = resolveColumnDragEnd('col:a', 'col:d', { columns });
+    if (!r) throw new Error('expected resolution');
+    const next = applyColumnReorder(columns, r);
     expect(next.map((c) => c.id)).toEqual(['b', 'c', 'd', 'a']);
   });
 
-  it('returns a copy unchanged when the moving column is missing', () => {
-    const next = applyColumnReorder(columns, { columnId: 'zz', insertIndex: 0 });
-    expect(next.map((c) => c.id)).toEqual(columns.map((c) => c.id));
+  it('keeps archived columns in their original slots', () => {
+    const withArchived = [
+      col('a', 'a0'),
+      col('arc', 'arc0', true),
+      col('b', 'b0'),
+      col('c', 'c0'),
+    ];
+    const r = resolveColumnDragEnd('col:a', 'col:c', { columns: withArchived });
+    if (!r) throw new Error('expected resolution');
+    const next = applyColumnReorder(withArchived, r);
+    // Live pre-move: [a,b,c]; a over c → [b,c,a]. Archived col stays in
+    // its slot (was at index 1 in the full list).
+    expect(next.map((c) => c.id)).toEqual(['b', 'arc', 'c', 'a']);
+  });
+});
+
+describe('filterCollidersForActive', () => {
+  const droppables = ['col:a', 'col:b', 'col:c', 'column:a', 'column:b', 'card-1', 'card-2'];
+
+  it('column drag → only col: ids survive', () => {
+    expect(filterCollidersForActive('col:a', droppables)).toEqual(['col:a', 'col:b', 'col:c']);
+  });
+
+  it('card drag → no col: ids survive (avoids hijacking by the column sortable)', () => {
+    expect(filterCollidersForActive('card-1', droppables)).toEqual([
+      'column:a',
+      'column:b',
+      'card-1',
+      'card-2',
+    ]);
+  });
+
+  it('column drag over a column that contains cards still resolves to a column id', () => {
+    // The bug: closestCorners over a populated column reports the nested
+    // card / `column:` body droppable. After filtering, only the column
+    // sortable ids remain so the resolver gets a valid target.
+    const overPopulated = ['col:a', 'col:b', 'column:b', 'card-99'];
+    expect(filterCollidersForActive('col:a', overPopulated)).toEqual(['col:a', 'col:b']);
   });
 });

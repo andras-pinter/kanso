@@ -10,6 +10,7 @@ import {
   closestCorners,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
@@ -19,7 +20,7 @@ import CardDetailDrawer from './CardDetailDrawer';
 import { CardOverlay } from './Card';
 import { useKanbanStore } from './hooks/useKanbanStore';
 import { resolveDragEnd } from './dragEnd';
-import { COLUMN_DRAG_PREFIX, parseColumnDragId, resolveColumnDragEnd } from './columnDragEnd';
+import { COLUMN_DRAG_PREFIX, filterCollidersForActive, parseColumnDragId, resolveColumnDragEnd } from './columnDragEnd';
 import type { CardDto } from './types';
 import './kanban.css';
 
@@ -46,6 +47,22 @@ export default function KanbanBoard() {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
   );
+
+  // Custom collision detection: during a column drag we only want to consider
+  // other column sortables — card / body droppables shadow the column they
+  // belong to and `closestCorners` would otherwise return a non-`col:` id,
+  // which `resolveColumnDragEnd` rejects.
+  const collisionDetection = useCallback<CollisionDetection>((args) => {
+    const activeId = String(args.active.id);
+    const allowed = new Set(
+      filterCollidersForActive(
+        activeId,
+        args.droppableContainers.map((c) => String(c.id)),
+      ),
+    );
+    const filtered = args.droppableContainers.filter((c) => allowed.has(String(c.id)));
+    return closestCorners({ ...args, droppableContainers: filtered });
+  }, []);
 
   const draggingCard = useMemo<CardDto | null>(() => {
     if (!draggingCardId) return null;
@@ -122,7 +139,7 @@ export default function KanbanBoard() {
       </div>
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCorners}
+        collisionDetection={collisionDetection}
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
         onDragCancel={onDragCancel}

@@ -274,7 +274,18 @@ describe('useKanbanStore boards', () => {
       if (cmd === 'column_move') throw { kind: 'failed', message: 'reorder boom' };
       return baseInvoker(cmd, args);
     });
-    await useKanbanStore.getState().reorderColumn({ columnId: 'a', insertIndex: 1 });
+    const colA = useKanbanStore.getState().columns.find((c) => c.id === 'a');
+    const colC = useKanbanStore.getState().columns.find((c) => c.id === 'c');
+    if (!colA || !colC) throw new Error('expected fixtures');
+    // a -> over c → [b, c, a]
+    await useKanbanStore.getState().reorderColumn({
+      columnId: 'a',
+      reordered: [
+        useKanbanStore.getState().columns[1],
+        useKanbanStore.getState().columns[2],
+        useKanbanStore.getState().columns[0],
+      ],
+    });
     const s = useKanbanStore.getState();
     expect(s.columns.map((c) => c.id)).toEqual(['a', 'b', 'c']);
     expect(s.error).toMatch(/reorder boom/);

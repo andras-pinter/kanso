@@ -42,6 +42,12 @@ type Status = 'idle' | 'loading' | 'ready' | 'error';
 
 const STORAGE_KEY = 'kanso.currentBoardId';
 
+// Monotonic token for board-content fetches. Each call to switchBoard,
+// setShowArchived, or any other full reload claims a fresh token; only
+// the latest token may write its result back, so a slow in-flight fetch
+// can never overwrite the user's newer board/toggle selection.
+let loadVersion = 0;
+
 interface KanbanState {
   status: Status;
   error: string | null;
@@ -91,16 +97,26 @@ function formatError(e: unknown): string {
   return String(e);
 }
 
-// Build the {before, after} payload from an insertion index relative to
-// the post-removal target column. Pass `before` whenever there's a card
-// at `insertIndex`; otherwise we're appending to the end.
+// Build the {before, after} payload from an insertion index into the
+// post-removal target list. Backend semantics: `before` is the neighbour
+// that should end up at the LOWER position (i.e. the predecessor) and
+// `after` is the SUCCESSOR. The neighbours come straight from the list:
+//
+//   list = [..., L[i-1], L[i], ...]
+//   inserting at i → before = L[i-1], after = L[i]
+//
+// Either side may be absent (prepend / append / empty list).
 export function computeAnchors(
   targetCards: readonly CardDto[],
   insertIndex: number,
 ): { before?: string; after?: string } {
-  const target = targetCards[insertIndex];
-  if (target) return { before: target.id };
-  return {};
+  const clamped = Math.max(0, Math.min(insertIndex, targetCards.length));
+  const prev = targetCards[clamped - 1];
+  const next = targetCards[clamped];
+  const anchors: { before?: string; after?: string } = {};
+  if (prev) anchors.before = prev.id;
+  if (next) anchors.after = next.id;
+  return anchors;
 }
 
 function readPersistedBoardId(): string | null {
@@ -152,6 +168,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
   selectCard: (id) => set({ selectedCardId: id }),
 
   load: async () => {
+    const myVersion = ++loadVersion;
     set({ status: 'loading', error: null });
     try {
       // Seed first so a brand-new install has at least one board + column.
@@ -164,6 +181,8 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
         (persisted && live.find((b) => b.id === persisted)) ?? live[0] ?? null;
 
       if (!target) {
+        if (myVersion !== loadVersion) return;
+        persistBoardId(null);
         set({
           status: 'ready',
           boards: allBoards,
@@ -176,6 +195,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
       }
 
       const { columns, cardsByColumn } = await fetchBoardContents(target.id, includeArchived);
+      if (myVersion !== loadVersion) return;
       persistBoardId(target.id);
       set({
         status: 'ready',
@@ -186,17 +206,21 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
         error: null,
       });
     } catch (e) {
+      if (myVersion !== loadVersion) return;
       set({ status: 'error', error: formatError(e) });
     }
   },
 
   switchBoard: async (id) => {
     if (get().currentBoardId === id) return;
+    const myVersion = ++loadVersion;
     try {
       const { columns, cardsByColumn } = await fetchBoardContents(id, get().showArchived);
+      if (myVersion !== loadVersion) return;
       persistBoardId(id);
       set({ currentBoardId: id, columns, cardsByColumn, selectedCardId: null, error: null });
     } catch (e) {
+      if (myVersion !== loadVersion) return;
       set({ error: formatError(e) });
     }
   },
@@ -205,10 +229,13 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
     set({ showArchived: v });
     const id = get().currentBoardId;
     if (!id) return;
+    const myVersion = ++loadVersion;
     try {
       const { columns, cardsByColumn } = await fetchBoardContents(id, v);
+      if (myVersion !== loadVersion) return;
       set({ columns, cardsByColumn });
     } catch (e) {
+      if (myVersion !== loadVersion) return;
       set({ error: formatError(e) });
     }
   },
@@ -270,10 +297,12 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
       if (wasCurrent) {
         const next = live[0] ?? null;
         if (next) {
+          const myVersion = ++loadVersion;
           const { columns, cardsByColumn } = await fetchBoardContents(
             next.id,
             get().showArchived,
           );
+          if (myVersion !== loadVersion) return;
           persistBoardId(next.id);
           set({
             boards: all,
@@ -284,6 +313,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
             error: null,
           });
         } else {
+          ++loadVersion;
           persistBoardId(null);
           set({
             boards: all,
@@ -320,10 +350,12 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
       if (get().currentBoardId === id) {
         const next = live[0] ?? null;
         if (next) {
+          const myVersion = ++loadVersion;
           const { columns, cardsByColumn } = await fetchBoardContents(
             next.id,
             get().showArchived,
           );
+          if (myVersion !== loadVersion) return;
           persistBoardId(next.id);
           set({
             boards: all,
@@ -333,6 +365,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
             selectedCardId: null,
           });
         } else {
+          ++loadVersion;
           persistBoardId(null);
           set({
             boards: all,
@@ -405,7 +438,9 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
       await columnArchive(id);
       const boardId = get().currentBoardId;
       if (!boardId) return;
+      const myVersion = ++loadVersion;
       const { columns, cardsByColumn } = await fetchBoardContents(boardId, get().showArchived);
+      if (myVersion !== loadVersion) return;
       set({ columns, cardsByColumn });
     } catch (e) {
       set({ error: formatError(e) });
@@ -417,7 +452,9 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
       await columnUnarchive(id);
       const boardId = get().currentBoardId;
       if (!boardId) return;
+      const myVersion = ++loadVersion;
       const { columns, cardsByColumn } = await fetchBoardContents(boardId, get().showArchived);
+      if (myVersion !== loadVersion) return;
       set({ columns, cardsByColumn });
     } catch (e) {
       set({ error: formatError(e) });
@@ -428,8 +465,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
     const snapshot = get().columns.slice();
     const optimistic = applyColumnReorder(snapshot, resolution);
     set({ columns: optimistic });
-    const withoutMoved = snapshot.filter((c) => c.id !== resolution.columnId);
-    const anchors = computeColumnAnchors(withoutMoved, resolution.insertIndex);
+    const anchors = computeColumnAnchors(resolution.reordered, resolution.columnId);
     try {
       const fresh = await columnMove(resolution.columnId, anchors);
       set((s) => ({
@@ -500,7 +536,9 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
       await cardUnarchive(id);
       const boardId = get().currentBoardId;
       if (!boardId) return;
+      const myVersion = ++loadVersion;
       const { columns, cardsByColumn } = await fetchBoardContents(boardId, get().showArchived);
+      if (myVersion !== loadVersion) return;
       set({ columns, cardsByColumn });
     } catch (e) {
       set({ error: formatError(e) });
@@ -512,6 +550,13 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
     const fromList = state.cardsByColumn[fromColumnId] ?? [];
     const card = fromList.find((c) => c.id === cardId);
     if (!card) return;
+
+    // Guard against dropping a live card onto an archived column. The
+    // droppable is also disabled in the UI, but keyboard / programmatic
+    // moves should fail silently rather than ship the card to a hidden
+    // bucket.
+    const targetCol = state.columns.find((c) => c.id === targetColumnId);
+    if (targetCol && targetCol.archived_at !== null) return;
 
     const snapshotFrom = fromList.slice();
     const snapshotTo =

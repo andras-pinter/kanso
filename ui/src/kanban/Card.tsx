@@ -9,6 +9,7 @@ interface Props {
 
 export default function Card({ card }: Props) {
   const selectCard = useKanbanStore((s) => s.selectCard);
+  const selected = useKanbanStore((s) => s.selectedCardId === card.id);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: card.id,
     data: { type: 'card', columnId: card.column_id },
@@ -21,11 +22,19 @@ export default function Card({ card }: Props) {
     transition,
   };
 
+  const cls = [
+    'kanso-card',
+    isDragging ? 'kanso-card--dragging' : '',
+    selected ? 'kanso-card--selected' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`kanso-card${isDragging ? ' kanso-card--dragging' : ''}`}
+      className={cls}
       {...attributes}
       {...listeners}
       onClick={(e) => {

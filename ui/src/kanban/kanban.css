@@ -1,19 +1,30 @@
-// Minimal, AFFiNE-flavored kanban styling. Plain CSS — no design system.
+// kanso phase 1 — plain CSS, AFFiNE-flavored tokens at :root.
 
 :root {
-  --kanso-bg: #fafafa;
-  --kanso-surface: #ffffff;
-  --kanso-surface-elevated: #ffffff;
-  --kanso-border: #ececec;
-  --kanso-border-strong: #d9d9d9;
-  --kanso-text: #1f1f1f;
-  --kanso-text-muted: #6b6b6b;
-  --kanso-accent: #1565c0;
-  --kanso-danger: #c0392b;
-  --kanso-radius: 6px;
-  --kanso-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --kanso-shadow-overlay: 0 6px 24px rgba(0, 0, 0, 0.18);
-  --kanso-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --surface-canvas: #f7f7f5;
+  --surface-raised: #ffffff;
+  --surface-subtle: #fafaf9;
+  --surface-hover: #f3f4f6;
+  --border: #e5e7eb;
+  --border-strong: #d1d5db;
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
+  --accent: #3b82f6;
+  --accent-strong: #2563eb;
+  --accent-bg: #eff6ff;
+  --danger: #dc2626;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-card-hover: 0 2px 6px rgba(0, 0, 0, 0.06);
+  --shadow-drag: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --shadow-drawer: -2px 0 16px rgba(0, 0, 0, 0.08);
+
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 html,
@@ -25,11 +36,12 @@ body,
 }
 
 body {
-  background: var(--kanso-bg);
-  color: var(--kanso-text);
-  font-family: var(--kanso-font);
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+  font-family: var(--font);
   font-size: 14px;
-  line-height: 1.4;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
 }
 
 .kanso-app {
@@ -39,135 +51,172 @@ body {
   overflow: hidden;
 }
 
+/* ---------- Header ---------- */
+
 .kanso-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--kanso-border);
-  background: var(--kanso-surface);
+  padding: 16px 24px;
+  background: var(--surface-raised);
+  border-bottom: 1px solid #eaeaea;
 }
 
 .kanso-wordmark {
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
   margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
 }
 
 .kanso-debug-btn {
   font-size: 12px;
-  color: var(--kanso-text-muted);
+  color: var(--text-secondary);
   background: transparent;
-  border: 1px solid var(--kanso-border);
-  border-radius: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   padding: 4px 10px;
   cursor: pointer;
 }
 
 .kanso-debug-btn:hover {
-  border-color: var(--kanso-border-strong);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
 }
+
+/* ---------- Board ---------- */
 
 .kanso-board {
   flex: 1;
   display: flex;
   min-height: 0;
   position: relative;
+  background: var(--surface-canvas);
 }
 
 .kanso-board-state {
   margin: auto;
-  color: var(--kanso-text-muted);
+  color: var(--text-secondary);
 }
 
 .kanso-columns {
   flex: 1;
   display: flex;
   gap: 16px;
-  padding: 16px;
+  padding: 32px 24px 24px;
   overflow-x: auto;
   overflow-y: hidden;
   align-items: flex-start;
+  scrollbar-width: thin;
 }
+
+/* ---------- Column ---------- */
 
 .kanso-column {
   display: flex;
   flex-direction: column;
-  width: 280px;
-  min-width: 280px;
+  gap: 10px;
+  width: 288px;
+  min-width: 288px;
+  max-width: 320px;
   max-height: 100%;
-  background: var(--kanso-surface);
-  border: 1px solid var(--kanso-border);
-  border-radius: var(--kanso-radius);
-  overflow: hidden;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 12px;
+  box-sizing: border-box;
 }
 
 .kanso-column-header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  padding: 12px 14px 8px;
+  padding: 4px 4px 0;
 }
 
 .kanso-column-name {
-  font-weight: 600;
-  font-size: 13px;
   margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.005em;
 }
 
 .kanso-column-count {
-  color: var(--kanso-text-muted);
-  font-size: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--surface-subtle);
+  border-radius: 999px;
+  padding: 2px 8px;
+  min-width: 18px;
+  text-align: center;
 }
 
 .kanso-cards {
-  flex: 1;
-  overflow-y: auto;
-  padding: 4px 10px;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  overflow-y: auto;
+  padding: 2px;
   min-height: 8px;
+  scrollbar-width: thin;
 }
 
 .kanso-cards--empty {
   min-height: 36px;
 }
 
+/* ---------- Card ---------- */
+
 .kanso-card {
-  background: var(--kanso-surface-elevated);
-  border: 1px solid var(--kanso-border);
-  border-radius: var(--kanso-radius);
-  padding: 8px 10px;
-  box-shadow: var(--kanso-shadow-card);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  box-shadow: var(--shadow-card);
   cursor: grab;
   user-select: none;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
 }
 
 .kanso-card:hover {
-  border-color: var(--kanso-border-strong);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-card-hover);
+}
+
+.kanso-card:active {
+  cursor: grabbing;
 }
 
 .kanso-card--dragging {
-  opacity: 0.35;
+  opacity: 0.4;
+}
+
+.kanso-card--selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
 }
 
 .kanso-card--overlay {
   cursor: grabbing;
-  box-shadow: var(--kanso-shadow-overlay);
-  border-color: var(--kanso-border-strong);
+  box-shadow: var(--shadow-drag);
+  border-color: var(--border-strong);
 }
 
 .kanso-card-title {
   font-size: 13px;
   font-weight: 500;
+  color: var(--text-primary);
   word-wrap: break-word;
 }
 
 .kanso-card-body {
   font-size: 12px;
-  color: var(--kanso-text-muted);
+  color: var(--text-secondary);
   margin-top: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -176,43 +225,48 @@ body {
   -webkit-box-orient: vertical;
 }
 
-.kanso-column-footer {
-  padding: 6px 10px 10px;
-  border-top: 1px solid var(--kanso-border);
-}
+/* ---------- Add card ---------- */
 
 .kanso-add-btn {
   width: 100%;
   background: transparent;
-  border: 1px dashed var(--kanso-border-strong);
-  border-radius: var(--kanso-radius);
-  color: var(--kanso-text-muted);
-  padding: 6px 8px;
-  font-size: 12px;
-  cursor: pointer;
+  border: none;
+  color: var(--text-secondary);
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  font: inherit;
+  font-size: 13px;
   text-align: left;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
 }
 
 .kanso-add-btn:hover {
-  color: var(--kanso-text);
-  border-color: var(--kanso-text-muted);
+  background: var(--surface-hover);
+  color: var(--text-primary);
 }
 
 .kanso-add-form {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .kanso-add-textarea {
   width: 100%;
   resize: vertical;
-  min-height: 60px;
-  padding: 6px 8px;
-  border: 1px solid var(--kanso-border-strong);
-  border-radius: var(--kanso-radius);
+  min-height: 64px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
   font: inherit;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--surface-raised);
   box-sizing: border-box;
+  transition: border-color 120ms ease;
 }
 
 .kanso-add-actions {
@@ -222,51 +276,62 @@ body {
   justify-content: flex-end;
 }
 
+/* ---------- Buttons ---------- */
+
 .kanso-btn {
-  padding: 4px 10px;
-  border-radius: 4px;
-  border: 1px solid var(--kanso-border-strong);
-  background: var(--kanso-surface);
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font: inherit;
   font-size: 12px;
   cursor: pointer;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
 }
 
 .kanso-btn:hover {
-  border-color: var(--kanso-text-muted);
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
 }
 
 .kanso-btn--primary {
-  background: var(--kanso-accent);
-  border-color: var(--kanso-accent);
-  color: white;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
 }
 
 .kanso-btn--primary:hover {
-  background: #0d4d99;
-  border-color: #0d4d99;
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
 }
 
 .kanso-btn--danger {
-  color: var(--kanso-danger);
-  border-color: var(--kanso-danger);
+  color: var(--danger);
+  border-color: var(--border);
 }
 
 .kanso-btn--danger:hover {
-  background: var(--kanso-danger);
-  color: white;
+  background: #fef2f2;
+  border-color: var(--danger);
 }
+
+/* ---------- Error toast ---------- */
 
 .kanso-error {
   position: absolute;
-  bottom: 12px;
+  bottom: 16px;
   left: 50%;
   transform: translateX(-50%);
   background: #fff1f0;
-  border: 1px solid #ffccc7;
-  color: var(--kanso-danger);
-  padding: 6px 12px;
-  border-radius: var(--kanso-radius);
+  border: 1px solid #fecaca;
+  color: var(--danger);
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
   font-size: 12px;
+  box-shadow: var(--shadow-card);
 }
 
 /* ---------- Card detail drawer ---------- */
@@ -283,36 +348,53 @@ body {
   top: 0;
   right: 0;
   bottom: 0;
-  width: 380px;
-  background: var(--kanso-surface);
-  border-left: 1px solid var(--kanso-border);
+  width: 400px;
+  background: var(--surface-raised);
+  border-left: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   z-index: 51;
-  box-shadow: -2px 0 12px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--shadow-drawer);
 }
 
 .kanso-drawer-header {
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--kanso-border);
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
 }
 
 .kanso-drawer-title {
-  font-size: 12px;
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--kanso-text-muted);
-  margin: 0;
+  color: var(--text-muted);
+}
+
+.kanso-saved-pill {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent);
+  background: var(--accent-bg);
+  padding: 2px 8px;
+  border-radius: 999px;
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+.kanso-saved-pill--visible {
+  opacity: 1;
 }
 
 .kanso-drawer-body {
-  padding: 16px;
+  padding: 20px 24px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 18px;
   flex: 1;
   overflow-y: auto;
 }
@@ -320,45 +402,53 @@ body {
 .kanso-field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 .kanso-label {
   font-size: 11px;
+  font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--kanso-text-muted);
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
 }
 
 .kanso-title-input {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 500;
-  padding: 6px 8px;
-  border: 1px solid var(--kanso-border);
-  border-radius: var(--kanso-radius);
+  color: var(--text-primary);
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
   font-family: inherit;
+  transition: border-color 120ms ease;
 }
 
 .kanso-title-input:focus,
 .kanso-body-textarea:focus,
 .kanso-add-textarea:focus {
   outline: none;
-  border-color: var(--kanso-accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
 }
 
 .kanso-body-textarea {
-  min-height: 180px;
+  min-height: 200px;
   resize: vertical;
-  padding: 8px 10px;
-  border: 1px solid var(--kanso-border);
-  border-radius: var(--kanso-radius);
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--text-primary);
   font: inherit;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
 .kanso-drawer-footer {
-  border-top: 1px solid var(--kanso-border);
-  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  padding: 12px 24px;
   display: flex;
   justify-content: space-between;
+  align-items: center;
 }

@@ -168,6 +168,9 @@ describe('useKanbanStore boards', () => {
       columns: [],
       cardsByColumn: {},
       selectedCardId: null,
+      tags: [],
+      tagsLoaded: false,
+      cardTagMap: {},
     });
   });
 

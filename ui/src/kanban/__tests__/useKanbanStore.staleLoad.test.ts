@@ -80,6 +80,9 @@ describe('useKanbanStore stale-load gating', () => {
       columns: [column('ca', 'a')],
       cardsByColumn: { ca: [card('k1', 'ca')] },
       selectedCardId: null,
+      tags: [],
+      tagsLoaded: false,
+      cardTagMap: {},
     });
   });
 

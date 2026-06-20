@@ -3,6 +3,8 @@
 
 #![allow(clippy::unwrap_used)]
 
+use std::sync::Arc;
+
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
@@ -12,12 +14,17 @@ use kanso_core::repo::{BoardRepo, CardRepo, ColumnRepo};
 use serde_json::{json, Value};
 use tower::ServiceExt;
 
+const TEST_TOKEN: &str = "test-token-roundtrip";
+
 async fn setup() -> (axum::Router, sqlx::SqlitePool, tempfile::TempDir) {
     let tmp = tempfile::tempdir().unwrap();
     let db = tmp.path().join("kanso.db");
     let pool = open(&db).await.unwrap();
     migrate(&pool).await.unwrap();
-    let app = router(AppState { pool: pool.clone() });
+    let app = router(AppState {
+        pool: pool.clone(),
+        token: Arc::from(TEST_TOKEN),
+    });
     (app, pool, tmp)
 }
 
@@ -26,11 +33,21 @@ fn req_json(method: &str, uri: &str, body: Value) -> Request<Body> {
         .method(method)
         .uri(uri)
         .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {TEST_TOKEN}"))
         .body(Body::from(body.to_string()))
         .unwrap()
 }
 
 fn req(method: &str, uri: &str) -> Request<Body> {
+    Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("authorization", format!("Bearer {TEST_TOKEN}"))
+        .body(Body::empty())
+        .unwrap()
+}
+
+fn req_no_auth(method: &str, uri: &str) -> Request<Body> {
     Request::builder()
         .method(method)
         .uri(uri)
@@ -46,8 +63,79 @@ async fn body_json(res: axum::response::Response) -> Value {
 #[tokio::test]
 async fn healthz_responds_ok() {
     let (app, _pool, _tmp) = setup().await;
-    let res = app.oneshot(req("GET", "/healthz")).await.unwrap();
+    let res = app.oneshot(req_no_auth("GET", "/healthz")).await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn healthz_no_auth_still_ok() {
+    let (app, _pool, _tmp) = setup().await;
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/healthz")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn boards_list_without_auth_returns_401() {
+    let (app, _pool, _tmp) = setup().await;
+    let res = app
+        .oneshot(req_no_auth("GET", "/boards"))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+    let v = body_json(res).await;
+    assert_eq!(v["error"], "unauthorized");
+}
+
+#[tokio::test]
+async fn boards_list_with_wrong_token_returns_401() {
+    let (app, _pool, _tmp) = setup().await;
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/boards")
+                .header("authorization", "Bearer not-the-token")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+    let v = body_json(res).await;
+    assert_eq!(v["error"], "unauthorized");
+}
+
+#[tokio::test]
+async fn boards_list_with_correct_token_returns_200() {
+    let (app, _pool, _tmp) = setup().await;
+    let res = app.oneshot(req("GET", "/boards")).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn boards_list_with_malformed_auth_returns_401() {
+    let (app, _pool, _tmp) = setup().await;
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/boards")
+                .header("authorization", TEST_TOKEN)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
 }
 
 #[tokio::test]

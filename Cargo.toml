@@ -36,6 +36,7 @@ sqlx = { version = "0.8", default-features = false, features = [
 libsqlite3-sys = { version = "0.30", features = ["bundled"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 base64 = "0.22"
+subtle = "2"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

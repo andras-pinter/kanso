@@ -11,9 +11,10 @@
 set -euo pipefail
 
 PORT="${KANSO_PORT:?set KANSO_PORT (read it from the port token written by the app)}"
+TOKEN="${KANSO_TOKEN:?set KANSO_TOKEN (read it from the port file written by the app)}"
 BASE="http://127.0.0.1:${PORT}"
 
-c() { curl -sS -o /tmp/kanso-smoke.body -w "%{http_code}" "$@"; }
+c() { curl -sS -o /tmp/kanso-smoke.body -w "%{http_code}" -H "Authorization: Bearer ${TOKEN}" "$@"; }
 expect() {
   local code="$1" want="$2" label="$3"
   if [[ "$code" != "$want" ]]; then

@@ -25,6 +25,7 @@ pub struct RuntimeState {
 struct Bootstrap {
     state: RuntimeState,
     listener: TcpListener,
+    api_token: Arc<str>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -74,6 +75,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             let Bootstrap {
                 state: runtime_state,
                 listener,
+                api_token,
             } = tauri::async_runtime::block_on(
                 async move { bootstrap(&db_path, &port_path).await },
             )
@@ -81,6 +83,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
             let api_state = AppState {
                 pool: runtime_state.pool.clone(),
+                token: api_token,
             };
             let bound = listener
                 .local_addr()
@@ -151,7 +154,9 @@ async fn bootstrap(
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let port = listener.local_addr()?.port();
 
-    write_port_file(port_path, port).await?;
+    let token = generate_token();
+    write_port_file(port_path, port, &token).await?;
+    let api_token: Arc<str> = Arc::from(token);
 
     Ok(Bootstrap {
         state: RuntimeState {
@@ -160,6 +165,7 @@ async fn bootstrap(
             api_port: port,
         },
         listener,
+        api_token,
     })
 }
 
@@ -194,13 +200,17 @@ async fn ensure_seed(
     })
 }
 
+fn generate_token() -> String {
+    let mut bytes = [0u8; 32];
+    rand::thread_rng().fill_bytes(&mut bytes);
+    hex::encode(bytes)
+}
+
 async fn write_port_file(
     path: &Path,
     port: u16,
+    token: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut bytes = [0u8; 32];
-    rand::thread_rng().fill_bytes(&mut bytes);
-    let token = hex::encode(bytes);
     let contents = format!("port={port}\ntoken={token}\n");
     let mut f = tokio::fs::File::create(path).await?;
     f.write_all(contents.as_bytes()).await?;

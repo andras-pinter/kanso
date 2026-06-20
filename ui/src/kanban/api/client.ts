@@ -10,8 +10,11 @@ import type {
   CardDto,
   CardPatch,
   ColumnDto,
+  ColumnMoveArgs,
   ColumnPatch,
   SeedIds,
+  TagDto,
+  TagPatch,
 } from '../types';
 
 export type InvokeFn = <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
@@ -66,6 +69,40 @@ export const columnArchive = (id: string): Promise<void> => invoker('column_arch
 
 export const columnUnarchive = (id: string): Promise<void> => invoker('column_unarchive', { id });
 
+export const columnMove = (id: string, args: ColumnMoveArgs = {}): Promise<ColumnDto> =>
+  invoker('column_move', { id, before: args.before, after: args.after });
+
+// ---------- tags ----------
+
+export const tagsList = (includeArchived = false): Promise<TagDto[]> =>
+  invoker('tags_list', { includeArchived });
+
+export const tagGet = (id: string): Promise<TagDto> => invoker('tag_get', { id });
+
+export const tagCreate = (name: string, color?: string): Promise<TagDto> =>
+  invoker('tag_create', { body: { name, color } });
+
+export const tagUpdate = (id: string, patch: TagPatch): Promise<TagDto> =>
+  invoker('tag_update', { id, patch });
+
+export const tagArchive = (id: string): Promise<void> => invoker('tag_archive', { id });
+
+export const tagUnarchive = (id: string): Promise<void> => invoker('tag_unarchive', { id });
+
+export const tagDelete = (id: string): Promise<void> => invoker('tag_delete', { id });
+
+export const tagCardsList = (tagId: string, includeArchived = false): Promise<CardDto[]> =>
+  invoker('tag_cards_list', { tagId, includeArchived });
+
+export const cardTagsList = (cardId: string, includeArchived = false): Promise<TagDto[]> =>
+  invoker('card_tags_list', { cardId, includeArchived });
+
+export const cardTagAdd = (cardId: string, tagId: string): Promise<void> =>
+  invoker('card_tag_add', { cardId, tagId });
+
+export const cardTagRemove = (cardId: string, tagId: string): Promise<void> =>
+  invoker('card_tag_remove', { cardId, tagId });
+
 // ---------- cards ----------
 
 export const cardsList = (columnId: string, includeArchived = false): Promise<CardDto[]> =>
@@ -99,3 +136,8 @@ export const cardBodyGet = (id: string): Promise<CardBody> => invoker('card_body
 
 export const cardBodySet = (id: string, body: CardBodySet): Promise<void> =>
   invoker('card_body_set', { id, body });
+
+// ---------- search ----------
+
+export const cardSearch = (query: string, includeArchived = false): Promise<CardDto[]> =>
+  invoker('card_search', { query, includeArchived });

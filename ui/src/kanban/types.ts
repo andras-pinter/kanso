@@ -69,6 +69,25 @@ export interface BoardPatch {
   color?: string | null;
 }
 
+export interface TagDto {
+  id: string;
+  name: string;
+  color: string | null;
+  created_at: number;
+  updated_at: number;
+  archived_at: number | null;
+}
+
+export interface TagPatch {
+  name?: string;
+  color?: string | null;
+}
+
+export interface ColumnMoveArgs {
+  before?: string;
+  after?: string;
+}
+
 export interface AppError {
   kind: string;
   message: string;

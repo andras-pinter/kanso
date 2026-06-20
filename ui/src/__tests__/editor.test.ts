@@ -113,4 +113,27 @@ describe('extractPlaintext', () => {
 
     expect(extractPlaintext(doc)).toBe('Plain string title');
   });
+
+  // H1 regression: legacy textarea bodies (Wave 5) are auto-seeded into a
+  // single paragraph block. Verify the seeded shape round-trips byte-for-byte
+  // through extractPlaintext so the FTS index stays accurate after the
+  // silent conversion.
+  it('round-trips legacy plaintext seeded into a single paragraph block', () => {
+    const inputs = [
+      'hello world',
+      'hello\nworld', // soft break inside one block
+      'hello\n\nworld', // blank lines preserved verbatim inside one block
+      'Find me with carrots — and 🥕',
+    ];
+    for (const input of inputs) {
+      const doc = buildDoc([
+        { id: 'root', flavour: 'affine:page', title: 'Untitled', children: ['note'] },
+        { id: 'note', flavour: 'affine:note', children: ['p'] },
+        { id: 'p', flavour: 'affine:paragraph', text: input },
+      ]);
+      // Page title 'Untitled' is part of the FTS plaintext too; the legacy
+      // body content is appended on its own line.
+      expect(extractPlaintext(doc)).toBe(`Untitled\n${input}`);
+    }
+  });
 });

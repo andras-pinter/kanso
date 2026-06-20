@@ -1,4 +1,4 @@
-use axum::extract::{Path, Query, State};
+use axum::extract::{DefaultBodyLimit, Path, Query, State};
 use axum::http::StatusCode;
 use axum::{Json, Router};
 use base64::engine::general_purpose::STANDARD as B64;
@@ -17,6 +17,11 @@ struct ListCardsQuery {
     include_archived: bool,
 }
 
+// Cap PUT /cards/:id/body payloads at 8 MiB. Typical bodies are <100 KiB;
+// 8 MiB tolerates pathologically large pasted-image base64 without enabling abuse.
+// Axum's default of 2 MiB rejects perfectly reasonable rich docs with an opaque 413.
+const BODY_PUT_LIMIT_BYTES: usize = 8 * 1024 * 1024;
+
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route(
@@ -29,7 +34,9 @@ pub fn routes() -> Router<AppState> {
         .route("/cards/:id/unarchive", axum::routing::post(unarchive))
         .route(
             "/cards/:id/body",
-            axum::routing::get(get_body).put(put_body),
+            axum::routing::get(get_body)
+                .put(put_body)
+                .layer(DefaultBodyLimit::max(BODY_PUT_LIMIT_BYTES)),
         )
 }
 

@@ -521,3 +521,44 @@ async fn card_body_put_invalid_base64_returns_400() {
         .unwrap();
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
 }
+
+#[tokio::test]
+async fn card_body_put_under_limit_succeeds() {
+    let (app, pool, _tmp) = setup().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
+
+    // ~7 MiB of valid base64 ("A" decodes to a single zero byte; padded to a multiple of 4).
+    let mut b64 = "A".repeat(7 * 1024 * 1024);
+    while b64.len() % 4 != 0 {
+        b64.push('=');
+    }
+
+    let body = json!({"body_blocksuite_b64": b64, "body_text": "x"});
+    let res = app
+        .oneshot(req_json("PUT", &format!("/cards/{}/body", card.id), body))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+}
+
+#[tokio::test]
+async fn card_body_put_over_limit_returns_413() {
+    let (app, pool, _tmp) = setup().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
+
+    let mut b64 = "A".repeat(9 * 1024 * 1024);
+    while b64.len() % 4 != 0 {
+        b64.push('=');
+    }
+
+    let body = json!({"body_blocksuite_b64": b64, "body_text": "x"});
+    let res = app
+        .oneshot(req_json("PUT", &format!("/cards/{}/body", card.id), body))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::PAYLOAD_TOO_LARGE);
+}

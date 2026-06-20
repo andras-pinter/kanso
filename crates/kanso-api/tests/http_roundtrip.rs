@@ -1051,3 +1051,74 @@ async fn link_archived_tag_returns_400_and_archive_filter_works() {
         .unwrap();
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
 }
+
+// ---------- Phase 4 W2: bulk board card-tag links ----------
+
+use kanso_api::CardTagLinkDto;
+use kanso_core::repo::TagRepo;
+
+#[tokio::test]
+async fn board_card_tags_via_http_returns_links() {
+    let (app, pool, _tmp) = setup().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "Todo", None)
+        .await
+        .unwrap();
+    let c1 = CardRepo::create(&pool, &col.id, "one").await.unwrap();
+    let c2 = CardRepo::create(&pool, &col.id, "two").await.unwrap();
+    let t1 = TagRepo::create(&pool, "alpha", None).await.unwrap();
+    let t2 = TagRepo::create(&pool, "beta", None).await.unwrap();
+    CardRepo::add_tag(&pool, &c1.id, &t1.id).await.unwrap();
+    CardRepo::add_tag(&pool, &c1.id, &t2.id).await.unwrap();
+    CardRepo::add_tag(&pool, &c2.id, &t2.id).await.unwrap();
+
+    let res = app
+        .oneshot(req("GET", &format!("/boards/{}/card_tags", board.id)))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let links: Vec<CardTagLinkDto> = serde_json::from_value(body_json(res).await).unwrap();
+    let mut got: Vec<(String, String)> = links
+        .into_iter()
+        .map(|l| (l.card_id, l.tag_id))
+        .collect();
+    got.sort();
+    let mut expected = vec![
+        (c1.id.clone(), t1.id.clone()),
+        (c1.id.clone(), t2.id.clone()),
+        (c2.id.clone(), t2.id.clone()),
+    ];
+    expected.sort();
+    assert_eq!(got, expected);
+}
+
+#[tokio::test]
+async fn board_card_tags_empty_board_returns_empty_array() {
+    let (app, pool, _tmp) = setup().await;
+    let board = BoardRepo::create(&pool, "Empty").await.unwrap();
+
+    let res = app
+        .oneshot(req("GET", &format!("/boards/{}/card_tags", board.id)))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let v = body_json(res).await;
+    assert_eq!(v, serde_json::json!([]));
+}
+
+#[tokio::test]
+async fn board_card_tags_requires_auth() {
+    let (app, pool, _tmp) = setup().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+
+    let res = app
+        .oneshot(req_no_auth(
+            "GET",
+            &format!("/boards/{}/card_tags", board.id),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+    let v = body_json(res).await;
+    assert_eq!(v["error"], "unauthorized");
+}

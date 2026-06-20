@@ -1208,3 +1208,93 @@ async fn test_search_with_context_returns_live_card_in_live_board() {
     assert_eq!(hits[0].column_id, col.id);
     assert_eq!(hits[0].board_id, board.id);
 }
+
+// ---------- Phase 4 W2: bulk card-tag links per board ----------
+
+#[tokio::test]
+async fn test_card_tags_for_board_returns_all_links_and_isolates_boards() {
+    let pool = fixture_pool().await;
+
+    let board = BoardRepo::create(&pool, "Main").await.unwrap();
+    let col_live = ColumnRepo::create(&pool, &board.id, "Todo", None)
+        .await
+        .unwrap();
+    let col_arch = ColumnRepo::create(&pool, &board.id, "Done", None)
+        .await
+        .unwrap();
+    let c_live = CardRepo::create(&pool, &col_live.id, "alive").await.unwrap();
+    let c_arch_card = CardRepo::create(&pool, &col_live.id, "archived-card")
+        .await
+        .unwrap();
+    let c_in_arch_col = CardRepo::create(&pool, &col_arch.id, "in-arch-col")
+        .await
+        .unwrap();
+    CardRepo::archive(&pool, &c_arch_card.id).await.unwrap();
+    ColumnRepo::archive(&pool, &col_arch.id).await.unwrap();
+
+    let t_live_a = TagRepo::create(&pool, "alpha", None).await.unwrap();
+    let t_live_b = TagRepo::create(&pool, "beta", None).await.unwrap();
+    let t_arch = TagRepo::create(&pool, "gamma", None).await.unwrap();
+
+    // 6 links across live/archived cards/columns/tags.
+    CardRepo::add_tag(&pool, &c_live.id, &t_live_a.id)
+        .await
+        .unwrap();
+    CardRepo::add_tag(&pool, &c_live.id, &t_live_b.id)
+        .await
+        .unwrap();
+    CardRepo::add_tag(&pool, &c_arch_card.id, &t_live_a.id)
+        .await
+        .unwrap();
+    CardRepo::add_tag(&pool, &c_in_arch_col.id, &t_live_b.id)
+        .await
+        .unwrap();
+    // Link the (now-archived) tag before archiving so we exercise inclusion.
+    CardRepo::add_tag(&pool, &c_live.id, &t_arch.id).await.unwrap();
+    TagRepo::archive(&pool, &t_arch.id).await.unwrap();
+
+    // An unlinked card on the same board — must not appear.
+    let _unlinked = CardRepo::create(&pool, &col_live.id, "naked").await.unwrap();
+    // An unlinked tag — must not appear.
+    let _unlinked_tag = TagRepo::create(&pool, "delta", None).await.unwrap();
+
+    // A second board with its own link — must not leak.
+    let other = BoardRepo::create(&pool, "Other").await.unwrap();
+    let other_col = ColumnRepo::create(&pool, &other.id, "Todo", None)
+        .await
+        .unwrap();
+    let other_card = CardRepo::create(&pool, &other_col.id, "elsewhere")
+        .await
+        .unwrap();
+    CardRepo::add_tag(&pool, &other_card.id, &t_live_a.id)
+        .await
+        .unwrap();
+
+    let links = CardRepo::card_tags_for_board(&pool, &board.id)
+        .await
+        .unwrap();
+    let mut expected = vec![
+        (c_live.id.clone(), t_live_a.id.clone()),
+        (c_live.id.clone(), t_live_b.id.clone()),
+        (c_live.id.clone(), t_arch.id.clone()),
+        (c_arch_card.id.clone(), t_live_a.id.clone()),
+        (c_in_arch_col.id.clone(), t_live_b.id.clone()),
+    ];
+    expected.sort();
+    let mut got = links.clone();
+    got.sort();
+    assert_eq!(got, expected);
+
+    // Cards / tags without links never surface.
+    assert!(links.iter().all(|(cid, _)| cid != &_unlinked.id));
+    assert!(links.iter().all(|(_, tid)| tid != &_unlinked_tag.id));
+    // Second board's link never leaks.
+    assert!(links.iter().all(|(cid, _)| cid != &other_card.id));
+
+    // Empty board returns an empty Vec, not an error.
+    let empty_board = BoardRepo::create(&pool, "Empty").await.unwrap();
+    assert!(CardRepo::card_tags_for_board(&pool, &empty_board.id)
+        .await
+        .unwrap()
+        .is_empty());
+}

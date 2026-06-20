@@ -7,6 +7,7 @@
 import { create } from 'zustand';
 import {
   boardArchive,
+  boardCardTagsList,
   boardCreate,
   boardDelete,
   boardUnarchive,
@@ -28,7 +29,6 @@ import {
   columnsList,
   defaultColumn,
   tagArchive,
-  tagCardsList,
   tagCreate,
   tagDelete,
   tagUnarchive,
@@ -185,26 +185,19 @@ async function fetchBoardContents(
   return { columns, cardsByColumn };
 }
 
-// Build a `cardId -> tagIds[]` map by walking the live tag list and
-// asking the backend which cards reference each tag. Round-trip count
-// is `1 + N_tags` (typical: 5-20 tags), which is fine for personal-app
-// scale. If this gets painful Phase 4 can collapse it into a single
-// JOIN endpoint.
-async function fetchCardTagMap(tags: readonly TagDto[]): Promise<Record<string, string[]>> {
-  if (tags.length === 0) return {};
-  const perTag = await Promise.all(
-    tags.map(async (t) => ({
-      tagId: t.id,
-      cards: await tagCardsList(t.id, true),
-    })),
-  );
+// Build a `cardId -> tagIds[]` map for a board in a single round-trip.
+// Phase 4 W2 collapsed the previous `1 + N_tags` walk into one bulk
+// endpoint. Returns an empty map when no board is active.
+async function fetchCardTagMap(
+  boardId: string | null,
+): Promise<Record<string, string[]>> {
+  if (!boardId) return {};
+  const links = await boardCardTagsList(boardId);
   const map: Record<string, string[]> = {};
-  for (const { tagId, cards } of perTag) {
-    for (const c of cards) {
-      const list = map[c.id];
-      if (list) list.push(tagId);
-      else map[c.id] = [tagId];
-    }
+  for (const { card_id, tag_id } of links) {
+    const list = map[card_id];
+    if (list) list.push(tag_id);
+    else map[card_id] = [tag_id];
   }
   return map;
 }
@@ -246,6 +239,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
           currentBoardId: null,
           columns: [],
           cardsByColumn: {},
+          cardTagMap: {},
           error: null,
         });
         return;
@@ -262,6 +256,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
         cardsByColumn,
         error: null,
       });
+      await get().reloadTagMap();
     } catch (e) {
       if (myVersion !== loadVersion) return;
       set({ status: 'error', error: formatError(e) });
@@ -276,6 +271,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
       if (myVersion !== loadVersion) return false;
       persistBoardId(id);
       set({ currentBoardId: id, columns, cardsByColumn, selectedCardId: null, error: null });
+      await get().reloadTagMap();
       return true;
     } catch (e) {
       if (myVersion !== loadVersion) return false;
@@ -293,6 +289,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
       const { columns, cardsByColumn } = await fetchBoardContents(id, v);
       if (myVersion !== loadVersion) return;
       set({ columns, cardsByColumn });
+      await get().reloadTagMap();
     } catch (e) {
       if (myVersion !== loadVersion) return;
       set({ error: formatError(e) });
@@ -371,6 +368,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
             selectedCardId: null,
             error: null,
           });
+          await get().reloadTagMap();
         } else {
           ++loadVersion;
           persistBoardId(null);
@@ -379,6 +377,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
             currentBoardId: null,
             columns: [],
             cardsByColumn: {},
+            cardTagMap: {},
             selectedCardId: null,
             error: null,
           });
@@ -423,6 +422,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
             cardsByColumn,
             selectedCardId: null,
           });
+          await get().reloadTagMap();
         } else {
           ++loadVersion;
           persistBoardId(null);
@@ -431,6 +431,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
             currentBoardId: null,
             columns: [],
             cardsByColumn: {},
+            cardTagMap: {},
             selectedCardId: null,
           });
         }
@@ -679,7 +680,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
     try {
       const tags = await tagsList(true);
       set({ tags, tagsLoaded: true });
-      const map = await fetchCardTagMap(tags);
+      const map = await fetchCardTagMap(get().currentBoardId);
       set({ cardTagMap: map });
     } catch (e) {
       set({ error: formatError(e) });
@@ -687,8 +688,11 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
   },
 
   reloadTagMap: async () => {
+    const boardId = get().currentBoardId;
+    const version = loadVersion;
     try {
-      const map = await fetchCardTagMap(get().tags);
+      const map = await fetchCardTagMap(boardId);
+      if (loadVersion !== version || get().currentBoardId !== boardId) return;
       set({ cardTagMap: map });
     } catch (e) {
       set({ error: formatError(e) });

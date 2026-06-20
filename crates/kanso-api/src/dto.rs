@@ -307,6 +307,12 @@ impl From<TagPatchDto> for TagPatch {
 
 // ---------- Column reorder ----------
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CardTagLinkDto {
+    pub card_id: String,
+    pub tag_id: String,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct MoveColumnBody {
     #[serde(default)]

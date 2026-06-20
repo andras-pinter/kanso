@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   __setInvoker,
   boardArchive,
+  boardCardTagsList,
   boardCreate,
   boardDelete,
   boardUnarchive,
@@ -164,6 +165,7 @@ describe('kanban api client', () => {
     await cardTagsList('k1', true);
     await cardTagAdd('k1', 't1');
     await cardTagRemove('k1', 't1');
+    await boardCardTagsList('b1');
     await cardSearch('foo');
 
     expect(calls).toEqual([
@@ -178,6 +180,7 @@ describe('kanban api client', () => {
       { cmd: 'card_tags_list', args: { cardId: 'k1', includeArchived: true } },
       { cmd: 'card_tag_add', args: { cardId: 'k1', tagId: 't1' } },
       { cmd: 'card_tag_remove', args: { cardId: 'k1', tagId: 't1' } },
+      { cmd: 'board_card_tags_list', args: { boardId: 'b1' } },
       { cmd: 'card_search', args: { query: 'foo', includeArchived: false } },
     ]);
   });

@@ -27,22 +27,14 @@ function buildInvoker(server: FakeServer): InvokeFn {
     switch (cmd) {
       case 'tags_list':
         return (a.includeArchived ? server.tags : server.tags.filter((t) => t.archived_at === null)) as never;
-      case 'tag_cards_list': {
-        const tagId = a.tagId as string;
-        const cardIds = Object.entries(server.links)
-          .filter(([, tags]) => tags.includes(tagId))
-          .map(([cid]) => ({
-            id: cid,
-            column_id: 'c',
-            title: cid,
-            body_text: null,
-            position: cid,
-            due_at: null,
-            created_at: 0,
-            updated_at: 0,
-            archived_at: null,
-          }));
-        return cardIds as never;
+      case 'board_card_tags_list': {
+        const pairs: { card_id: string; tag_id: string }[] = [];
+        for (const [cid, tags] of Object.entries(server.links)) {
+          for (const tid of tags) {
+            pairs.push({ card_id: cid, tag_id: tid });
+          }
+        }
+        return pairs as never;
       }
       case 'tag_create': {
         const body = a.body as { name: string; color?: string | null };
@@ -108,7 +100,7 @@ function reset() {
     status: 'idle',
     error: null,
     boards: [],
-    currentBoardId: null,
+    currentBoardId: 'board1',
     showArchived: false,
     columns: [],
     cardsByColumn: {},
@@ -184,6 +176,23 @@ describe('useKanbanStore tag actions', () => {
     expect(s.cardTagMap.card1).toEqual([]);
   });
 
+  it('loadTags short-circuits the map fetch when no board is active', async () => {
+    useKanbanStore.setState({ currentBoardId: null });
+    let calledBoardEndpoint = false;
+    __setInvoker(async (cmd, args) => {
+      if (cmd === 'board_card_tags_list') {
+        calledBoardEndpoint = true;
+      }
+      return buildInvoker(server)(cmd, args);
+    });
+
+    await useKanbanStore.getState().loadTags();
+    const s = useKanbanStore.getState();
+    expect(s.tagsLoaded).toBe(true);
+    expect(s.cardTagMap).toEqual({});
+    expect(calledBoardEndpoint).toBe(false);
+  });
+
   it('concurrent addCardTag rollback preserves later successful add', async () => {
     await useKanbanStore.getState().loadTags();
     // Reset links so card2 starts clean.
@@ -217,5 +226,157 @@ describe('useKanbanStore tag actions', () => {
 
     // Only t1 should be rolled back; t2 must survive.
     expect(useKanbanStore.getState().cardTagMap.card2).toEqual(['t2']);
+  });
+
+  it('switchBoard refreshes cardTagMap for the new board', async () => {
+    const linksByBoard: Record<string, Record<string, string[]>> = {
+      board1: { card1: ['t1'] },
+      board2: { card2: ['t2'], card3: ['t1', 't2'] },
+    };
+    __setInvoker(async (cmd, args) => {
+      const a = (args ?? {}) as Record<string, unknown>;
+      switch (cmd) {
+        case 'columns_list':
+          return [] as never;
+        case 'boards_list':
+          return [] as never;
+        case 'board_card_tags_list': {
+          const bid = a.boardId as string;
+          const links = linksByBoard[bid] ?? {};
+          const pairs: { card_id: string; tag_id: string }[] = [];
+          for (const [cid, tids] of Object.entries(links)) {
+            for (const tid of tids) pairs.push({ card_id: cid, tag_id: tid });
+          }
+          return pairs as never;
+        }
+        default:
+          return buildInvoker(server)(cmd, args);
+      }
+    });
+
+    useKanbanStore.setState({ currentBoardId: 'board1' });
+    await useKanbanStore.getState().loadTags();
+    expect(useKanbanStore.getState().cardTagMap).toEqual({ card1: ['t1'] });
+
+    const ok = await useKanbanStore.getState().switchBoard('board2');
+    expect(ok).toBe(true);
+    const m = useKanbanStore.getState().cardTagMap;
+    expect(m.card1).toBeUndefined();
+    expect(m.card2).toEqual(['t2']);
+    expect(m.card3?.sort()).toEqual(['t1', 't2']);
+  });
+
+  it('setShowArchived refreshes cardTagMap', async () => {
+    let bulkCalls = 0;
+    __setInvoker(async (cmd, args) => {
+      if (cmd === 'columns_list') return [] as never;
+      if (cmd === 'board_card_tags_list') {
+        bulkCalls += 1;
+        return [] as never;
+      }
+      return buildInvoker(server)(cmd, args);
+    });
+
+    await useKanbanStore.getState().loadTags();
+    const before = bulkCalls;
+    await useKanbanStore.getState().setShowArchived(true);
+    expect(bulkCalls).toBe(before + 1);
+  });
+
+  it('boot: loadTags after load populates map even if tags resolve first', async () => {
+    // Reproduces a real boot race: KanbanBoard fires load() and loadTags()
+    // concurrently. loadTags reads get().currentBoardId; if load hasn't
+    // committed yet, it sees null and short-circuits to {}. load() must
+    // refresh the map after committing.
+    let releaseContents!: () => void;
+    const contentsGate = new Promise<void>((res) => {
+      releaseContents = res;
+    });
+
+    const tagsPayload: TagDto[] = [tag('t1', 'red')];
+    const boardPayload = [{ id: 'board1', name: 'B1', archived_at: null, created_at: 0, updated_at: 0 }];
+    const linksPayload = [{ card_id: 'card1', tag_id: 't1' }];
+
+    __setInvoker(async (cmd, _args) => {
+      switch (cmd) {
+        case 'default_column':
+          return { board_id: 'board1', column_id: 'col1' } as never;
+        case 'boards_list':
+          return boardPayload as never;
+        case 'columns_list':
+          await contentsGate;
+          return [] as never;
+        case 'cards_list':
+          return [] as never;
+        case 'tags_list':
+          return tagsPayload as never;
+        case 'board_card_tags_list':
+          return linksPayload as never;
+        default:
+          return undefined as never;
+      }
+    });
+
+    useKanbanStore.setState({ currentBoardId: null, tagsLoaded: false, cardTagMap: {} });
+
+    const loadP = useKanbanStore.getState().load();
+    const tagsP = useKanbanStore.getState().loadTags();
+    await tagsP;
+    // Tags settled while load() is still pending — map must be empty here.
+    expect(useKanbanStore.getState().cardTagMap).toEqual({});
+
+    releaseContents();
+    await loadP;
+
+    expect(useKanbanStore.getState().currentBoardId).toBe('board1');
+    expect(useKanbanStore.getState().cardTagMap).toEqual({ card1: ['t1'] });
+  });
+
+  it('reloadTagMap: late response does not clobber newer board', async () => {
+    // Switch B (slow) then C (fast). C lands first and commits; B's late
+    // response must be discarded by the version/board guard.
+    const linksByBoard: Record<string, { card_id: string; tag_id: string }[]> = {
+      boardB: [{ card_id: 'cardB', tag_id: 't1' }],
+      boardC: [{ card_id: 'cardC', tag_id: 't2' }],
+    };
+    let releaseB!: () => void;
+    const bGate = new Promise<void>((res) => {
+      releaseB = res;
+    });
+
+    __setInvoker(async (cmd, args) => {
+      const a = (args ?? {}) as Record<string, unknown>;
+      switch (cmd) {
+        case 'columns_list':
+          return [] as never;
+        case 'board_card_tags_list': {
+          const bid = a.boardId as string;
+          if (bid === 'boardB') await bGate;
+          return (linksByBoard[bid] ?? []) as never;
+        }
+        default:
+          return buildInvoker(server)(cmd, args);
+      }
+    });
+
+    useKanbanStore.setState({ currentBoardId: 'boardA' });
+
+    const switchB = useKanbanStore.getState().switchBoard('boardB');
+    // Let switchB commit currentBoardId='boardB' and pause inside reloadTagMap awaiting bGate.
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    expect(useKanbanStore.getState().currentBoardId).toBe('boardB');
+
+    const switchC = useKanbanStore.getState().switchBoard('boardC');
+
+    await switchC;
+    expect(useKanbanStore.getState().currentBoardId).toBe('boardC');
+    expect(useKanbanStore.getState().cardTagMap).toEqual({ cardC: ['t2'] });
+
+    releaseB();
+    await switchB;
+
+    // B's late fetch must NOT have overwritten C's map.
+    expect(useKanbanStore.getState().currentBoardId).toBe('boardC');
+    expect(useKanbanStore.getState().cardTagMap).toEqual({ cardC: ['t2'] });
   });
 });

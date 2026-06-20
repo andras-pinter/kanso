@@ -104,6 +104,11 @@ export const cardTagAdd = (cardId: string, tagId: string): Promise<void> =>
 export const cardTagRemove = (cardId: string, tagId: string): Promise<void> =>
   invoker('card_tag_remove', { cardId, tagId });
 
+export const boardCardTagsList = (
+  boardId: string,
+): Promise<{ card_id: string; tag_id: string }[]> =>
+  invoker('board_card_tags_list', { boardId });
+
 // ---------- cards ----------
 
 export const cardsList = (columnId: string, includeArchived = false): Promise<CardDto[]> =>

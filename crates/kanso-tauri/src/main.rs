@@ -107,6 +107,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             cmd_board::board_archive,
             cmd_board::board_unarchive,
             cmd_board::board_delete,
+            cmd_board::board_card_tags_list,
             cmd_column::columns_list,
             cmd_column::column_create,
             cmd_column::column_update,

@@ -1,5 +1,5 @@
-use kanso_api::{BoardDto, BoardPatchDto};
-use kanso_core::repo::BoardRepo;
+use kanso_api::{BoardDto, BoardPatchDto, CardTagLinkDto};
+use kanso_core::repo::{BoardRepo, CardRepo};
 use tauri::State;
 
 use crate::error::AppError;
@@ -53,4 +53,16 @@ pub async fn board_unarchive(state: State<'_, RuntimeState>, id: String) -> Resu
 pub async fn board_delete(state: State<'_, RuntimeState>, id: String) -> Result<(), AppError> {
     BoardRepo::hard_delete(&state.pool, &id).await?;
     Ok(())
+}
+
+#[tauri::command]
+pub async fn board_card_tags_list(
+    state: State<'_, RuntimeState>,
+    board_id: String,
+) -> Result<Vec<CardTagLinkDto>, AppError> {
+    let rows = CardRepo::card_tags_for_board(&state.pool, &board_id).await?;
+    Ok(rows
+        .into_iter()
+        .map(|(card_id, tag_id)| CardTagLinkDto { card_id, tag_id })
+        .collect())
 }

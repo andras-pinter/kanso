@@ -7,6 +7,15 @@ function isMac(): boolean {
   return navigator.platform.toLowerCase().includes('mac');
 }
 
+function isEditableTarget(t: EventTarget | null): boolean {
+  if (!(t instanceof HTMLElement)) return false;
+  const tag = t.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  if (t.isContentEditable) return true;
+  if (t.closest('[contenteditable="true"]')) return true;
+  return false;
+}
+
 export function useCmdK(onTrigger: () => void): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -15,6 +24,8 @@ export function useCmdK(onTrigger: () => void): void {
       if (!mod) return;
       // Skip if another modifier is held (avoid Cmd+Shift+K browser shortcuts).
       if (e.altKey) return;
+      // Don't steal the shortcut while the user is typing in an editor.
+      if (isEditableTarget(e.target)) return;
       e.preventDefault();
       onTrigger();
     };

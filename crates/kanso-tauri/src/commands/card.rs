@@ -1,6 +1,6 @@
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine as _;
-use kanso_api::{CardBodyDto, CardBodySetDto, CardDto, CardPatchDto};
+use kanso_api::{CardBodyDto, CardBodySetDto, CardDto, CardPatchDto, CardSearchHitDto};
 use kanso_core::repo::CardRepo;
 use tauri::State;
 
@@ -130,7 +130,9 @@ pub async fn card_search(
     state: State<'_, RuntimeState>,
     query: String,
     include_archived: Option<bool>,
-) -> Result<Vec<CardDto>, AppError> {
-    let rows = CardRepo::search(&state.pool, &query, include_archived.unwrap_or(false)).await?;
-    Ok(rows.into_iter().map(CardDto::from).collect())
+) -> Result<Vec<CardSearchHitDto>, AppError> {
+    let rows =
+        CardRepo::search_with_context(&state.pool, &query, include_archived.unwrap_or(false))
+            .await?;
+    Ok(rows.into_iter().map(CardSearchHitDto::from).collect())
 }

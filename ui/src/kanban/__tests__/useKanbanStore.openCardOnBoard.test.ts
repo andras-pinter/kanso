@@ -1,6 +1,6 @@
-// H2 regression: board-content fetches must be gated by a monotonic
-// load-version token. A slow in-flight fetch from a prior switchBoard /
-// setShowArchived must NOT overwrite state once the user has moved on.
+// H2 regression: rapid Cmd+K result picks must not leave the store
+// pointing at a stale card. openCardOnBoard must respect switchBoard's
+// commit signal and re-verify state before setting selectedCardId.
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { __setInvoker, type InvokeFn } from '../api/client';
@@ -68,7 +68,7 @@ function installLocalStorageShim() {
   });
 }
 
-describe('useKanbanStore stale-load gating', () => {
+describe('useKanbanStore.openCardOnBoard race safety', () => {
   beforeEach(() => {
     installLocalStorageShim();
     useKanbanStore.setState({
@@ -78,7 +78,7 @@ describe('useKanbanStore stale-load gating', () => {
       currentBoardId: 'a',
       showArchived: false,
       columns: [column('ca', 'a')],
-      cardsByColumn: { ca: [card('k1', 'ca')] },
+      cardsByColumn: { ca: [card('ka', 'ca')] },
       selectedCardId: null,
       tags: [],
       tagsLoaded: false,
@@ -90,7 +90,7 @@ describe('useKanbanStore stale-load gating', () => {
     __setInvoker(realInvoke);
   });
 
-  it('switchBoard(B) then switchBoard(C): late B response is ignored', async () => {
+  it('stale openCardOnBoard does not clobber a newer board switch', async () => {
     let resolveB!: () => void;
     const bGate = new Promise<void>((r) => {
       resolveB = r;
@@ -116,57 +116,41 @@ describe('useKanbanStore stale-load gating', () => {
     };
     __setInvoker(invoker);
 
-    // Two concurrent switches; we control which fetch resolves first.
-    const pB = useKanbanStore.getState().switchBoard('b');
-    const pC = useKanbanStore.getState().switchBoard('c');
+    // User clicks two palette results in quick succession: kB on board b,
+    // then kC on board c. C resolves first; B must not write its card.
+    const pB = useKanbanStore.getState().openCardOnBoard('kB', 'b');
+    const pC = useKanbanStore.getState().openCardOnBoard('kC', 'c');
 
-    // Resolve C first → state should reflect C.
     resolveC();
     await pC;
     expect(useKanbanStore.getState().currentBoardId).toBe('c');
-    expect(useKanbanStore.getState().columns.map((c) => c.id)).toEqual(['cc']);
 
-    // Now resolve B late. The guard must drop the result on the floor.
     resolveB();
     await pB;
     const s = useKanbanStore.getState();
     expect(s.currentBoardId).toBe('c');
-    expect(s.columns.map((c) => c.id)).toEqual(['cc']);
+    // selectedCardId must NOT be kB — that card doesn't exist on board c.
+    expect(s.selectedCardId).not.toBe('kB');
   });
 
-  it('setShowArchived racing with switchBoard discards the loser', async () => {
-    // Goal: setShowArchived kicks off a fetch for board 'a', then the user
-    // immediately switches to board 'b'. The 'b' fetch returns fast; 'a'
-    // returns late. State must reflect 'b'.
-    let resolveA!: () => void;
-    const aGate = new Promise<void>((r) => {
-      resolveA = r;
-    });
-
+  it('skips selection when the card is not present on the loaded board', async () => {
     const invoker: InvokeFn = async (cmd, args) => {
       const a = (args ?? {}) as Record<string, unknown>;
       if (cmd === 'columns_list') {
         const boardId = a.boardId as string;
-        if (boardId === 'a') await aGate;
-        return [{ ...column(`c${boardId}`, boardId), name: `name-${boardId}` }] as never;
+        return [column(`c${boardId}`, boardId)] as never;
       }
-      if (cmd === 'cards_list') return [] as never;
+      if (cmd === 'cards_list') {
+        const colId = a.columnId as string;
+        // The board's only card is k-<col>, NOT the one we asked for.
+        return [card(`k-${colId}`, colId)] as never;
+      }
       return undefined as never;
     };
     __setInvoker(invoker);
 
-    // Kick off slow fetch for current board 'a'.
-    const pArchived = useKanbanStore.getState().setShowArchived(true);
-    // Then switch boards — fast fetch for 'b'.
-    const pSwitch = useKanbanStore.getState().switchBoard('b');
-    await pSwitch;
+    await useKanbanStore.getState().openCardOnBoard('ghost', 'b');
     expect(useKanbanStore.getState().currentBoardId).toBe('b');
-    expect(useKanbanStore.getState().columns[0]?.name).toBe('name-b');
-
-    // Release the slow archived fetch — its write must be discarded.
-    resolveA();
-    await pArchived;
-    expect(useKanbanStore.getState().currentBoardId).toBe('b');
-    expect(useKanbanStore.getState().columns[0]?.name).toBe('name-b');
+    expect(useKanbanStore.getState().selectedCardId).toBeNull();
   });
 });

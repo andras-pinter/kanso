@@ -753,17 +753,47 @@ async fn card_search_via_http() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let hits: Vec<CardDto> = serde_json::from_value(body_json(res).await).unwrap();
-    assert_eq!(hits.len(), 1);
-    assert_eq!(hits[0].id, card.id);
+    let hits = body_json(res).await;
+    let arr = hits.as_array().unwrap();
+    assert_eq!(arr.len(), 1);
+    assert_eq!(arr[0]["card"]["id"], card.id);
 
     let res = app
         .clone()
         .oneshot(req("GET", "/cards/search?q="))
         .await
         .unwrap();
-    let hits: Vec<CardDto> = serde_json::from_value(body_json(res).await).unwrap();
-    assert!(hits.is_empty());
+    let hits = body_json(res).await;
+    assert!(hits.as_array().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn card_search_returns_board_and_column_context() {
+    let (app, pool, _tmp) = setup().await;
+    let board = BoardRepo::create(&pool, "Garden").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "Todo", None)
+        .await
+        .unwrap();
+    let card = CardRepo::create(&pool, &col.id, "Buy seeds")
+        .await
+        .unwrap();
+
+    let res = app
+        .clone()
+        .oneshot(req("GET", "/cards/search?q=seeds"))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let hits = body_json(res).await;
+    let arr = hits.as_array().unwrap();
+    assert_eq!(arr.len(), 1);
+    let hit = &arr[0];
+    assert_eq!(hit["card"]["id"], card.id);
+    assert_eq!(hit["card"]["title"], "Buy seeds");
+    assert_eq!(hit["column_id"], col.id);
+    assert_eq!(hit["column_name"], "Todo");
+    assert_eq!(hit["board_id"], board.id);
+    assert_eq!(hit["board_name"], "Garden");
 }
 
 #[tokio::test]

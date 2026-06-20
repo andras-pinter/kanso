@@ -205,6 +205,30 @@ pub struct MoveCardBody {
     pub after: Option<String>,
 }
 
+/// FTS5 hit enriched with the board + column the card lives in.
+/// Powers the Cmd+K palette so a click can jump across boards without
+/// a follow-up lookup per result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CardSearchHitDto {
+    pub card: CardDto,
+    pub column_id: String,
+    pub column_name: String,
+    pub board_id: String,
+    pub board_name: String,
+}
+
+impl From<kanso_core::repo::CardSearchHit> for CardSearchHitDto {
+    fn from(h: kanso_core::repo::CardSearchHit) -> Self {
+        Self {
+            card: CardDto::from(h.card),
+            column_id: h.column_id,
+            column_name: h.column_name,
+            board_id: h.board_id,
+            board_name: h.board_name,
+        }
+    }
+}
+
 // ---------- Card body (BlockSuite blob) ----------
 
 /// Response shape for `GET /cards/:id/body`. Mirrors the Tauri command

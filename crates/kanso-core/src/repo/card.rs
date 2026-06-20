@@ -27,6 +27,58 @@ pub struct CardBody {
     pub updated_at: i64,
 }
 
+/// A search hit enriched with the column + board the card belongs to.
+/// Used by the Cmd+K palette to jump across boards without follow-up
+/// queries.
+#[derive(Debug, Clone)]
+pub struct CardSearchHit {
+    pub card: Card,
+    pub column_id: String,
+    pub column_name: String,
+    pub board_id: String,
+    pub board_name: String,
+}
+
+#[derive(sqlx::FromRow)]
+struct SearchRow {
+    card_id: String,
+    card_column_id: String,
+    title: String,
+    body_text: Option<String>,
+    position: String,
+    due_at: Option<i64>,
+    created_at: i64,
+    updated_at: i64,
+    archived_at: Option<i64>,
+    col_id: String,
+    col_name: String,
+    board_id: String,
+    board_name: String,
+}
+
+impl SearchRow {
+    fn into_hit(self) -> CardSearchHit {
+        CardSearchHit {
+            card: Card {
+                id: self.card_id,
+                column_id: self.card_column_id,
+                title: self.title,
+                body_blocksuite: None,
+                body_text: self.body_text,
+                position: self.position,
+                due_at: self.due_at,
+                created_at: self.created_at,
+                updated_at: self.updated_at,
+                archived_at: self.archived_at,
+            },
+            column_id: self.col_id,
+            column_name: self.col_name,
+            board_id: self.board_id,
+            board_name: self.board_name,
+        }
+    }
+}
+
 pub struct CardRepo;
 
 impl CardRepo {
@@ -339,18 +391,87 @@ impl CardRepo {
             "SELECT c.* FROM cards c \
              JOIN cards_fts f ON f.rowid = c.rowid \
              WHERE cards_fts MATCH ?1 \
-             ORDER BY rank"
+             ORDER BY rank, c.updated_at DESC, c.id ASC"
         } else {
             "SELECT c.* FROM cards c \
              JOIN cards_fts f ON f.rowid = c.rowid \
-             WHERE cards_fts MATCH ?1 AND c.archived_at IS NULL \
-             ORDER BY rank"
+             JOIN columns col ON col.id = c.column_id \
+             JOIN boards b ON b.id = col.board_id \
+             WHERE cards_fts MATCH ?1 \
+               AND c.archived_at IS NULL \
+               AND col.archived_at IS NULL \
+               AND b.archived_at IS NULL \
+             ORDER BY rank, c.updated_at DESC, c.id ASC"
         };
         let cards = sqlx::query_as::<_, Card>(sql)
             .bind(match_expr)
             .fetch_all(pool)
             .await?;
         Ok(cards)
+    }
+
+    /// FTS5 search enriched with the column + board each hit lives in so
+    /// search palettes can render `board · column` subtitles and jump
+    /// across boards without a second round-trip per hit.
+    pub async fn search_with_context(
+        pool: &SqlitePool,
+        query: &str,
+        include_archived: bool,
+    ) -> Result<Vec<CardSearchHit>> {
+        let trimmed = query.trim();
+        if trimmed.is_empty() {
+            return Ok(Vec::new());
+        }
+        let match_expr = fts5_quote(trimmed);
+        let sql = if include_archived {
+            "SELECT c.id          AS card_id, \
+                    c.column_id   AS card_column_id, \
+                    c.title       AS title, \
+                    c.body_text   AS body_text, \
+                    c.position    AS position, \
+                    c.due_at      AS due_at, \
+                    c.created_at  AS created_at, \
+                    c.updated_at  AS updated_at, \
+                    c.archived_at AS archived_at, \
+                    col.id        AS col_id, \
+                    col.name      AS col_name, \
+                    b.id          AS board_id, \
+                    b.name        AS board_name \
+             FROM cards c \
+             JOIN cards_fts f ON f.rowid = c.rowid \
+             JOIN columns col ON col.id = c.column_id \
+             JOIN boards b ON b.id = col.board_id \
+             WHERE cards_fts MATCH ?1 \
+             ORDER BY rank, c.updated_at DESC, c.id ASC"
+        } else {
+            "SELECT c.id          AS card_id, \
+                    c.column_id   AS card_column_id, \
+                    c.title       AS title, \
+                    c.body_text   AS body_text, \
+                    c.position    AS position, \
+                    c.due_at      AS due_at, \
+                    c.created_at  AS created_at, \
+                    c.updated_at  AS updated_at, \
+                    c.archived_at AS archived_at, \
+                    col.id        AS col_id, \
+                    col.name      AS col_name, \
+                    b.id          AS board_id, \
+                    b.name        AS board_name \
+             FROM cards c \
+             JOIN cards_fts f ON f.rowid = c.rowid \
+             JOIN columns col ON col.id = c.column_id \
+             JOIN boards b ON b.id = col.board_id \
+             WHERE cards_fts MATCH ?1 \
+               AND c.archived_at IS NULL \
+               AND col.archived_at IS NULL \
+               AND b.archived_at IS NULL \
+             ORDER BY rank, c.updated_at DESC, c.id ASC"
+        };
+        let rows = sqlx::query_as::<_, SearchRow>(sql)
+            .bind(match_expr)
+            .fetch_all(pool)
+            .await?;
+        Ok(rows.into_iter().map(SearchRow::into_hit).collect())
     }
 
     /// Idempotently associate `card_id` with `tag_id`. Both entities must

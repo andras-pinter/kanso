@@ -9,6 +9,7 @@ import type {
   CardBodySet,
   CardDto,
   CardPatch,
+  CardSearchHitDto,
   ColumnDto,
   ColumnMoveArgs,
   ColumnPatch,
@@ -139,5 +140,8 @@ export const cardBodySet = (id: string, body: CardBodySet): Promise<void> =>
 
 // ---------- search ----------
 
-export const cardSearch = (query: string, includeArchived = false): Promise<CardDto[]> =>
+export const cardSearch = (
+  query: string,
+  includeArchived = false,
+): Promise<CardSearchHitDto[]> =>
   invoker('card_search', { query, includeArchived });

@@ -88,6 +88,14 @@ export interface ColumnMoveArgs {
   after?: string;
 }
 
+export interface CardSearchHitDto {
+  card: CardDto;
+  column_id: string;
+  column_name: string;
+  board_id: string;
+  board_name: string;
+}
+
 export interface AppError {
   kind: string;
   message: string;

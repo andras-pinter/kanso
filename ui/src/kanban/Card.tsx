@@ -2,6 +2,8 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { CardDto } from './types';
 import { useKanbanStore } from './hooks/useKanbanStore';
+import TagChips from './TagChips';
+import DueBadge from './DueBadge';
 
 interface Props {
   card: CardDto;
@@ -46,6 +48,8 @@ export default function Card({ card }: Props) {
     >
       <div className="kanso-card-title">{card.title}</div>
       {firstBodyLine && <div className="kanso-card-body">{firstBodyLine}</div>}
+      <TagChips cardId={card.id} />
+      {card.due_at !== null && card.due_at !== undefined && <DueBadge dueAt={card.due_at} />}
     </div>
   );
 }
@@ -58,6 +62,8 @@ export function CardOverlay({ card }: Props) {
     <div className="kanso-card kanso-card--overlay">
       <div className="kanso-card-title">{card.title}</div>
       {firstBodyLine && <div className="kanso-card-body">{firstBodyLine}</div>}
+      <TagChips cardId={card.id} />
+      {card.due_at !== null && card.due_at !== undefined && <DueBadge dueAt={card.due_at} />}
     </div>
   );
 }

@@ -24,6 +24,10 @@ struct ListTagsQuery {
 struct TagsForCardQuery {
     #[serde(default)]
     include_archived: bool,
+    #[serde(default)]
+    limit: Option<u32>,
+    #[serde(default)]
+    offset: Option<u32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -117,7 +121,9 @@ async fn tags_for_card(
     Path(id): Path<String>,
     Query(q): Query<TagsForCardQuery>,
 ) -> Result<Json<Vec<TagDto>>, ApiError> {
-    let rows = CardRepo::tags_for_card(&state.pool, &id, q.include_archived).await?;
+    let (limit, offset) = resolve_page(q.limit, q.offset);
+    let rows =
+        CardRepo::tags_for_card_paged(&state.pool, &id, q.include_archived, limit, offset).await?;
     Ok(Json(rows.into_iter().map(TagDto::from).collect()))
 }
 

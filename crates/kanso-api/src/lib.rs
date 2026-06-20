@@ -86,14 +86,18 @@ fn unauthorized() -> Response {
 /// DNS-rebinding defense: only accept requests whose `Host` header names
 /// the loopback interface. A page at `evil.com` that rebinds DNS to 127.0.0.1
 /// would arrive here with `Host: evil.com`; reject it before any handler runs.
+///
+/// Also rejects requests with multiple `Host` headers — RFC 7230 §5.4 forbids
+/// it, but raw clients (curl, smuggling proxies) can still ship them, and
+/// `HeaderMap::get` would otherwise only see the first.
 async fn require_loopback_host(req: Request, next: Next) -> Response {
-    let Some(raw_host) = req
-        .headers()
-        .get(header::HOST)
-        .and_then(|h| h.to_str().ok())
-    else {
+    let mut hosts = req.headers().get_all(header::HOST).iter();
+    let Some(raw_host) = hosts.next().and_then(|h| h.to_str().ok()) else {
         return forbidden_host();
     };
+    if hosts.next().is_some() {
+        return forbidden_host();
+    }
 
     if is_loopback_host(raw_host) {
         next.run(req).await
@@ -103,14 +107,29 @@ async fn require_loopback_host(req: Request, next: Next) -> Response {
 }
 
 fn is_loopback_host(raw: &str) -> bool {
-    // Strip the optional `:port` suffix. We accept any port the listener
-    // happens to bind to, but the hostname must be one of the loopback aliases.
-    let host = match raw.rsplit_once(':') {
-        // IPv6 literals appear as `[::1]:port` — bail to the bracketed form below.
-        Some((host, _)) if !host.contains(':') => host,
-        _ => raw,
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return false;
+    }
+    let Some(host) = split_host_port(raw) else {
+        return false;
     };
-    matches!(host, "127.0.0.1" | "localhost")
+    host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1"
+}
+
+fn split_host_port(raw: &str) -> Option<&str> {
+    // Reject bracketed IPv6 forms — the listener binds 127.0.0.1 only.
+    if raw.starts_with('[') {
+        return None;
+    }
+    if let Some((host, port)) = raw.rsplit_once(':') {
+        if host.is_empty() || port.is_empty() || !port.bytes().all(|b| b.is_ascii_digit()) {
+            return None;
+        }
+        Some(host)
+    } else {
+        Some(raw)
+    }
 }
 
 fn forbidden_host() -> Response {

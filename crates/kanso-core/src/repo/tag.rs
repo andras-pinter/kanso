@@ -68,10 +68,10 @@ impl TagRepo {
         offset: u32,
     ) -> Result<Vec<Tag>> {
         let sql = if include_archived {
-            "SELECT * FROM tags ORDER BY name COLLATE NOCASE ASC LIMIT ?1 OFFSET ?2"
+            "SELECT * FROM tags ORDER BY name COLLATE NOCASE ASC, id ASC LIMIT ?1 OFFSET ?2"
         } else {
             "SELECT * FROM tags WHERE archived_at IS NULL \
-             ORDER BY name COLLATE NOCASE ASC LIMIT ?1 OFFSET ?2"
+             ORDER BY name COLLATE NOCASE ASC, id ASC LIMIT ?1 OFFSET ?2"
         };
         let rows = sqlx::query_as::<_, Tag>(sql)
             .bind(limit)

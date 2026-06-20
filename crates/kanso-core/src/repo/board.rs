@@ -74,9 +74,11 @@ impl BoardRepo {
         offset: u32,
     ) -> Result<Vec<Board>> {
         let sql = if include_archived {
-            "SELECT * FROM boards ORDER BY position ASC LIMIT ?1 OFFSET ?2"
+            "SELECT * FROM boards \
+             ORDER BY position ASC, id ASC LIMIT ?1 OFFSET ?2"
         } else {
-            "SELECT * FROM boards WHERE archived_at IS NULL ORDER BY position ASC LIMIT ?1 OFFSET ?2"
+            "SELECT * FROM boards WHERE archived_at IS NULL \
+             ORDER BY position ASC, id ASC LIMIT ?1 OFFSET ?2"
         };
         let rows = sqlx::query_as::<_, Board>(sql)
             .bind(limit)

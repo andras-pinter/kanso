@@ -1317,3 +1317,144 @@ async fn healthz_also_host_guarded() {
     let res = app.oneshot(good).await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
 }
+#[tokio::test]
+async fn duplicate_host_headers_are_rejected() {
+    let (app, _pool, _tmp) = setup().await;
+    let r = Request::builder()
+        .method("GET")
+        .uri("/boards")
+        .header("host", "127.0.0.1:9999")
+        .header("host", "evil.com")
+        .header("authorization", format!("Bearer {TEST_TOKEN}"))
+        .body(Body::empty())
+        .unwrap();
+    let res = app.oneshot(r).await.unwrap();
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn mixed_case_localhost_host_passes() {
+    let (app, _pool, _tmp) = setup().await;
+    let r = Request::builder()
+        .method("GET")
+        .uri("/boards")
+        .header("host", "LocalHost:9999")
+        .header("authorization", format!("Bearer {TEST_TOKEN}"))
+        .body(Body::empty())
+        .unwrap();
+    let res = app.oneshot(r).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn host_with_surrounding_whitespace_passes() {
+    // hyper's HeaderValue forbids ASCII control chars but accepts surrounding
+    // spaces; our guard trims OWS before matching.
+    let (app, _pool, _tmp) = setup().await;
+    let r = Request::builder()
+        .method("GET")
+        .uri("/boards")
+        .header("host", "  127.0.0.1:9999  ")
+        .header("authorization", format!("Bearer {TEST_TOKEN}"))
+        .body(Body::empty())
+        .unwrap();
+    let res = app.oneshot(r).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn cards_search_respects_limit_and_offset() {
+    let (app, pool, _tmp) = setup().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
+    for i in 0..5 {
+        let c = CardRepo::create(&pool, &col.id, &format!("hit {i}"))
+            .await
+            .unwrap();
+        CardRepo::set_body(&pool, &c.id, b"y", "needle needle needle")
+            .await
+            .unwrap();
+    }
+
+    let res = app
+        .clone()
+        .oneshot(req("GET", "/cards/search?q=needle&limit=2&offset=0"))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let page0 = body_json(res).await;
+    let arr0 = page0.as_array().unwrap();
+    assert_eq!(arr0.len(), 2);
+
+    let res = app
+        .clone()
+        .oneshot(req("GET", "/cards/search?q=needle&limit=2&offset=1"))
+        .await
+        .unwrap();
+    let page1 = body_json(res).await;
+    let arr1 = page1.as_array().unwrap();
+    assert_eq!(arr1.len(), 2);
+
+    let ids0: std::collections::HashSet<String> = arr0
+        .iter()
+        .map(|h| h["card"]["id"].as_str().unwrap().to_string())
+        .collect();
+    let ids1: std::collections::HashSet<String> = arr1
+        .iter()
+        .map(|h| h["card"]["id"].as_str().unwrap().to_string())
+        .collect();
+    // page1 starts one row later; it must NOT be identical to page0.
+    assert_ne!(ids0, ids1);
+    // And the second-row item from page0 must appear in page1.
+    let p0_second = arr0[1]["card"]["id"].as_str().unwrap().to_string();
+    assert!(ids1.contains(&p0_second));
+}
+
+#[tokio::test]
+async fn tags_for_card_default_pagination() {
+    use kanso_core::repo::TagRepo;
+    let (app, pool, _tmp) = setup().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
+    let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
+    for i in 0..3 {
+        let t = TagRepo::create(&pool, &format!("tag-{i:02}"), None)
+            .await
+            .unwrap();
+        CardRepo::add_tag(&pool, &card.id, &t.id).await.unwrap();
+    }
+
+    // Default (no params) returns all 3 (well under 100).
+    let res = app
+        .clone()
+        .oneshot(req("GET", &format!("/cards/{}/tags", card.id)))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let v = body_json(res).await;
+    assert_eq!(v.as_array().unwrap().len(), 3);
+
+    // limit=1 clamps the page.
+    let res = app
+        .clone()
+        .oneshot(req(
+            "GET",
+            &format!("/cards/{}/tags?limit=1&offset=1", card.id),
+        ))
+        .await
+        .unwrap();
+    let v = body_json(res).await;
+    assert_eq!(v.as_array().unwrap().len(), 1);
+
+    // limit over MAX silently clamps; no 400.
+    let res = app
+        .clone()
+        .oneshot(req("GET", &format!("/cards/{}/tags?limit=99999", card.id)))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+}

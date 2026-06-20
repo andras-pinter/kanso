@@ -31,6 +31,10 @@ struct SearchCardsQuery {
     q: String,
     #[serde(default)]
     include_archived: bool,
+    #[serde(default)]
+    limit: Option<u32>,
+    #[serde(default)]
+    offset: Option<u32>,
 }
 
 // Cap PUT /cards/:id/body payloads at 8 MiB. Typical bodies are <100 KiB;
@@ -152,6 +156,9 @@ async fn search(
     State(state): State<AppState>,
     Query(q): Query<SearchCardsQuery>,
 ) -> Result<Json<Vec<CardSearchHitDto>>, ApiError> {
-    let rows = CardRepo::search_with_context(&state.pool, &q.q, q.include_archived).await?;
+    let (limit, offset) = resolve_page(q.limit, q.offset);
+    let rows =
+        CardRepo::search_with_context_paged(&state.pool, &q.q, q.include_archived, limit, offset)
+            .await?;
     Ok(Json(rows.into_iter().map(CardSearchHitDto::from).collect()))
 }

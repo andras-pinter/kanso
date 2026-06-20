@@ -92,11 +92,12 @@ impl ColumnRepo {
         offset: u32,
     ) -> Result<Vec<Column>> {
         let sql = if include_archived {
-            "SELECT * FROM columns WHERE board_id = ?1 ORDER BY position ASC LIMIT ?2 OFFSET ?3"
+            "SELECT * FROM columns WHERE board_id = ?1 \
+             ORDER BY position ASC, id ASC LIMIT ?2 OFFSET ?3"
         } else {
             "SELECT * FROM columns \
              WHERE board_id = ?1 AND archived_at IS NULL \
-             ORDER BY position ASC LIMIT ?2 OFFSET ?3"
+             ORDER BY position ASC, id ASC LIMIT ?2 OFFSET ?3"
         };
         let rows = sqlx::query_as::<_, Column>(sql)
             .bind(board_id)

@@ -742,7 +742,7 @@ async fn test_tag_delete_cascades_card_tags() {
 
     CardRepo::add_tag(&pool, &card.id, &tag.id).await.unwrap();
     assert_eq!(
-        CardRepo::tags_for_card(&pool, &card.id)
+        CardRepo::tags_for_card(&pool, &card.id, false)
             .await
             .unwrap()
             .len(),
@@ -750,7 +750,7 @@ async fn test_tag_delete_cascades_card_tags() {
     );
 
     TagRepo::delete(&pool, &tag.id).await.unwrap();
-    assert!(CardRepo::tags_for_card(&pool, &card.id)
+    assert!(CardRepo::tags_for_card(&pool, &card.id, false)
         .await
         .unwrap()
         .is_empty());
@@ -770,7 +770,7 @@ async fn test_card_tag_link_idempotent_and_unlink_idempotent() {
     CardRepo::add_tag(&pool, &card.id, &tag.id).await.unwrap();
     CardRepo::add_tag(&pool, &card.id, &tag.id).await.unwrap();
     assert_eq!(
-        CardRepo::tags_for_card(&pool, &card.id)
+        CardRepo::tags_for_card(&pool, &card.id, false)
             .await
             .unwrap()
             .len(),
@@ -783,7 +783,7 @@ async fn test_card_tag_link_idempotent_and_unlink_idempotent() {
     CardRepo::remove_tag(&pool, &card.id, &tag.id)
         .await
         .unwrap();
-    assert!(CardRepo::tags_for_card(&pool, &card.id)
+    assert!(CardRepo::tags_for_card(&pool, &card.id, false)
         .await
         .unwrap()
         .is_empty());
@@ -798,7 +798,7 @@ async fn test_card_tag_link_idempotent_and_unlink_idempotent() {
         Err(KansoError::NotFound { entity: "tag", .. })
     ));
     assert!(matches!(
-        CardRepo::tags_for_card(&pool, missing).await,
+        CardRepo::tags_for_card(&pool, missing, false).await,
         Err(KansoError::NotFound { entity: "card", .. })
     ));
     assert!(matches!(
@@ -1011,4 +1011,132 @@ async fn test_column_patch_color_and_move_via_repo() {
         .map(|c| c.name)
         .collect();
     assert_eq!(order, vec!["b", "a"]);
+}
+
+#[tokio::test]
+async fn test_tag_update_trims_and_rejects_empty() {
+    use kanso_core::repo::TagPatch;
+    use kanso_core::KansoError;
+    let pool = fixture_pool().await;
+    let tag = TagRepo::create(&pool, "ops", None).await.unwrap();
+
+    let err = TagRepo::update(
+        &pool,
+        &tag.id,
+        TagPatch {
+            name: Some("   ".to_string()),
+            color: None,
+        },
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(err, KansoError::InvalidInput(_)), "got {err:?}");
+
+    let updated = TagRepo::update(
+        &pool,
+        &tag.id,
+        TagPatch {
+            name: Some("  renamed  ".to_string()),
+            color: None,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(updated.name, "renamed");
+}
+
+#[tokio::test]
+async fn test_tag_create_rejects_blank_name() {
+    use kanso_core::KansoError;
+    let pool = fixture_pool().await;
+    let err = TagRepo::create(&pool, "   ", None).await.unwrap_err();
+    assert!(matches!(err, KansoError::InvalidInput(_)), "got {err:?}");
+}
+
+#[tokio::test]
+async fn test_archived_tag_hidden_in_tags_for_card() {
+    let pool = fixture_pool().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
+    let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
+    let tag_a = TagRepo::create(&pool, "alive", None).await.unwrap();
+    let tag_b = TagRepo::create(&pool, "buried", None).await.unwrap();
+
+    CardRepo::add_tag(&pool, &card.id, &tag_a.id).await.unwrap();
+    CardRepo::add_tag(&pool, &card.id, &tag_b.id).await.unwrap();
+    TagRepo::archive(&pool, &tag_b.id).await.unwrap();
+
+    let visible = CardRepo::tags_for_card(&pool, &card.id, false)
+        .await
+        .unwrap();
+    assert_eq!(visible.len(), 1);
+    assert_eq!(visible[0].name, "alive");
+
+    let all = CardRepo::tags_for_card(&pool, &card.id, true)
+        .await
+        .unwrap();
+    assert_eq!(all.len(), 2);
+}
+
+#[tokio::test]
+async fn test_link_archived_tag_rejected() {
+    use kanso_core::KansoError;
+    let pool = fixture_pool().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
+    let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
+    let tag = TagRepo::create(&pool, "dead", None).await.unwrap();
+    TagRepo::archive(&pool, &tag.id).await.unwrap();
+
+    let err = CardRepo::add_tag(&pool, &card.id, &tag.id)
+        .await
+        .unwrap_err();
+    assert!(matches!(err, KansoError::InvalidInput(_)), "got {err:?}");
+
+    // Linking succeeds once the tag is unarchived again.
+    TagRepo::unarchive(&pool, &tag.id).await.unwrap();
+    CardRepo::add_tag(&pool, &card.id, &tag.id).await.unwrap();
+}
+
+#[tokio::test]
+async fn test_cards_with_tag_ordered_by_column_then_card_position() {
+    let pool = fixture_pool().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let c1 = ColumnRepo::create(&pool, &board.id, "first", None)
+        .await
+        .unwrap();
+    let c2 = ColumnRepo::create(&pool, &board.id, "second", None)
+        .await
+        .unwrap();
+    let c3 = ColumnRepo::create(&pool, &board.id, "third", None)
+        .await
+        .unwrap();
+
+    // Create cards in creation order: a in c1, b in c2, c in c3, plus a second
+    // card in c2 so ordering within a column matters too.
+    let card_a = CardRepo::create(&pool, &c1.id, "a").await.unwrap();
+    let card_b1 = CardRepo::create(&pool, &c2.id, "b1").await.unwrap();
+    let card_b2 = CardRepo::create(&pool, &c2.id, "b2").await.unwrap();
+    let card_c = CardRepo::create(&pool, &c3.id, "c").await.unwrap();
+
+    // Reorder columns: third → first → second (so creation order ≠ board order).
+    ColumnRepo::move_column(&pool, &c3.id, None, Some(&c1.id))
+        .await
+        .unwrap();
+
+    let tag = TagRepo::create(&pool, "lbl", None).await.unwrap();
+    for cid in [&card_a.id, &card_b1.id, &card_b2.id, &card_c.id] {
+        CardRepo::add_tag(&pool, cid, &tag.id).await.unwrap();
+    }
+
+    let cards = CardRepo::cards_with_tag(&pool, &tag.id, false)
+        .await
+        .unwrap();
+    let names: Vec<&str> = cards.iter().map(|c| c.title.as_str()).collect();
+    // Visual board order after reorder is: third (c), first (a), second (b1, b2)
+    assert_eq!(names, vec!["c", "a", "b1", "b2"]);
 }

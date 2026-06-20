@@ -359,6 +359,16 @@ impl CardRepo {
         let mut tx = pool.begin().await?;
         ensure_exists(&mut tx, "cards", "card", card_id).await?;
         ensure_exists(&mut tx, "tags", "tag", tag_id).await?;
+        let archived: Option<(Option<i64>,)> =
+            sqlx::query_as("SELECT archived_at FROM tags WHERE id = ?1")
+                .bind(tag_id)
+                .fetch_optional(&mut *tx)
+                .await?;
+        if let Some((Some(_),)) = archived {
+            return Err(KansoError::InvalidInput(
+                "cannot link an archived tag; unarchive it first".into(),
+            ));
+        }
         sqlx::query("INSERT OR IGNORE INTO card_tags (card_id, tag_id) VALUES (?1, ?2)")
             .bind(card_id)
             .bind(tag_id)
@@ -383,26 +393,38 @@ impl CardRepo {
         Ok(())
     }
 
-    /// Tags currently linked to `card_id`, alphabetised. `NotFound` if the
-    /// card does not exist.
-    pub async fn tags_for_card(pool: &SqlitePool, card_id: &str) -> Result<Vec<Tag>> {
+    /// Tags currently linked to `card_id`, alphabetised. Archived tags are
+    /// hidden unless `include_archived` is true. `NotFound` if the card
+    /// does not exist.
+    pub async fn tags_for_card(
+        pool: &SqlitePool,
+        card_id: &str,
+        include_archived: bool,
+    ) -> Result<Vec<Tag>> {
         let mut tx = pool.begin().await?;
         ensure_exists(&mut tx, "cards", "card", card_id).await?;
-        let rows = sqlx::query_as::<_, Tag>(
+        let sql = if include_archived {
             "SELECT t.* FROM tags t \
              JOIN card_tags ct ON ct.tag_id = t.id \
              WHERE ct.card_id = ?1 \
-             ORDER BY t.name COLLATE NOCASE ASC",
-        )
-        .bind(card_id)
-        .fetch_all(&mut *tx)
-        .await?;
+             ORDER BY t.name COLLATE NOCASE ASC"
+        } else {
+            "SELECT t.* FROM tags t \
+             JOIN card_tags ct ON ct.tag_id = t.id \
+             WHERE ct.card_id = ?1 AND t.archived_at IS NULL \
+             ORDER BY t.name COLLATE NOCASE ASC"
+        };
+        let rows = sqlx::query_as::<_, Tag>(sql)
+            .bind(card_id)
+            .fetch_all(&mut *tx)
+            .await?;
         tx.commit().await?;
         Ok(rows)
     }
 
-    /// Cards linked to `tag_id`, ordered by column then position. `NotFound`
-    /// if the tag does not exist.
+    /// Cards linked to `tag_id`, ordered by board layout (column position
+    /// then card position) so callers receive them in the same order they
+    /// appear visually on the board. `NotFound` if the tag does not exist.
     pub async fn cards_with_tag(
         pool: &SqlitePool,
         tag_id: &str,
@@ -413,13 +435,15 @@ impl CardRepo {
         let sql = if include_archived {
             "SELECT c.* FROM cards c \
              JOIN card_tags ct ON ct.card_id = c.id \
+             JOIN columns col ON col.id = c.column_id \
              WHERE ct.tag_id = ?1 \
-             ORDER BY c.column_id ASC, c.position ASC"
+             ORDER BY col.position ASC, c.position ASC"
         } else {
             "SELECT c.* FROM cards c \
              JOIN card_tags ct ON ct.card_id = c.id \
+             JOIN columns col ON col.id = c.column_id \
              WHERE ct.tag_id = ?1 AND c.archived_at IS NULL \
-             ORDER BY c.column_id ASC, c.position ASC"
+             ORDER BY col.position ASC, c.position ASC"
         };
         let rows = sqlx::query_as::<_, Card>(sql)
             .bind(tag_id)

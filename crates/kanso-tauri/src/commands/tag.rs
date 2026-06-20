@@ -66,8 +66,10 @@ pub async fn tag_delete(state: State<'_, RuntimeState>, id: String) -> Result<()
 pub async fn card_tags_list(
     state: State<'_, RuntimeState>,
     card_id: String,
+    include_archived: Option<bool>,
 ) -> Result<Vec<TagDto>, AppError> {
-    let rows = CardRepo::tags_for_card(&state.pool, &card_id).await?;
+    let rows =
+        CardRepo::tags_for_card(&state.pool, &card_id, include_archived.unwrap_or(false)).await?;
     Ok(rows.into_iter().map(TagDto::from).collect())
 }
 

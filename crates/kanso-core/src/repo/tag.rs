@@ -18,6 +18,10 @@ pub struct TagRepo;
 
 impl TagRepo {
     pub async fn create(pool: &SqlitePool, name: &str, color: Option<&str>) -> Result<Tag> {
+        let trimmed = name.trim();
+        if trimmed.is_empty() {
+            return Err(KansoError::InvalidInput("tag name cannot be empty".into()));
+        }
         let id = new_id();
         let now = now_ms();
         let res = sqlx::query(
@@ -25,7 +29,7 @@ impl TagRepo {
              VALUES (?1, ?2, ?3, ?4, ?4)",
         )
         .bind(&id)
-        .bind(name)
+        .bind(trimmed)
         .bind(color)
         .bind(now)
         .execute(pool)
@@ -34,14 +38,14 @@ impl TagRepo {
         match res {
             Ok(_) => Ok(Tag {
                 id,
-                name: name.to_string(),
+                name: trimmed.to_string(),
                 color: color.map(|s| s.to_string()),
                 created_at: now,
                 updated_at: now,
                 archived_at: None,
             }),
-            Err(e) if is_unique_violation(&e) => Err(KansoError::Conflict(format!(
-                "tag name '{name}' already exists"
+            Err(e) if is_tag_name_unique_violation(&e) => Err(KansoError::Conflict(format!(
+                "tag name '{trimmed}' already exists"
             ))),
             Err(e) => Err(e.into()),
         }
@@ -69,10 +73,20 @@ impl TagRepo {
     }
 
     pub async fn update(pool: &SqlitePool, id: &str, patch: TagPatch) -> Result<Tag> {
+        let trimmed_name = match patch.name.as_deref() {
+            Some(n) => {
+                let t = n.trim();
+                if t.is_empty() {
+                    return Err(KansoError::InvalidInput("tag name cannot be empty".into()));
+                }
+                Some(t.to_string())
+            }
+            None => None,
+        };
         let now = now_ms();
         let mut qb = sqlx::QueryBuilder::new("UPDATE tags SET updated_at = ");
         qb.push_bind(now);
-        if let Some(name) = &patch.name {
+        if let Some(name) = trimmed_name.as_deref() {
             qb.push(", name = ").push_bind(name);
         }
         if let Some(color) = &patch.color {
@@ -86,9 +100,9 @@ impl TagRepo {
                 id: id.to_string(),
             }),
             Ok(_) => Self::get(pool, id).await,
-            Err(e) if is_unique_violation(&e) => Err(KansoError::Conflict(format!(
+            Err(e) if is_tag_name_unique_violation(&e) => Err(KansoError::Conflict(format!(
                 "tag name '{}' already exists",
-                patch.name.as_deref().unwrap_or("")
+                trimmed_name.as_deref().unwrap_or("")
             ))),
             Err(e) => Err(e.into()),
         }
@@ -143,6 +157,18 @@ impl TagRepo {
     }
 }
 
-fn is_unique_violation(e: &sqlx::Error) -> bool {
-    matches!(e, sqlx::Error::Database(db) if db.code().as_deref() == Some("2067") || db.message().contains("UNIQUE"))
+/// True only when the error is SQLITE_CONSTRAINT_UNIQUE on `tags.name`.
+/// We require both the extended code (2067) and a mention of the actual
+/// constrained column so future UNIQUE constraints on `tags` don't get
+/// silently folded into "tag name already exists".
+fn is_tag_name_unique_violation(e: &sqlx::Error) -> bool {
+    let sqlx::Error::Database(db) = e else {
+        return false;
+    };
+    let code_ok = db
+        .code()
+        .as_deref()
+        .map(|c| c == "2067" || c == "19")
+        .unwrap_or(false);
+    code_ok && db.message().contains("tags.name")
 }

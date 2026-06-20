@@ -99,8 +99,9 @@ async fn hard_delete(
 async fn tags_for_card(
     State(state): State<AppState>,
     Path(id): Path<String>,
+    Query(q): Query<CardsByTagQuery>,
 ) -> Result<Json<Vec<TagDto>>, ApiError> {
-    let rows = CardRepo::tags_for_card(&state.pool, &id).await?;
+    let rows = CardRepo::tags_for_card(&state.pool, &id, q.include_archived).await?;
     Ok(Json(rows.into_iter().map(TagDto::from).collect()))
 }
 

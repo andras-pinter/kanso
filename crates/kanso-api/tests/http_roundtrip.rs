@@ -816,3 +816,95 @@ async fn column_move_via_http() {
     let patched: ColumnDto = serde_json::from_value(body_json(res).await).unwrap();
     assert_eq!(patched.color.as_deref(), Some("#abc"));
 }
+
+#[tokio::test]
+async fn tag_update_blank_name_returns_400() {
+    let (app, _pool, _tmp) = setup().await;
+    let res = app
+        .clone()
+        .oneshot(req_json("POST", "/tags", json!({"name": "ok"})))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::CREATED);
+    let tag: TagDto = serde_json::from_value(body_json(res).await).unwrap();
+
+    let res = app
+        .clone()
+        .oneshot(req_json(
+            "PATCH",
+            &format!("/tags/{}", tag.id),
+            json!({"name": "   "}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn link_archived_tag_returns_400_and_archive_filter_works() {
+    let (app, pool, _tmp) = setup().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
+    let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
+    let card2 = CardRepo::create(&pool, &col.id, "T2").await.unwrap();
+
+    let res = app
+        .clone()
+        .oneshot(req_json("POST", "/tags", json!({"name": "buried"})))
+        .await
+        .unwrap();
+    let tag: TagDto = serde_json::from_value(body_json(res).await).unwrap();
+
+    // Link succeeds while tag is live.
+    let res = app
+        .clone()
+        .oneshot(req(
+            "POST",
+            &format!("/cards/{}/tags/{}", card.id, tag.id),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+
+    // Archive the tag.
+    let res = app
+        .clone()
+        .oneshot(req("POST", &format!("/tags/{}/archive", tag.id)))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    // Default list hides archived links.
+    let res = app
+        .clone()
+        .oneshot(req("GET", &format!("/cards/{}/tags", card.id)))
+        .await
+        .unwrap();
+    let visible: Vec<TagDto> = serde_json::from_value(body_json(res).await).unwrap();
+    assert!(visible.is_empty(), "got {visible:?}");
+
+    // Opt-in surfaces them.
+    let res = app
+        .clone()
+        .oneshot(req(
+            "GET",
+            &format!("/cards/{}/tags?include_archived=true", card.id),
+        ))
+        .await
+        .unwrap();
+    let all: Vec<TagDto> = serde_json::from_value(body_json(res).await).unwrap();
+    assert_eq!(all.len(), 1);
+
+    // Linking a fresh card to the archived tag is a 400.
+    let res = app
+        .clone()
+        .oneshot(req(
+            "POST",
+            &format!("/cards/{}/tags/{}", card2.id, tag.id),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}

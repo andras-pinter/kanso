@@ -5,7 +5,7 @@ use serde::Deserialize;
 
 use kanso_core::repo::ColumnRepo;
 
-use crate::dto::{ColumnDto, ColumnPatchDto, CreateColumnBody};
+use crate::dto::{ColumnDto, ColumnPatchDto, CreateColumnBody, MoveColumnBody};
 use crate::error::{require_non_empty, ApiError};
 use crate::AppState;
 
@@ -22,6 +22,7 @@ pub fn routes() -> Router<AppState> {
             axum::routing::get(list).post(create),
         )
         .route("/columns/:id", axum::routing::patch(update))
+        .route("/columns/:id/move", axum::routing::post(move_column))
         .route("/columns/:id/archive", axum::routing::post(archive))
         .route("/columns/:id/unarchive", axum::routing::post(unarchive))
 }
@@ -41,8 +42,13 @@ async fn create(
     Json(body): Json<CreateColumnBody>,
 ) -> Result<(StatusCode, Json<ColumnDto>), ApiError> {
     require_non_empty("name", &body.name)?;
-    let col =
-        ColumnRepo::create(&state.pool, &board_id, body.name.trim(), body.color.as_deref()).await?;
+    let col = ColumnRepo::create(
+        &state.pool,
+        &board_id,
+        body.name.trim(),
+        body.color.as_deref(),
+    )
+    .await?;
     Ok((StatusCode::CREATED, Json(ColumnDto::from(col))))
 }
 
@@ -69,4 +75,19 @@ async fn unarchive(
 ) -> Result<StatusCode, ApiError> {
     ColumnRepo::unarchive(&state.pool, &id).await?;
     Ok(StatusCode::OK)
+}
+
+async fn move_column(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<MoveColumnBody>,
+) -> Result<Json<ColumnDto>, ApiError> {
+    let col = ColumnRepo::move_column(
+        &state.pool,
+        &id,
+        body.before.as_deref(),
+        body.after.as_deref(),
+    )
+    .await?;
+    Ok(Json(ColumnDto::from(col)))
 }

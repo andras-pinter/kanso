@@ -55,3 +55,17 @@ pub async fn column_unarchive(state: State<'_, RuntimeState>, id: String) -> Res
     ColumnRepo::unarchive(&state.pool, &id).await?;
     Ok(())
 }
+
+#[tauri::command]
+pub async fn column_move(
+    state: State<'_, RuntimeState>,
+    id: String,
+    before: Option<String>,
+    after: Option<String>,
+) -> Result<ColumnDto, AppError> {
+    Ok(
+        ColumnRepo::move_column(&state.pool, &id, before.as_deref(), after.as_deref())
+            .await?
+            .into(),
+    )
+}

@@ -25,6 +25,7 @@ pub fn router(state: AppState) -> Router {
         .merge(handlers::board::routes())
         .merge(handlers::column::routes())
         .merge(handlers::card::routes())
+        .merge(handlers::tag::routes())
         .with_state(state)
 }
 

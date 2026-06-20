@@ -63,11 +63,7 @@ async fn board_crud_via_http() {
     let created: BoardDto = serde_json::from_value(body_json(res).await).unwrap();
     assert_eq!(created.name, "Main");
 
-    let res = app
-        .clone()
-        .oneshot(req("GET", "/boards"))
-        .await
-        .unwrap();
+    let res = app.clone().oneshot(req("GET", "/boards")).await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
     let listed: Vec<BoardDto> = serde_json::from_value(body_json(res).await).unwrap();
     assert_eq!(listed.len(), 1);
@@ -93,11 +89,7 @@ async fn board_crud_via_http() {
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
 
-    let res = app
-        .clone()
-        .oneshot(req("GET", "/boards"))
-        .await
-        .unwrap();
+    let res = app.clone().oneshot(req("GET", "/boards")).await.unwrap();
     let active: Vec<BoardDto> = serde_json::from_value(body_json(res).await).unwrap();
     assert!(active.is_empty());
 
@@ -181,7 +173,9 @@ async fn column_crud_via_http() {
 async fn card_crud_via_http() {
     let (app, pool, _tmp) = setup().await;
     let board = BoardRepo::create(&pool, "B").await.unwrap();
-    let column = ColumnRepo::create(&pool, &board.id, "Todo", None).await.unwrap();
+    let column = ColumnRepo::create(&pool, &board.id, "Todo", None)
+        .await
+        .unwrap();
 
     let res = app
         .clone()
@@ -197,7 +191,9 @@ async fn card_crud_via_http() {
     assert_eq!(created.title, "from test");
 
     // Persisted via the shared pool.
-    let from_db = CardRepo::list_by_column(&pool, &column.id, false).await.unwrap();
+    let from_db = CardRepo::list_by_column(&pool, &column.id, false)
+        .await
+        .unwrap();
     assert_eq!(from_db.len(), 1);
     assert_eq!(from_db[0].id, created.id);
 
@@ -248,7 +244,9 @@ async fn card_crud_via_http() {
 async fn card_archive_round_trip_via_http() {
     let (app, pool, _tmp) = setup().await;
     let board = BoardRepo::create(&pool, "B").await.unwrap();
-    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
     let a = CardRepo::create(&pool, &col.id, "a").await.unwrap();
     let _b = CardRepo::create(&pool, &col.id, "b").await.unwrap();
 
@@ -289,7 +287,9 @@ async fn card_archive_round_trip_via_http() {
 async fn card_move_via_http() {
     let (app, pool, _tmp) = setup().await;
     let board = BoardRepo::create(&pool, "B").await.unwrap();
-    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
     let a = CardRepo::create(&pool, &col.id, "a").await.unwrap();
     let b = CardRepo::create(&pool, &col.id, "b").await.unwrap();
     let c = CardRepo::create(&pool, &col.id, "c").await.unwrap();
@@ -318,7 +318,9 @@ async fn card_move_via_http() {
 async fn create_card_rejects_blank_title() {
     let (app, pool, _tmp) = setup().await;
     let board = BoardRepo::create(&pool, "B").await.unwrap();
-    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
 
     let res = app
         .oneshot(req_json(
@@ -335,7 +337,9 @@ async fn create_card_rejects_blank_title() {
 async fn move_card_non_adjacent_returns_400() {
     let (app, pool, _tmp) = setup().await;
     let board = BoardRepo::create(&pool, "B").await.unwrap();
-    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
     let a = CardRepo::create(&pool, &col.id, "a").await.unwrap();
     let _b = CardRepo::create(&pool, &col.id, "b").await.unwrap();
     let c = CardRepo::create(&pool, &col.id, "c").await.unwrap();
@@ -356,7 +360,9 @@ async fn move_card_non_adjacent_returns_400() {
 async fn card_body_text_clear_via_http() {
     let (app, pool, _tmp) = setup().await;
     let board = BoardRepo::create(&pool, "B").await.unwrap();
-    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
     let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
 
     // Set body_text via PATCH.
@@ -384,7 +390,11 @@ async fn card_body_text_clear_via_http() {
         .await
         .unwrap();
     let after: CardDto = serde_json::from_value(body_json(res).await).unwrap();
-    assert_eq!(after.body_text.as_deref(), Some("scratch"), "omit must leave body_text untouched");
+    assert_eq!(
+        after.body_text.as_deref(),
+        Some("scratch"),
+        "omit must leave body_text untouched"
+    );
 
     // Explicit null clears it.
     let res = app
@@ -405,8 +415,12 @@ async fn card_body_text_clear_via_http() {
 async fn list_columns_include_archived_via_http() {
     let (app, pool, _tmp) = setup().await;
     let board = BoardRepo::create(&pool, "B").await.unwrap();
-    let c1 = ColumnRepo::create(&pool, &board.id, "Active", None).await.unwrap();
-    let c2 = ColumnRepo::create(&pool, &board.id, "Hidden", None).await.unwrap();
+    let c1 = ColumnRepo::create(&pool, &board.id, "Active", None)
+        .await
+        .unwrap();
+    let c2 = ColumnRepo::create(&pool, &board.id, "Hidden", None)
+        .await
+        .unwrap();
     ColumnRepo::archive(&pool, &c2.id).await.unwrap();
 
     let res = app
@@ -447,7 +461,9 @@ async fn card_body_put_get_roundtrip_via_http() {
 
     let (app, pool, _tmp) = setup().await;
     let board = BoardRepo::create(&pool, "B").await.unwrap();
-    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
     let card = CardRepo::create(&pool, &col.id, "Body").await.unwrap();
 
     // Fresh card: both blob fields null.
@@ -489,7 +505,7 @@ async fn card_body_put_get_roundtrip_via_http() {
     assert!(got.updated_at >= card.updated_at);
 
     // FTS must see the new body_text.
-    let hits = CardRepo::search(&pool, "carrots").await.unwrap();
+    let hits = CardRepo::search(&pool, "carrots", false).await.unwrap();
     assert_eq!(hits.len(), 1);
     assert_eq!(hits[0].id, card.id);
 }
@@ -508,7 +524,9 @@ async fn card_body_get_unknown_returns_404() {
 async fn card_body_put_invalid_base64_returns_400() {
     let (app, pool, _tmp) = setup().await;
     let board = BoardRepo::create(&pool, "B").await.unwrap();
-    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
     let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
 
     let res = app
@@ -526,7 +544,9 @@ async fn card_body_put_invalid_base64_returns_400() {
 async fn card_body_put_under_limit_succeeds() {
     let (app, pool, _tmp) = setup().await;
     let board = BoardRepo::create(&pool, "B").await.unwrap();
-    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
     let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
 
     // ~7 MiB of valid base64 ("A" decodes to a single zero byte; padded to a multiple of 4).
@@ -547,7 +567,9 @@ async fn card_body_put_under_limit_succeeds() {
 async fn card_body_put_over_limit_returns_413() {
     let (app, pool, _tmp) = setup().await;
     let board = BoardRepo::create(&pool, "B").await.unwrap();
-    let col = ColumnRepo::create(&pool, &board.id, "C", None).await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
     let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
 
     let mut b64 = "A".repeat(9 * 1024 * 1024);
@@ -561,4 +583,328 @@ async fn card_body_put_over_limit_returns_413() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::PAYLOAD_TOO_LARGE);
+}
+
+// ---------- Phase 3: tags + card-tag links + search + column move ----------
+
+use kanso_api::TagDto;
+
+#[tokio::test]
+async fn tag_crud_via_http() {
+    let (app, _pool, _tmp) = setup().await;
+
+    let res = app
+        .clone()
+        .oneshot(req_json(
+            "POST",
+            "/tags",
+            json!({"name": "ops", "color": "#fff"}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::CREATED);
+    let tag: TagDto = serde_json::from_value(body_json(res).await).unwrap();
+    assert_eq!(tag.name, "ops");
+
+    let res = app
+        .clone()
+        .oneshot(req_json("POST", "/tags", json!({"name": "ops"})))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::CONFLICT);
+
+    let res = app.clone().oneshot(req("GET", "/tags")).await.unwrap();
+    let listed: Vec<TagDto> = serde_json::from_value(body_json(res).await).unwrap();
+    assert_eq!(listed.len(), 1);
+
+    let res = app
+        .clone()
+        .oneshot(req_json(
+            "PATCH",
+            &format!("/tags/{}", tag.id),
+            json!({"color": null}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let patched: TagDto = serde_json::from_value(body_json(res).await).unwrap();
+    assert!(patched.color.is_none());
+
+    let res = app
+        .clone()
+        .oneshot(req("POST", &format!("/tags/{}/archive", tag.id)))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let res = app
+        .clone()
+        .oneshot(req("POST", "/tags/00000000000000000000000000/archive"))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+
+    let res = app
+        .clone()
+        .oneshot(req("DELETE", &format!("/tags/{}", tag.id)))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+}
+
+#[tokio::test]
+async fn card_tag_link_via_http() {
+    let (app, pool, _tmp) = setup().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
+    let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
+
+    let res = app
+        .clone()
+        .oneshot(req_json("POST", "/tags", json!({"name": "ops"})))
+        .await
+        .unwrap();
+    let tag: TagDto = serde_json::from_value(body_json(res).await).unwrap();
+
+    let res = app
+        .clone()
+        .oneshot(req("POST", &format!("/cards/{}/tags/{}", card.id, tag.id)))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+
+    // idempotent
+    let res = app
+        .clone()
+        .oneshot(req("POST", &format!("/cards/{}/tags/{}", card.id, tag.id)))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+
+    let res = app
+        .clone()
+        .oneshot(req("GET", &format!("/cards/{}/tags", card.id)))
+        .await
+        .unwrap();
+    let tags: Vec<TagDto> = serde_json::from_value(body_json(res).await).unwrap();
+    assert_eq!(tags.len(), 1);
+
+    let res = app
+        .clone()
+        .oneshot(req("GET", &format!("/tags/{}/cards", tag.id)))
+        .await
+        .unwrap();
+    let cards: Vec<CardDto> = serde_json::from_value(body_json(res).await).unwrap();
+    assert_eq!(cards.len(), 1);
+    assert_eq!(cards[0].id, card.id);
+
+    let res = app
+        .clone()
+        .oneshot(req(
+            "DELETE",
+            &format!("/cards/{}/tags/{}", card.id, tag.id),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+
+    // idempotent unlink
+    let res = app
+        .clone()
+        .oneshot(req(
+            "DELETE",
+            &format!("/cards/{}/tags/{}", card.id, tag.id),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+
+    // missing card -> 404
+    let res = app
+        .clone()
+        .oneshot(req(
+            "POST",
+            &format!("/cards/00000000000000000000000000/tags/{}", tag.id),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn card_search_via_http() {
+    let (app, pool, _tmp) = setup().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
+    let card = CardRepo::create(&pool, &col.id, "Plain Title")
+        .await
+        .unwrap();
+    CardRepo::set_body(&pool, &card.id, b"y", "ribbon ribbon ribbon")
+        .await
+        .unwrap();
+
+    let res = app
+        .clone()
+        .oneshot(req("GET", "/cards/search?q=ribbon"))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let hits: Vec<CardDto> = serde_json::from_value(body_json(res).await).unwrap();
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0].id, card.id);
+
+    let res = app
+        .clone()
+        .oneshot(req("GET", "/cards/search?q="))
+        .await
+        .unwrap();
+    let hits: Vec<CardDto> = serde_json::from_value(body_json(res).await).unwrap();
+    assert!(hits.is_empty());
+}
+
+#[tokio::test]
+async fn column_move_via_http() {
+    let (app, pool, _tmp) = setup().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let a = ColumnRepo::create(&pool, &board.id, "a", None)
+        .await
+        .unwrap();
+    let b = ColumnRepo::create(&pool, &board.id, "b", None)
+        .await
+        .unwrap();
+    let _c = ColumnRepo::create(&pool, &board.id, "c", None)
+        .await
+        .unwrap();
+
+    let res = app
+        .clone()
+        .oneshot(req_json(
+            "POST",
+            &format!("/columns/{}/move", b.id),
+            json!({}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let res = app
+        .clone()
+        .oneshot(req("GET", &format!("/boards/{}/columns", board.id)))
+        .await
+        .unwrap();
+    let listed: Vec<ColumnDto> = serde_json::from_value(body_json(res).await).unwrap();
+    assert_eq!(
+        listed.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(),
+        vec!["a", "c", "b"]
+    );
+
+    // PATCH color
+    let res = app
+        .clone()
+        .oneshot(req_json(
+            "PATCH",
+            &format!("/columns/{}", a.id),
+            json!({"color": "#abc"}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let patched: ColumnDto = serde_json::from_value(body_json(res).await).unwrap();
+    assert_eq!(patched.color.as_deref(), Some("#abc"));
+}
+
+#[tokio::test]
+async fn tag_update_blank_name_returns_400() {
+    let (app, _pool, _tmp) = setup().await;
+    let res = app
+        .clone()
+        .oneshot(req_json("POST", "/tags", json!({"name": "ok"})))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::CREATED);
+    let tag: TagDto = serde_json::from_value(body_json(res).await).unwrap();
+
+    let res = app
+        .clone()
+        .oneshot(req_json(
+            "PATCH",
+            &format!("/tags/{}", tag.id),
+            json!({"name": "   "}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn link_archived_tag_returns_400_and_archive_filter_works() {
+    let (app, pool, _tmp) = setup().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
+    let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
+    let card2 = CardRepo::create(&pool, &col.id, "T2").await.unwrap();
+
+    let res = app
+        .clone()
+        .oneshot(req_json("POST", "/tags", json!({"name": "buried"})))
+        .await
+        .unwrap();
+    let tag: TagDto = serde_json::from_value(body_json(res).await).unwrap();
+
+    // Link succeeds while tag is live.
+    let res = app
+        .clone()
+        .oneshot(req(
+            "POST",
+            &format!("/cards/{}/tags/{}", card.id, tag.id),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+
+    // Archive the tag.
+    let res = app
+        .clone()
+        .oneshot(req("POST", &format!("/tags/{}/archive", tag.id)))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    // Default list hides archived links.
+    let res = app
+        .clone()
+        .oneshot(req("GET", &format!("/cards/{}/tags", card.id)))
+        .await
+        .unwrap();
+    let visible: Vec<TagDto> = serde_json::from_value(body_json(res).await).unwrap();
+    assert!(visible.is_empty(), "got {visible:?}");
+
+    // Opt-in surfaces them.
+    let res = app
+        .clone()
+        .oneshot(req(
+            "GET",
+            &format!("/cards/{}/tags?include_archived=true", card.id),
+        ))
+        .await
+        .unwrap();
+    let all: Vec<TagDto> = serde_json::from_value(body_json(res).await).unwrap();
+    assert_eq!(all.len(), 1);
+
+    // Linking a fresh card to the archived tag is a 400.
+    let res = app
+        .clone()
+        .oneshot(req(
+            "POST",
+            &format!("/cards/{}/tags/{}", card2.id, tag.id),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
 }

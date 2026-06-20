@@ -17,11 +17,10 @@ pub struct BoardRepo;
 
 impl BoardRepo {
     pub async fn create(pool: &SqlitePool, name: &str) -> Result<Board> {
-        let last_pos: Option<(String,)> = sqlx::query_as(
-            "SELECT position FROM boards ORDER BY position DESC LIMIT 1",
-        )
-        .fetch_optional(pool)
-        .await?;
+        let last_pos: Option<(String,)> =
+            sqlx::query_as("SELECT position FROM boards ORDER BY position DESC LIMIT 1")
+                .fetch_optional(pool)
+                .await?;
         let position = positioning::between(last_pos.as_ref().map(|(p,)| p.as_str()), None);
 
         let id = new_id();

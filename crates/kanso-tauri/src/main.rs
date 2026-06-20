@@ -13,7 +13,7 @@ use tokio::net::TcpListener;
 mod commands;
 mod error;
 
-use commands::{board as cmd_board, card as cmd_card, column as cmd_column};
+use commands::{board as cmd_board, card as cmd_card, column as cmd_column, tag as cmd_tag};
 
 #[derive(Clone)]
 pub struct RuntimeState {
@@ -107,6 +107,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             cmd_column::columns_list,
             cmd_column::column_create,
             cmd_column::column_update,
+            cmd_column::column_move,
             cmd_column::column_archive,
             cmd_column::column_unarchive,
             cmd_card::cards_list,
@@ -117,6 +118,18 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             cmd_card::card_unarchive,
             cmd_card::card_body_get,
             cmd_card::card_body_set,
+            cmd_card::card_search,
+            cmd_tag::tags_list,
+            cmd_tag::tag_create,
+            cmd_tag::tag_get,
+            cmd_tag::tag_update,
+            cmd_tag::tag_archive,
+            cmd_tag::tag_unarchive,
+            cmd_tag::tag_delete,
+            cmd_tag::card_tags_list,
+            cmd_tag::card_tag_add,
+            cmd_tag::card_tag_remove,
+            cmd_tag::tag_cards_list,
             // Legacy aliases — keep until Wave 5 migrates the UI.
             cmd_card::create_card,
             cmd_card::list_cards,

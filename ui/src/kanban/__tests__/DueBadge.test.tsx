@@ -4,7 +4,7 @@ import DueBadge from '../DueBadge';
 
 function startOfToday(): number {
   const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 }
 
 const DAY = 24 * 60 * 60 * 1000;

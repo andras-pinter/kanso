@@ -1,5 +1,6 @@
 // Native <input type="date"> wired through the store. Stores the picked
-// day as start-of-day in the local TZ, matching the badge logic.
+// day as UTC midnight so the displayed date is stable across timezones
+// (date-only semantics; see DueBadge for the matching overdue check).
 
 import { useKanbanStore } from './hooks/useKanbanStore';
 import type { CardDto } from './types';
@@ -11,9 +12,9 @@ interface Props {
 function millisToInputValue(ms: number | null | undefined): string {
   if (ms === null || ms === undefined) return '';
   const d = new Date(ms);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
 
@@ -21,7 +22,7 @@ function inputValueToMillis(v: string): number | null {
   if (!v) return null;
   const [y, m, d] = v.split('-').map((x) => Number.parseInt(x, 10));
   if (!y || !m || !d) return null;
-  return new Date(y, m - 1, d, 0, 0, 0, 0).getTime();
+  return Date.UTC(y, m - 1, d, 0, 0, 0, 0);
 }
 
 export default function DueDateEditor({ card }: Props) {

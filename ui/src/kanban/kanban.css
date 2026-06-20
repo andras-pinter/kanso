@@ -1166,10 +1166,10 @@ body {
   margin: 32px auto;
   max-width: 520px;
   padding: 24px;
-  background: var(--surface);
+  background: var(--surface-raised);
   border: 1px solid var(--danger);
   border-radius: var(--radius-md);
-  color: var(--text);
+  color: var(--text-primary);
 }
 
 .kanso-error-fallback-title {

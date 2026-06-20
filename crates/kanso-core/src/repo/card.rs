@@ -586,8 +586,9 @@ impl CardRepo {
             "SELECT ct.card_id, ct.tag_id FROM card_tags ct \
              JOIN cards c ON c.id = ct.card_id \
              JOIN columns col ON col.id = c.column_id \
+             JOIN tags t ON t.id = ct.tag_id \
              WHERE col.board_id = ?1 \
-             ORDER BY ct.card_id, ct.tag_id",
+             ORDER BY ct.card_id, t.name COLLATE NOCASE ASC, ct.tag_id",
         )
         .bind(board_id)
         .fetch_all(pool)

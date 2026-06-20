@@ -239,6 +239,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
           currentBoardId: null,
           columns: [],
           cardsByColumn: {},
+          cardTagMap: {},
           error: null,
         });
         return;
@@ -255,6 +256,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
         cardsByColumn,
         error: null,
       });
+      await get().reloadTagMap();
     } catch (e) {
       if (myVersion !== loadVersion) return;
       set({ status: 'error', error: formatError(e) });
@@ -366,6 +368,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
             selectedCardId: null,
             error: null,
           });
+          await get().reloadTagMap();
         } else {
           ++loadVersion;
           persistBoardId(null);
@@ -374,6 +377,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
             currentBoardId: null,
             columns: [],
             cardsByColumn: {},
+            cardTagMap: {},
             selectedCardId: null,
             error: null,
           });
@@ -418,6 +422,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
             cardsByColumn,
             selectedCardId: null,
           });
+          await get().reloadTagMap();
         } else {
           ++loadVersion;
           persistBoardId(null);
@@ -426,6 +431,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
             currentBoardId: null,
             columns: [],
             cardsByColumn: {},
+            cardTagMap: {},
             selectedCardId: null,
           });
         }
@@ -682,8 +688,11 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
   },
 
   reloadTagMap: async () => {
+    const boardId = get().currentBoardId;
+    const version = loadVersion;
     try {
-      const map = await fetchCardTagMap(get().currentBoardId);
+      const map = await fetchCardTagMap(boardId);
+      if (loadVersion !== version || get().currentBoardId !== boardId) return;
       set({ cardTagMap: map });
     } catch (e) {
       set({ error: formatError(e) });

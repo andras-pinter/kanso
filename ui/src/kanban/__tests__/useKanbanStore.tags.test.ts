@@ -282,4 +282,101 @@ describe('useKanbanStore tag actions', () => {
     await useKanbanStore.getState().setShowArchived(true);
     expect(bulkCalls).toBe(before + 1);
   });
+
+  it('boot: loadTags after load populates map even if tags resolve first', async () => {
+    // Reproduces a real boot race: KanbanBoard fires load() and loadTags()
+    // concurrently. loadTags reads get().currentBoardId; if load hasn't
+    // committed yet, it sees null and short-circuits to {}. load() must
+    // refresh the map after committing.
+    let releaseContents!: () => void;
+    const contentsGate = new Promise<void>((res) => {
+      releaseContents = res;
+    });
+
+    const tagsPayload: TagDto[] = [tag('t1', 'red')];
+    const boardPayload = [{ id: 'board1', name: 'B1', archived_at: null, created_at: 0, updated_at: 0 }];
+    const linksPayload = [{ card_id: 'card1', tag_id: 't1' }];
+
+    __setInvoker(async (cmd, _args) => {
+      switch (cmd) {
+        case 'default_column':
+          return { board_id: 'board1', column_id: 'col1' } as never;
+        case 'boards_list':
+          return boardPayload as never;
+        case 'columns_list':
+          await contentsGate;
+          return [] as never;
+        case 'cards_list':
+          return [] as never;
+        case 'tags_list':
+          return tagsPayload as never;
+        case 'board_card_tags_list':
+          return linksPayload as never;
+        default:
+          return undefined as never;
+      }
+    });
+
+    useKanbanStore.setState({ currentBoardId: null, tagsLoaded: false, cardTagMap: {} });
+
+    const loadP = useKanbanStore.getState().load();
+    const tagsP = useKanbanStore.getState().loadTags();
+    await tagsP;
+    // Tags settled while load() is still pending — map must be empty here.
+    expect(useKanbanStore.getState().cardTagMap).toEqual({});
+
+    releaseContents();
+    await loadP;
+
+    expect(useKanbanStore.getState().currentBoardId).toBe('board1');
+    expect(useKanbanStore.getState().cardTagMap).toEqual({ card1: ['t1'] });
+  });
+
+  it('reloadTagMap: late response does not clobber newer board', async () => {
+    // Switch B (slow) then C (fast). C lands first and commits; B's late
+    // response must be discarded by the version/board guard.
+    const linksByBoard: Record<string, { card_id: string; tag_id: string }[]> = {
+      boardB: [{ card_id: 'cardB', tag_id: 't1' }],
+      boardC: [{ card_id: 'cardC', tag_id: 't2' }],
+    };
+    let releaseB!: () => void;
+    const bGate = new Promise<void>((res) => {
+      releaseB = res;
+    });
+
+    __setInvoker(async (cmd, args) => {
+      const a = (args ?? {}) as Record<string, unknown>;
+      switch (cmd) {
+        case 'columns_list':
+          return [] as never;
+        case 'board_card_tags_list': {
+          const bid = a.boardId as string;
+          if (bid === 'boardB') await bGate;
+          return (linksByBoard[bid] ?? []) as never;
+        }
+        default:
+          return buildInvoker(server)(cmd, args);
+      }
+    });
+
+    useKanbanStore.setState({ currentBoardId: 'boardA' });
+
+    const switchB = useKanbanStore.getState().switchBoard('boardB');
+    // Let switchB commit currentBoardId='boardB' and pause inside reloadTagMap awaiting bGate.
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    expect(useKanbanStore.getState().currentBoardId).toBe('boardB');
+
+    const switchC = useKanbanStore.getState().switchBoard('boardC');
+
+    await switchC;
+    expect(useKanbanStore.getState().currentBoardId).toBe('boardC');
+    expect(useKanbanStore.getState().cardTagMap).toEqual({ cardC: ['t2'] });
+
+    releaseB();
+    await switchB;
+
+    // B's late fetch must NOT have overwritten C's map.
+    expect(useKanbanStore.getState().currentBoardId).toBe('boardC');
+    expect(useKanbanStore.getState().cardTagMap).toEqual({ cardC: ['t2'] });
+  });
 });

@@ -1,0 +1,364 @@
+// Minimal, AFFiNE-flavored kanban styling. Plain CSS — no design system.
+
+:root {
+  --kanso-bg: #fafafa;
+  --kanso-surface: #ffffff;
+  --kanso-surface-elevated: #ffffff;
+  --kanso-border: #ececec;
+  --kanso-border-strong: #d9d9d9;
+  --kanso-text: #1f1f1f;
+  --kanso-text-muted: #6b6b6b;
+  --kanso-accent: #1565c0;
+  --kanso-danger: #c0392b;
+  --kanso-radius: 6px;
+  --kanso-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --kanso-shadow-overlay: 0 6px 24px rgba(0, 0, 0, 0.18);
+  --kanso-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--kanso-bg);
+  color: var(--kanso-text);
+  font-family: var(--kanso-font);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.kanso-app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.kanso-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--kanso-border);
+  background: var(--kanso-surface);
+}
+
+.kanso-wordmark {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin: 0;
+}
+
+.kanso-debug-btn {
+  font-size: 12px;
+  color: var(--kanso-text-muted);
+  background: transparent;
+  border: 1px solid var(--kanso-border);
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.kanso-debug-btn:hover {
+  border-color: var(--kanso-border-strong);
+}
+
+.kanso-board {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  position: relative;
+}
+
+.kanso-board-state {
+  margin: auto;
+  color: var(--kanso-text-muted);
+}
+
+.kanso-columns {
+  flex: 1;
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  align-items: flex-start;
+}
+
+.kanso-column {
+  display: flex;
+  flex-direction: column;
+  width: 280px;
+  min-width: 280px;
+  max-height: 100%;
+  background: var(--kanso-surface);
+  border: 1px solid var(--kanso-border);
+  border-radius: var(--kanso-radius);
+  overflow: hidden;
+}
+
+.kanso-column-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 12px 14px 8px;
+}
+
+.kanso-column-name {
+  font-weight: 600;
+  font-size: 13px;
+  margin: 0;
+}
+
+.kanso-column-count {
+  color: var(--kanso-text-muted);
+  font-size: 12px;
+}
+
+.kanso-cards {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 8px;
+}
+
+.kanso-cards--empty {
+  min-height: 36px;
+}
+
+.kanso-card {
+  background: var(--kanso-surface-elevated);
+  border: 1px solid var(--kanso-border);
+  border-radius: var(--kanso-radius);
+  padding: 8px 10px;
+  box-shadow: var(--kanso-shadow-card);
+  cursor: grab;
+  user-select: none;
+}
+
+.kanso-card:hover {
+  border-color: var(--kanso-border-strong);
+}
+
+.kanso-card--dragging {
+  opacity: 0.35;
+}
+
+.kanso-card--overlay {
+  cursor: grabbing;
+  box-shadow: var(--kanso-shadow-overlay);
+  border-color: var(--kanso-border-strong);
+}
+
+.kanso-card-title {
+  font-size: 13px;
+  font-weight: 500;
+  word-wrap: break-word;
+}
+
+.kanso-card-body {
+  font-size: 12px;
+  color: var(--kanso-text-muted);
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.kanso-column-footer {
+  padding: 6px 10px 10px;
+  border-top: 1px solid var(--kanso-border);
+}
+
+.kanso-add-btn {
+  width: 100%;
+  background: transparent;
+  border: 1px dashed var(--kanso-border-strong);
+  border-radius: var(--kanso-radius);
+  color: var(--kanso-text-muted);
+  padding: 6px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.kanso-add-btn:hover {
+  color: var(--kanso-text);
+  border-color: var(--kanso-text-muted);
+}
+
+.kanso-add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kanso-add-textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 60px;
+  padding: 6px 8px;
+  border: 1px solid var(--kanso-border-strong);
+  border-radius: var(--kanso-radius);
+  font: inherit;
+  box-sizing: border-box;
+}
+
+.kanso-add-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.kanso-btn {
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--kanso-border-strong);
+  background: var(--kanso-surface);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.kanso-btn:hover {
+  border-color: var(--kanso-text-muted);
+}
+
+.kanso-btn--primary {
+  background: var(--kanso-accent);
+  border-color: var(--kanso-accent);
+  color: white;
+}
+
+.kanso-btn--primary:hover {
+  background: #0d4d99;
+  border-color: #0d4d99;
+}
+
+.kanso-btn--danger {
+  color: var(--kanso-danger);
+  border-color: var(--kanso-danger);
+}
+
+.kanso-btn--danger:hover {
+  background: var(--kanso-danger);
+  color: white;
+}
+
+.kanso-error {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #fff1f0;
+  border: 1px solid #ffccc7;
+  color: var(--kanso-danger);
+  padding: 6px 12px;
+  border-radius: var(--kanso-radius);
+  font-size: 12px;
+}
+
+/* ---------- Card detail drawer ---------- */
+
+.kanso-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: transparent;
+  z-index: 50;
+}
+
+.kanso-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 380px;
+  background: var(--kanso-surface);
+  border-left: 1px solid var(--kanso-border);
+  display: flex;
+  flex-direction: column;
+  z-index: 51;
+  box-shadow: -2px 0 12px rgba(0, 0, 0, 0.06);
+}
+
+.kanso-drawer-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--kanso-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.kanso-drawer-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--kanso-text-muted);
+  margin: 0;
+}
+
+.kanso-drawer-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.kanso-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.kanso-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--kanso-text-muted);
+}
+
+.kanso-title-input {
+  font-size: 16px;
+  font-weight: 500;
+  padding: 6px 8px;
+  border: 1px solid var(--kanso-border);
+  border-radius: var(--kanso-radius);
+  font-family: inherit;
+}
+
+.kanso-title-input:focus,
+.kanso-body-textarea:focus,
+.kanso-add-textarea:focus {
+  outline: none;
+  border-color: var(--kanso-accent);
+}
+
+.kanso-body-textarea {
+  min-height: 180px;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--kanso-border);
+  border-radius: var(--kanso-radius);
+  font: inherit;
+  line-height: 1.5;
+}
+
+.kanso-drawer-footer {
+  border-top: 1px solid var(--kanso-border);
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+}

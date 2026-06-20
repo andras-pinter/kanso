@@ -212,8 +212,22 @@ async fn write_port_file(
     token: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let contents = format!("port={port}\ntoken={token}\n");
-    let mut f = tokio::fs::File::create(path).await?;
+
+    let mut opts = tokio::fs::OpenOptions::new();
+    opts.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    opts.mode(0o600);
+    let mut f = opts.open(path).await?;
     f.write_all(contents.as_bytes()).await?;
     f.flush().await?;
+    drop(f);
+
+    // Defend against a pre-existing file that was created before we started
+    // setting the mode at open time.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        tokio::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).await?;
+    }
     Ok(())
 }

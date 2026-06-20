@@ -139,6 +139,31 @@ async fn boards_list_with_malformed_auth_returns_401() {
 }
 
 #[tokio::test]
+async fn boards_create_without_auth_returns_401() {
+    let (app, pool, _tmp) = setup().await;
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/boards")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({"name": "Should Not Land"}).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM boards")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
+}
+
+#[tokio::test]
 async fn board_crud_via_http() {
     let (app, _pool, _tmp) = setup().await;
 

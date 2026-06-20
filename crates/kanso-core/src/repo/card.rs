@@ -391,12 +391,17 @@ impl CardRepo {
             "SELECT c.* FROM cards c \
              JOIN cards_fts f ON f.rowid = c.rowid \
              WHERE cards_fts MATCH ?1 \
-             ORDER BY rank"
+             ORDER BY rank, c.updated_at DESC, c.id ASC"
         } else {
             "SELECT c.* FROM cards c \
              JOIN cards_fts f ON f.rowid = c.rowid \
-             WHERE cards_fts MATCH ?1 AND c.archived_at IS NULL \
-             ORDER BY rank"
+             JOIN columns col ON col.id = c.column_id \
+             JOIN boards b ON b.id = col.board_id \
+             WHERE cards_fts MATCH ?1 \
+               AND c.archived_at IS NULL \
+               AND col.archived_at IS NULL \
+               AND b.archived_at IS NULL \
+             ORDER BY rank, c.updated_at DESC, c.id ASC"
         };
         let cards = sqlx::query_as::<_, Card>(sql)
             .bind(match_expr)
@@ -437,7 +442,7 @@ impl CardRepo {
              JOIN columns col ON col.id = c.column_id \
              JOIN boards b ON b.id = col.board_id \
              WHERE cards_fts MATCH ?1 \
-             ORDER BY rank"
+             ORDER BY rank, c.updated_at DESC, c.id ASC"
         } else {
             "SELECT c.id          AS card_id, \
                     c.column_id   AS card_column_id, \
@@ -456,8 +461,11 @@ impl CardRepo {
              JOIN cards_fts f ON f.rowid = c.rowid \
              JOIN columns col ON col.id = c.column_id \
              JOIN boards b ON b.id = col.board_id \
-             WHERE cards_fts MATCH ?1 AND c.archived_at IS NULL \
-             ORDER BY rank"
+             WHERE cards_fts MATCH ?1 \
+               AND c.archived_at IS NULL \
+               AND col.archived_at IS NULL \
+               AND b.archived_at IS NULL \
+             ORDER BY rank, c.updated_at DESC, c.id ASC"
         };
         let rows = sqlx::query_as::<_, SearchRow>(sql)
             .bind(match_expr)

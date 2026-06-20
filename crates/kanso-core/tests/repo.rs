@@ -1140,3 +1140,71 @@ async fn test_cards_with_tag_ordered_by_column_then_card_position() {
     // Visual board order after reorder is: third (c), first (a), second (b1, b2)
     assert_eq!(names, vec!["c", "a", "b1", "b2"]);
 }
+
+// ---------- Wave 8b H1: search hides transitively archived hits ----------
+
+#[tokio::test]
+async fn test_search_hides_cards_in_archived_columns() {
+    let pool = fixture_pool().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
+    let card = CardRepo::create(&pool, &col.id, "needleA").await.unwrap();
+    ColumnRepo::archive(&pool, &col.id).await.unwrap();
+
+    assert!(CardRepo::search(&pool, "needleA", false)
+        .await
+        .unwrap()
+        .is_empty());
+    assert!(CardRepo::search_with_context(&pool, "needleA", false)
+        .await
+        .unwrap()
+        .is_empty());
+
+    let inc = CardRepo::search(&pool, "needleA", true).await.unwrap();
+    assert_eq!(inc.len(), 1);
+    assert_eq!(inc[0].id, card.id);
+}
+
+#[tokio::test]
+async fn test_search_hides_cards_in_archived_boards() {
+    let pool = fixture_pool().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
+    let card = CardRepo::create(&pool, &col.id, "needleB").await.unwrap();
+    BoardRepo::archive(&pool, &board.id).await.unwrap();
+
+    assert!(CardRepo::search(&pool, "needleB", false)
+        .await
+        .unwrap()
+        .is_empty());
+    assert!(CardRepo::search_with_context(&pool, "needleB", false)
+        .await
+        .unwrap()
+        .is_empty());
+
+    let inc = CardRepo::search(&pool, "needleB", true).await.unwrap();
+    assert_eq!(inc.len(), 1);
+    assert_eq!(inc[0].id, card.id);
+}
+
+#[tokio::test]
+async fn test_search_with_context_returns_live_card_in_live_board() {
+    let pool = fixture_pool().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "Todo", None)
+        .await
+        .unwrap();
+    let card = CardRepo::create(&pool, &col.id, "needleC").await.unwrap();
+
+    let hits = CardRepo::search_with_context(&pool, "needleC", false)
+        .await
+        .unwrap();
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0].card.id, card.id);
+    assert_eq!(hits[0].column_id, col.id);
+    assert_eq!(hits[0].board_id, board.id);
+}

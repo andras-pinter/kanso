@@ -3,10 +3,10 @@ use axum::http::StatusCode;
 use axum::{Json, Router};
 use serde::Deserialize;
 
-use kanso_core::repo::BoardRepo;
+use kanso_core::repo::{BoardRepo, CardRepo};
 use kanso_core::KansoError;
 
-use crate::dto::{BoardDto, BoardPatchDto, CreateBoardBody};
+use crate::dto::{BoardDto, BoardPatchDto, CardTagLinkDto, CreateBoardBody};
 use crate::error::{require_non_empty, ApiError};
 use crate::AppState;
 
@@ -25,6 +25,7 @@ pub fn routes() -> Router<AppState> {
         )
         .route("/boards/:id/archive", axum::routing::post(archive))
         .route("/boards/:id/unarchive", axum::routing::post(unarchive))
+        .route("/boards/:id/card_tags", axum::routing::get(card_tags))
 }
 
 async fn list(
@@ -81,4 +82,16 @@ async fn hard_delete(
         })),
         Err(e) => Err(ApiError(e)),
     }
+}
+
+async fn card_tags(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<Vec<CardTagLinkDto>>, ApiError> {
+    let rows = CardRepo::card_tags_for_board(&state.pool, &id).await?;
+    Ok(Json(
+        rows.into_iter()
+            .map(|(card_id, tag_id)| CardTagLinkDto { card_id, tag_id })
+            .collect(),
+    ))
 }

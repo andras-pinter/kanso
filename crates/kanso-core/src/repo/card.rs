@@ -574,6 +574,27 @@ impl CardRepo {
         Ok(rows)
     }
 
+    /// Every `(card_id, tag_id)` link for a board. Walks `card_tags` joined
+    /// through `cards`/`columns` and filters by `columns.board_id`. Includes
+    /// archived cards/columns/tags — the UI decides what to render. Returned
+    /// pairs are ordered by `(card_id, tag_id)` for determinism.
+    pub async fn card_tags_for_board(
+        pool: &SqlitePool,
+        board_id: &str,
+    ) -> Result<Vec<(String, String)>> {
+        let rows: Vec<(String, String)> = sqlx::query_as(
+            "SELECT ct.card_id, ct.tag_id FROM card_tags ct \
+             JOIN cards c ON c.id = ct.card_id \
+             JOIN columns col ON col.id = c.column_id \
+             WHERE col.board_id = ?1 \
+             ORDER BY ct.card_id, ct.tag_id",
+        )
+        .bind(board_id)
+        .fetch_all(pool)
+        .await?;
+        Ok(rows)
+    }
+
     pub async fn archive(pool: &SqlitePool, id: &str) -> Result<()> {
         let now = now_ms();
         let res = sqlx::query("UPDATE cards SET archived_at = ?1, updated_at = ?1 WHERE id = ?2")

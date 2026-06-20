@@ -27,22 +27,14 @@ function buildInvoker(server: FakeServer): InvokeFn {
     switch (cmd) {
       case 'tags_list':
         return (a.includeArchived ? server.tags : server.tags.filter((t) => t.archived_at === null)) as never;
-      case 'tag_cards_list': {
-        const tagId = a.tagId as string;
-        const cardIds = Object.entries(server.links)
-          .filter(([, tags]) => tags.includes(tagId))
-          .map(([cid]) => ({
-            id: cid,
-            column_id: 'c',
-            title: cid,
-            body_text: null,
-            position: cid,
-            due_at: null,
-            created_at: 0,
-            updated_at: 0,
-            archived_at: null,
-          }));
-        return cardIds as never;
+      case 'board_card_tags_list': {
+        const pairs: { card_id: string; tag_id: string }[] = [];
+        for (const [cid, tags] of Object.entries(server.links)) {
+          for (const tid of tags) {
+            pairs.push({ card_id: cid, tag_id: tid });
+          }
+        }
+        return pairs as never;
       }
       case 'tag_create': {
         const body = a.body as { name: string; color?: string | null };
@@ -108,7 +100,7 @@ function reset() {
     status: 'idle',
     error: null,
     boards: [],
-    currentBoardId: null,
+    currentBoardId: 'board1',
     showArchived: false,
     columns: [],
     cardsByColumn: {},
@@ -182,6 +174,23 @@ describe('useKanbanStore tag actions', () => {
     const s = useKanbanStore.getState();
     expect(s.tags.find((t) => t.id === 't1')).toBeUndefined();
     expect(s.cardTagMap.card1).toEqual([]);
+  });
+
+  it('loadTags short-circuits the map fetch when no board is active', async () => {
+    useKanbanStore.setState({ currentBoardId: null });
+    let calledBoardEndpoint = false;
+    __setInvoker(async (cmd, args) => {
+      if (cmd === 'board_card_tags_list') {
+        calledBoardEndpoint = true;
+      }
+      return buildInvoker(server)(cmd, args);
+    });
+
+    await useKanbanStore.getState().loadTags();
+    const s = useKanbanStore.getState();
+    expect(s.tagsLoaded).toBe(true);
+    expect(s.cardTagMap).toEqual({});
+    expect(calledBoardEndpoint).toBe(false);
   });
 
   it('concurrent addCardTag rollback preserves later successful add', async () => {

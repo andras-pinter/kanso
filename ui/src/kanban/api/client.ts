@@ -28,6 +28,14 @@ export interface CliExtStatus {
   dismissed: boolean;
 }
 
+export interface HostInfo {
+  id: string;
+  name: string;
+  detected: boolean;
+  config_dir: string;
+  config_file_hint: string | null;
+}
+
 let invoker: InvokeFn = invoke;
 
 // Test-only seam: lets vitest swap the underlying transport without
@@ -47,6 +55,13 @@ export const cliExtStatus = (): Promise<CliExtStatus> => invoker('cli_ext_status
 
 export const cliExtSetConsent = (install: boolean): Promise<CliExtStatus> =>
   invoker('cli_ext_set_consent', { install });
+
+export const mcpHostDetect = (): Promise<HostInfo[]> => invoker('mcp_host_detect');
+
+export const mcpServerPath = (): Promise<string | null> => invoker('mcp_server_path');
+
+export const revealInFinder = (path: string): Promise<void> =>
+  invoker('reveal_in_finder', { path });
 
 // ---------- boards ----------
 

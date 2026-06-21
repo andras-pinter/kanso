@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use kanso_api::AppState;
@@ -16,10 +17,12 @@ use tokio::net::TcpListener;
 mod commands;
 mod error;
 mod ext_install;
+mod mcp_hosts;
 
 use commands::{board as cmd_board, card as cmd_card, column as cmd_column, tag as cmd_tag};
 use error::AppError;
 use ext_install::{CliExtStatus, InstallTarget};
+use mcp_hosts::HostInfo;
 
 const MENU_SHOW: &str = "show";
 const MENU_REINSTALL_CLI: &str = "reinstall_cli";
@@ -71,6 +74,21 @@ fn cli_ext_set_consent(app: AppHandle, install: bool) -> Result<CliExtStatus, Ap
             Err(e.into())
         }
     }
+}
+
+#[tauri::command]
+fn mcp_host_detect(app: AppHandle) -> Result<Vec<HostInfo>, AppError> {
+    Ok(mcp_hosts::detect_from_app(&app)?)
+}
+
+#[tauri::command]
+fn mcp_server_path(app: AppHandle) -> Result<Option<String>, AppError> {
+    Ok(mcp_hosts::mcp_server_path_from_app(&app)?)
+}
+
+#[tauri::command]
+fn reveal_in_finder(path: PathBuf) -> Result<(), AppError> {
+    Ok(mcp_hosts::reveal_in_finder(&path)?)
 }
 
 fn main() {
@@ -147,6 +165,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             api_port,
             cli_ext_status,
             cli_ext_set_consent,
+            mcp_host_detect,
+            mcp_server_path,
+            reveal_in_finder,
             cmd_board::boards_list,
             cmd_board::board_create,
             cmd_board::board_update,

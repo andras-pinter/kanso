@@ -4,6 +4,7 @@ import BoardSwitcher from './kanban/BoardSwitcher';
 import ManageBoardsDrawer from './kanban/ManageBoardsDrawer';
 import CliExtConsentModal from './CliExtConsentModal';
 import { cliExtStatus, isTauri } from './kanban/api/client';
+import ConnectAppsPanel from './connect/ConnectAppsPanel';
 
 const EditorDemo = lazy(() => import('./editor/EditorDemo'));
 
@@ -11,11 +12,13 @@ const EditorDemo = lazy(() => import('./editor/EditorDemo'));
 // boundary exercised behind a debug flag so the editor chunk path doesn't
 // bit-rot if no card is opened during a session.
 const DEBUG_EDITOR = false;
+type View = 'board' | 'connect';
 
 export default function App() {
   const [showEditor, setShowEditor] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
   const [showCliExtConsent, setShowCliExtConsent] = useState(false);
+  const [view, setView] = useState<View>('board');
 
   useEffect(() => {
     if (!isTauri()) return;
@@ -37,7 +40,25 @@ export default function App() {
   return (
     <div className="kanso-app">
       <header className="kanso-header">
-        <BoardSwitcher onOpenManage={() => setManageOpen(true)} />
+        <div className="kanso-header-main">
+          <BoardSwitcher onOpenManage={() => setManageOpen(true)} />
+          <nav className="kanso-top-nav" aria-label="Primary">
+            <button
+              type="button"
+              className={`kanso-nav-btn${view === 'board' ? ' kanso-nav-btn--active' : ''}`}
+              onClick={() => setView('board')}
+            >
+              Board
+            </button>
+            <button
+              type="button"
+              className={`kanso-nav-btn${view === 'connect' ? ' kanso-nav-btn--active' : ''}`}
+              onClick={() => setView('connect')}
+            >
+              Connect Apps
+            </button>
+          </nav>
+        </div>
         {DEBUG_EDITOR && (
           <button
             type="button"
@@ -52,6 +73,8 @@ export default function App() {
         <Suspense fallback={<p>Loading editor…</p>}>
           <EditorDemo />
         </Suspense>
+      ) : view === 'connect' ? (
+        <ConnectAppsPanel />
       ) : (
         <KanbanBoard />
       )}

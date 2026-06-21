@@ -4,7 +4,6 @@ members = [
     "crates/kanso-core",
     "crates/kanso-api",
     "crates/kanso-tauri",
-    "crates/kanso-cli-ext",
 ]
 
 [workspace.package]

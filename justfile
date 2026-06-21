@@ -64,6 +64,11 @@ test:
     else \
         echo "skip: ui test (no ui/package.json)"; \
     fi
+    @if [ -f .github/extensions/kanso/package.json ]; then \
+        cd .github/extensions/kanso && npm test; \
+    else \
+        echo "skip: kanso cli extension test"; \
+    fi
 
 # Format everything. Each step guarded.
 fmt:

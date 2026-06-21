@@ -12,11 +12,11 @@ A personal Kanban app — local-first, keyboard-driven, AFFiNE-inspired. Built a
 ## Repo layout
 
 ```
-crates/          Rust workspace (kanso-core, kanso-api, kanso-tauri, kanso-cli-ext)
+crates/          Rust workspace (kanso-core, kanso-api, kanso-tauri)
 ui/              Vite + React app
 migrations/      sqlx migrations
 docs/            Architecture notes and ADRs
-.github/         CI + Copilot agent config
+.github/         CI + Copilot agent config + Copilot CLI extension
 ```
 
 ## Quickstart

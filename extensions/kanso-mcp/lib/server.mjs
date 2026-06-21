@@ -11,7 +11,9 @@
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
     boardFull,
+    boardGet,
     cardGet,
+    columnGet,
     KansoApiError,
     kansoAdd,
     kansoDone,
@@ -33,6 +35,9 @@ const CARD_TEMPLATE = "kanso://cards/{id}";
 const MIME = "text/markdown";
 
 const BOARD_INDEX_LIMIT = 500;
+// We fetch one extra row so we can detect the >cap case without an off-by-one
+// (banner shows only when the API actually had more than BOARD_INDEX_LIMIT).
+const BOARD_INDEX_FETCH_LIMIT = BOARD_INDEX_LIMIT + 1;
 const PER_BOARD_CARD_COUNT_LIMIT = 1000;
 
 /**
@@ -78,10 +83,12 @@ const toolWrap = (fn, client) => async (/** @type {T} */ args) => {
  * @param {any} client
  */
 const buildBoardsIndex = async (client) => {
-    const boards = await client.get(`/boards?limit=${BOARD_INDEX_LIMIT}`);
+    const boards = await client.get(`/boards?limit=${BOARD_INDEX_FETCH_LIMIT}`);
     const list = Array.isArray(boards) ? boards : [];
+    const truncated = list.length > BOARD_INDEX_LIMIT;
+    const visible = truncated ? list.slice(0, BOARD_INDEX_LIMIT) : list;
     const enriched = await Promise.all(
-        list.map(async (b) => {
+        visible.map(async (b) => {
             try {
                 const cols = await client.get(
                     `/boards/${encodeURIComponent(b.id)}/columns?limit=${PER_BOARD_CARD_COUNT_LIMIT}`,
@@ -102,16 +109,14 @@ const buildBoardsIndex = async (client) => {
                     cards: cardCounts.reduce((s, n) => s + n, 0),
                 };
             } catch {
-                // A board we can't enumerate (perms, transient db) should still
-                // show up in the index — counts collapse to `?`.
-                return { id: b.id, name: b.name ?? "(unnamed)", columns: 0, cards: 0 };
+                // A board we can't enumerate (perms, transient db) still shows
+                // up in the index — collapse counts to `?` so callers can tell
+                // them apart from genuinely empty boards.
+                return { id: b.id, name: b.name ?? "(unnamed)", columns: "?", cards: "?" };
             }
         }),
     );
-    return renderBoardsIndex({
-        boards: enriched,
-        truncated: list.length >= BOARD_INDEX_LIMIT,
-    });
+    return renderBoardsIndex({ boards: enriched, truncated });
 };
 
 /**
@@ -147,10 +152,25 @@ const buildCardSnapshot = async (client, id) => {
         }
         throw err;
     }
-    // Tag list is the only cheap parent context we can resolve without a
-    // GET /columns/:id or GET /boards/:id endpoint. Column/board names are
-    // skipped on purpose; the column_id on the card is still rendered as a
-    // raw id for users that need it.
+    // Best-effort parent-context lookups: column then board. A failure on
+    // either falls through to the renderer's `column_id` fallback so the
+    // card still renders cleanly.
+    let column;
+    let board;
+    if (card?.column_id) {
+        try {
+            column = await columnGet(client, { id: card.column_id });
+        } catch {
+            column = undefined;
+        }
+        if (column?.board_id) {
+            try {
+                board = await boardGet(client, { id: column.board_id });
+            } catch {
+                board = undefined;
+            }
+        }
+    }
     let tags = [];
     try {
         tags = await client.get(`/cards/${encodeURIComponent(id)}/tags`);
@@ -158,7 +178,7 @@ const buildCardSnapshot = async (client, id) => {
     } catch {
         tags = [];
     }
-    return renderCard({ card, tags });
+    return renderCard({ card, column, board, tags });
 };
 
 /**

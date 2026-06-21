@@ -214,7 +214,7 @@ describe("resources/templates/list", () => {
 describe("resources/read", () => {
     it("renders the boards index", async () => {
         const client = fakeClient({
-            "/boards?limit=500": [{ id: "b1", name: "Work" }],
+            "/boards?limit=501": [{ id: "b1", name: "Work" }],
             "/boards/b1/columns?limit=1000": [{ id: "c1", name: "Col" }],
             "/columns/c1/cards?limit=1000": [{ id: "card1" }, { id: "card2" }],
         });
@@ -224,6 +224,50 @@ describe("resources/read", () => {
         const text = res.contents[0].text;
         expect(text).toContain("# Kanso boards");
         expect(text).toContain("| b1 | Work | 1 | 2 |");
+        expect(text).not.toMatch(/_500\+ boards/);
+    });
+
+    it("renders ? for enrichment failures in the boards index", async () => {
+        const client = fakeClient({
+            "/boards?limit=501": [{ id: "b1", name: "Work" }],
+            "/boards/b1/columns?limit=1000": new Error("transient db error"),
+        });
+        const { mcpClient } = await harness(client);
+        const res = await mcpClient.readResource({ uri: "kanso://boards" });
+        const text = res.contents[0].text;
+        expect(text).toContain("| b1 | Work | ? | ? |");
+    });
+
+    it("does not show the 500+ banner when exactly 500 boards exist", async () => {
+        const boards = Array.from({ length: 500 }, (_, i) => ({
+            id: `b${i}`,
+            name: `Board ${i}`,
+        }));
+        const client = fakeClient({
+            "/boards?limit=501": boards,
+            "/boards/": new Error("nope"),
+        });
+        const { mcpClient } = await harness(client);
+        const res = await mcpClient.readResource({ uri: "kanso://boards" });
+        expect(res.contents[0].text).not.toMatch(/_500\+ boards/);
+    });
+
+    it("shows the 500+ banner only when more than 500 boards exist", async () => {
+        const boards = Array.from({ length: 501 }, (_, i) => ({
+            id: `b${i}`,
+            name: `Board ${i}`,
+        }));
+        const client = fakeClient({
+            "/boards?limit=501": boards,
+            "/boards/": new Error("nope"),
+        });
+        const { mcpClient } = await harness(client);
+        const res = await mcpClient.readResource({ uri: "kanso://boards" });
+        const text = res.contents[0].text;
+        expect(text).toMatch(/_500\+ boards; showing first 500\._/);
+        // Verify we truncate to 500 rows in the table.
+        const tableRows = text.split("\n").filter((l) => l.startsWith("| b"));
+        expect(tableRows).toHaveLength(500);
     });
 
     it("renders a board snapshot for boards/{id} (happy path)", async () => {
@@ -292,15 +336,40 @@ describe("resources/read", () => {
                 due_at: Date.UTC(2026, 5, 23),
                 archived_at: null,
             },
+            "/columns/col1": { id: "col1", board_id: "b1", name: "To Do" },
+            "/boards/b1": { id: "b1", name: "Work" },
             "/cards/c1/tags": [{ id: "t1", name: "urgent" }],
         });
         const { mcpClient } = await harness(client);
         const res = await mcpClient.readResource({ uri: "kanso://cards/c1" });
         const text = res.contents[0].text;
         expect(text).toContain("# Card: Buy milk");
+        expect(text).toContain("Board: **Work**");
+        expect(text).toContain("Column: **To Do**");
+        expect(text).not.toContain("Column id:");
         expect(text).toContain("Due: 2026-06-23");
         expect(text).toContain("Tags: `urgent`");
         expect(text).toContain("from the corner shop");
+    });
+
+    it("falls back to raw column_id when column lookup fails", async () => {
+        const client = fakeClient({
+            "/cards/c1": {
+                id: "c1",
+                column_id: "col-x",
+                title: "Orphan",
+                body_text: null,
+                due_at: null,
+            },
+            "/columns/col-x": new Error("boom"),
+            "/cards/c1/tags": [],
+        });
+        const { mcpClient } = await harness(client);
+        const res = await mcpClient.readResource({ uri: "kanso://cards/c1" });
+        const text = res.contents[0].text;
+        expect(text).toContain("# Card: Orphan");
+        expect(text).toContain("Column id: `col-x`");
+        expect(text).not.toContain("Board:");
     });
 
     it("renders a friendly message on missing card", async () => {

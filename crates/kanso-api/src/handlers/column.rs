@@ -4,6 +4,7 @@ use axum::{Json, Router};
 use serde::Deserialize;
 
 use kanso_core::repo::ColumnRepo;
+use kanso_core::KansoError;
 
 use crate::dto::{ColumnDto, ColumnPatchDto, CreateColumnBody, MoveColumnBody};
 use crate::error::{require_non_empty, ApiError};
@@ -26,7 +27,7 @@ pub fn routes() -> Router<AppState> {
             "/boards/:board_id/columns",
             axum::routing::get(list).post(create),
         )
-        .route("/columns/:id", axum::routing::patch(update))
+        .route("/columns/:id", axum::routing::get(get_one).patch(update))
         .route("/columns/:id/move", axum::routing::post(move_column))
         .route("/columns/:id/archive", axum::routing::post(archive))
         .route("/columns/:id/unarchive", axum::routing::post(unarchive))
@@ -67,6 +68,19 @@ async fn update(
 ) -> Result<Json<ColumnDto>, ApiError> {
     let col = ColumnRepo::update(&state.pool, &id, patch.into()).await?;
     Ok(Json(ColumnDto::from(col)))
+}
+
+async fn get_one(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<ColumnDto>, ApiError> {
+    match ColumnRepo::get(&state.pool, &id).await? {
+        Some(col) => Ok(Json(ColumnDto::from(col))),
+        None => Err(ApiError(KansoError::NotFound {
+            entity: "column",
+            id,
+        })),
+    }
 }
 
 async fn archive(

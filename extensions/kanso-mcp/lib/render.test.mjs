@@ -222,4 +222,50 @@ describe("extractTextFromYjsBlob", () => {
         const extracted = extractTextFromYjsBlob(b64);
         expect(extracted).toContain("hello world");
     });
+
+    it("caps extraction at EXCERPT_MAX_CHARS for a giant YText body", async () => {
+        const Y = await import("yjs");
+        const doc = new Y.Doc();
+        const text = doc.getText("body");
+        // Insert in 100-char chunks so Yjs produces multiple Items — proves
+        // the walk-bound short-circuits the linked list rather than just
+        // slicing a single ContentString at the end.
+        const chunk = "x".repeat(100);
+        for (let i = 0; i < 100; i += 1) text.insert(text.length, chunk);
+        const b64 = Buffer.from(Y.encodeStateAsUpdate(doc)).toString("base64");
+
+        const t0 = Date.now();
+        const extracted = extractTextFromYjsBlob(b64);
+        const elapsed = Date.now() - t0;
+
+        // Total source is 10_000 chars; cap is 500. Length budget is cap + 1
+        // for the trailing ellipsis.
+        expect(extracted.length).toBeLessThanOrEqual(_EXCERPT_MAX_CHARS + 1);
+        expect(extracted.endsWith("…")).toBe(true);
+        // Soft wall-clock guard — a full traversal of 10k chars is still
+        // sub-second, but a regression that drops the cap would balloon
+        // proportionally on real BlockSuite docs.
+        expect(elapsed).toBeLessThan(250);
+    });
+
+    it("extracts text from a BlockSuite-shaped Yjs doc (nested YMap with prop:text YText)", async () => {
+        const Y = await import("yjs");
+        // Mirror BlockSuite's on-wire layout: a top-level YMap `blocks` keyed
+        // by block id, each value a YMap with a `prop:text` YText child plus
+        // assorted flags. This is the shape that our synthetic Y.Text-only
+        // tests don't exercise — a regression in `collectText`'s YMap branch
+        // would silently break real card bodies.
+        const doc = new Y.Doc();
+        const blocks = doc.getMap("blocks");
+        const block = new Y.Map();
+        const yText = new Y.Text();
+        yText.insert(0, "Hello from BlockSuite");
+        block.set("prop:text", yText);
+        block.set("sys:flavour", "affine:paragraph");
+        blocks.set("block-1", block);
+
+        const b64 = Buffer.from(Y.encodeStateAsUpdate(doc)).toString("base64");
+        const extracted = extractTextFromYjsBlob(b64);
+        expect(extracted).toContain("Hello from BlockSuite");
+    });
 });

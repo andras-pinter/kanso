@@ -567,7 +567,7 @@ body {
   color: var(--danger) !important;
 }
 
-/* ---------- Card detail drawer ---------- */
+/* ---------- Side drawers (Manage boards / Manage tags) ---------- */
 
 .kanso-drawer-backdrop {
   position: fixed;
@@ -725,7 +725,59 @@ body {
   cursor: pointer;
 }
 
-.kanso-drawer-footer {
+/* ---------- Card detail modal ---------- */
+
+.kanso-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 60;
+}
+
+.kanso-modal {
+  width: min(880px, 100%);
+  max-height: 80vh;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+
+.kanso-modal-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.kanso-modal-title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.kanso-modal-body {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.kanso-modal-footer {
   border-top: 1px solid var(--border);
   padding: 12px 24px;
   display: flex;

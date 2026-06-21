@@ -1,6 +1,6 @@
 // Right-side drawer for managing boards: rename, recolor, archive, delete.
-// Same `<aside>` chrome as `CardDetailDrawer`. Archived boards are shown
-// under a toggleable section.
+// Shares the `.kanso-drawer` chrome with `ManageTagsDrawer`. Archived
+// boards are shown under a toggleable section.
 
 import { useEffect, useRef, useState } from 'react';
 import ColorPicker from './ColorPicker';

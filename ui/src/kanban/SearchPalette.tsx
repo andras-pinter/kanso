@@ -1,6 +1,6 @@
 // Cmd+K command palette: full-screen overlay, centered search panel, debounced
 // FTS5 query, click result → openCardOnBoard (switches boards if needed, then
-// opens the drawer).
+// opens the modal).
 
 import { useEffect, useRef, useState } from 'react';
 import { cardSearch } from './api/client';

@@ -16,7 +16,7 @@ where
 }
 
 use kanso_core::domain::{Board, Card, Column, Tag};
-use kanso_core::repo::{BoardPatch, CardPatch, ColumnPatch, TagPatch};
+use kanso_core::repo::{BoardFull, BoardPatch, CardPatch, ColumnPatch, TagPatch};
 
 // ---------- Board ----------
 
@@ -319,4 +319,52 @@ pub struct MoveColumnBody {
     pub before: Option<String>,
     #[serde(default)]
     pub after: Option<String>,
+}
+
+// ---------- Board (full snapshot) ----------
+
+/// Card payload inside [`ColumnWithCardsDto`]. `tag_ids` references
+/// [`BoardFullDto::tags`] so the wire format avoids duplicating tag rows.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CardWithTagIdsDto {
+    pub card: CardDto,
+    pub tag_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ColumnWithCardsDto {
+    pub column: ColumnDto,
+    pub cards: Vec<CardWithTagIdsDto>,
+}
+
+/// Response shape for `GET /boards/:id/_full`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BoardFullDto {
+    pub board: BoardDto,
+    pub tags: Vec<TagDto>,
+    pub columns: Vec<ColumnWithCardsDto>,
+}
+
+impl From<BoardFull> for BoardFullDto {
+    fn from(f: BoardFull) -> Self {
+        Self {
+            board: BoardDto::from(f.board),
+            tags: f.tags.into_iter().map(TagDto::from).collect(),
+            columns: f
+                .columns
+                .into_iter()
+                .map(|c| ColumnWithCardsDto {
+                    column: ColumnDto::from(c.column),
+                    cards: c
+                        .cards
+                        .into_iter()
+                        .map(|cwt| CardWithTagIdsDto {
+                            card: CardDto::from(cwt.card),
+                            tag_ids: cwt.tag_ids,
+                        })
+                        .collect(),
+                })
+                .collect(),
+        }
+    }
 }

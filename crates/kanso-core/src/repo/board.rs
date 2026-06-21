@@ -1,10 +1,12 @@
-use serde::{Deserialize, Serialize};
-use sqlx::SqlitePool;
+use std::collections::{BTreeSet, HashMap};
 
-use crate::domain::Board;
+use serde::{Deserialize, Serialize};
+use sqlx::{QueryBuilder, Sqlite, SqlitePool};
+
+use crate::domain::{Board, Card, Column, Tag};
 use crate::error::KansoError;
 use crate::positioning;
-use crate::repo::{new_id, now_ms};
+use crate::repo::{new_id, now_ms, CardRepo};
 use crate::Result;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -12,6 +14,35 @@ pub struct BoardPatch {
     pub name: Option<String>,
     pub color: Option<Option<String>>,
 }
+
+/// Card plus the tag IDs linked to it. Tag rows themselves live in
+/// [`BoardFull::tags`] so callers can dedupe lookup.
+#[derive(Debug, Clone)]
+pub struct CardWithTagIds {
+    pub card: Card,
+    pub tag_ids: Vec<String>,
+}
+
+/// Column plus its visible cards (already filtered + ordered).
+#[derive(Debug, Clone)]
+pub struct ColumnWithCards {
+    pub column: Column,
+    pub cards: Vec<CardWithTagIds>,
+}
+
+/// Full board snapshot: board + columns (with nested cards) + deduped tags
+/// referenced by the visible cards.
+#[derive(Debug, Clone)]
+pub struct BoardFull {
+    pub board: Board,
+    pub columns: Vec<ColumnWithCards>,
+    pub tags: Vec<Tag>,
+}
+
+/// Hard cap on total visible cards in a single full-board snapshot. Above
+/// this we return [`KansoError::Conflict`] instead of streaming a giant
+/// payload. Mirrors the defense-in-depth on `card_tags_for_board`.
+const FULL_BOARD_CARD_CAP: i64 = 1000;
 
 pub struct BoardRepo;
 
@@ -161,4 +192,148 @@ impl BoardRepo {
         }
         Ok(())
     }
+
+    /// Single-shot snapshot of a board with all its visible columns, cards,
+    /// and the deduped set of tags actually referenced by those cards.
+    ///
+    /// Refuses with [`KansoError::Conflict`] when the board would yield more
+    /// than [`FULL_BOARD_CARD_CAP`] cards (counted after the archive filter).
+    /// Returns [`KansoError::NotFound`] when `id` is unknown.
+    pub async fn full_with_context(
+        pool: &SqlitePool,
+        id: &str,
+        include_archived: bool,
+    ) -> Result<BoardFull> {
+        let mut tx = pool.begin().await?;
+
+        let board: Board = sqlx::query_as::<_, Board>("SELECT * FROM boards WHERE id = ?1")
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await?
+            .ok_or_else(|| KansoError::NotFound {
+                entity: "board",
+                id: id.to_string(),
+            })?;
+
+        let count_sql = if include_archived {
+            "SELECT COUNT(*) FROM cards c \
+             JOIN columns col ON col.id = c.column_id \
+             WHERE col.board_id = ?1"
+        } else {
+            "SELECT COUNT(*) FROM cards c \
+             JOIN columns col ON col.id = c.column_id \
+             WHERE col.board_id = ?1 \
+               AND c.archived_at IS NULL \
+               AND col.archived_at IS NULL"
+        };
+        let (count,): (i64,) = sqlx::query_as(count_sql)
+            .bind(id)
+            .fetch_one(&mut *tx)
+            .await?;
+        if count > FULL_BOARD_CARD_CAP {
+            return Err(KansoError::Conflict(format!(
+                "board too large (>{FULL_BOARD_CARD_CAP} cards)"
+            )));
+        }
+
+        let columns_sql = if include_archived {
+            "SELECT * FROM columns WHERE board_id = ?1 \
+             ORDER BY position ASC, id ASC"
+        } else {
+            "SELECT * FROM columns WHERE board_id = ?1 AND archived_at IS NULL \
+             ORDER BY position ASC, id ASC"
+        };
+        let columns: Vec<Column> = sqlx::query_as::<_, Column>(columns_sql)
+            .bind(id)
+            .fetch_all(&mut *tx)
+            .await?;
+
+        let cards_sql = if include_archived {
+            "SELECT c.* FROM cards c \
+             JOIN columns col ON col.id = c.column_id \
+             WHERE col.board_id = ?1 \
+             ORDER BY col.position ASC, col.id ASC, c.position ASC, c.id ASC"
+        } else {
+            "SELECT c.* FROM cards c \
+             JOIN columns col ON col.id = c.column_id \
+             WHERE col.board_id = ?1 \
+               AND c.archived_at IS NULL \
+               AND col.archived_at IS NULL \
+             ORDER BY col.position ASC, col.id ASC, c.position ASC, c.id ASC"
+        };
+        let cards: Vec<Card> = sqlx::query_as::<_, Card>(cards_sql)
+            .bind(id)
+            .fetch_all(&mut *tx)
+            .await?;
+
+        let links =
+            CardRepo::card_tags_for_board_visible(&mut *tx, id, include_archived).await?;
+        let mut tag_ids_by_card: HashMap<String, Vec<String>> = HashMap::new();
+        let mut needed_tag_ids: BTreeSet<String> = BTreeSet::new();
+        for (card_id, tag_id) in links {
+            needed_tag_ids.insert(tag_id.clone());
+            tag_ids_by_card.entry(card_id).or_default().push(tag_id);
+        }
+
+        let tags = fetch_tags_by_ids(&mut *tx, &needed_tag_ids, include_archived).await?;
+        // Drop tag IDs that point to filtered-out (archived) tags so the wire
+        // shape stays self-consistent — no card claims a tag the snapshot
+        // doesn't list.
+        let allowed_tag_ids: std::collections::HashSet<&str> =
+            tags.iter().map(|t| t.id.as_str()).collect();
+        for v in tag_ids_by_card.values_mut() {
+            v.retain(|id| allowed_tag_ids.contains(id.as_str()));
+        }
+
+        // Read-only transaction; nothing to commit, but dropping it is fine.
+        drop(tx);
+
+        let mut cards_by_column: HashMap<String, Vec<CardWithTagIds>> = HashMap::new();
+        for card in cards {
+            let tag_ids = tag_ids_by_card.remove(&card.id).unwrap_or_default();
+            cards_by_column
+                .entry(card.column_id.clone())
+                .or_default()
+                .push(CardWithTagIds { card, tag_ids });
+        }
+
+        let columns = columns
+            .into_iter()
+            .map(|column| {
+                let cards = cards_by_column.remove(&column.id).unwrap_or_default();
+                ColumnWithCards { column, cards }
+            })
+            .collect();
+
+        Ok(BoardFull {
+            board,
+            columns,
+            tags,
+        })
+    }
+}
+
+async fn fetch_tags_by_ids<'e, E>(
+    executor: E,
+    ids: &BTreeSet<String>,
+    include_archived: bool,
+) -> Result<Vec<Tag>>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
+{
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut qb: QueryBuilder<Sqlite> = QueryBuilder::new("SELECT * FROM tags WHERE id IN (");
+    let mut sep = qb.separated(", ");
+    for id in ids {
+        sep.push_bind(id);
+    }
+    qb.push(")");
+    if !include_archived {
+        qb.push(" AND archived_at IS NULL");
+    }
+    qb.push(" ORDER BY name COLLATE NOCASE ASC, id ASC");
+    let rows = qb.build_query_as::<Tag>().fetch_all(executor).await?;
+    Ok(rows)
 }

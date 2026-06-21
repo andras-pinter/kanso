@@ -1458,3 +1458,138 @@ async fn tags_for_card_default_pagination() {
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
 }
+
+// ---- Phase 6 Wave A: /boards/:id/_full ------------------------------------
+
+mod board_full_endpoint {
+    use super::*;
+    use kanso_api::BoardFullDto;
+    use kanso_core::repo::TagRepo;
+
+    #[tokio::test]
+    async fn board_full_endpoint_returns_nested_dto() {
+        let (app, pool, _tmp) = setup().await;
+        let board = BoardRepo::create(&pool, "B").await.unwrap();
+        let col = ColumnRepo::create(&pool, &board.id, "Todo", None).await.unwrap();
+        let card = CardRepo::create(&pool, &col.id, "do it").await.unwrap();
+        let tag = TagRepo::create(&pool, "urgent", None).await.unwrap();
+        CardRepo::add_tag(&pool, &card.id, &tag.id).await.unwrap();
+
+        let res = app
+            .oneshot(req("GET", &format!("/boards/{}/_full", board.id)))
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let body = body_json(res).await;
+        let snap: BoardFullDto = serde_json::from_value(body).unwrap();
+        assert_eq!(snap.board.id, board.id);
+        assert_eq!(snap.columns.len(), 1);
+        assert_eq!(snap.columns[0].column.id, col.id);
+        assert_eq!(snap.columns[0].cards.len(), 1);
+        assert_eq!(snap.columns[0].cards[0].card.id, card.id);
+        assert_eq!(snap.columns[0].cards[0].tag_ids, vec![tag.id.clone()]);
+        assert_eq!(snap.tags.len(), 1);
+        assert_eq!(snap.tags[0].id, tag.id);
+    }
+
+    #[tokio::test]
+    async fn board_full_endpoint_requires_auth() {
+        let (app, pool, _tmp) = setup().await;
+        let board = BoardRepo::create(&pool, "B").await.unwrap();
+        let res = app
+            .oneshot(req_no_auth("GET", &format!("/boards/{}/_full", board.id)))
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn board_full_endpoint_returns_404_for_unknown_board() {
+        let (app, _pool, _tmp) = setup().await;
+        let res = app
+            .oneshot(req("GET", "/boards/does-not-exist/_full"))
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn board_full_endpoint_returns_409_when_over_cap() {
+        let (app, pool, _tmp) = setup().await;
+        let board = BoardRepo::create(&pool, "Huge").await.unwrap();
+        let col = ColumnRepo::create(&pool, &board.id, "c", None).await.unwrap();
+        let mut tx = pool.begin().await.unwrap();
+        for i in 0..1001 {
+            sqlx::query(
+                "INSERT INTO cards (id, column_id, title, position, created_at, updated_at) \
+                 VALUES (?1, ?2, ?3, ?4, 0, 0)",
+            )
+            .bind(format!("card-{i:04}"))
+            .bind(&col.id)
+            .bind(format!("c{i}"))
+            .bind(format!("{i:05}"))
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+        }
+        tx.commit().await.unwrap();
+
+        let res = app
+            .oneshot(req("GET", &format!("/boards/{}/_full", board.id)))
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::CONFLICT);
+        let v = body_json(res).await;
+        let err = v["error"].as_str().unwrap();
+        assert!(err.contains("1000"), "got: {err}");
+        assert!(err.contains("too large"), "got: {err}");
+    }
+
+    #[tokio::test]
+    async fn board_full_endpoint_respects_include_archived_flag() {
+        let (app, pool, _tmp) = setup().await;
+        let board = BoardRepo::create(&pool, "B").await.unwrap();
+        let col = ColumnRepo::create(&pool, &board.id, "Todo", None).await.unwrap();
+        let live = CardRepo::create(&pool, &col.id, "live").await.unwrap();
+        let dead = CardRepo::create(&pool, &col.id, "dead").await.unwrap();
+        CardRepo::archive(&pool, &dead.id).await.unwrap();
+
+        let res = app
+            .clone()
+            .oneshot(req("GET", &format!("/boards/{}/_full", board.id)))
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let snap: BoardFullDto = serde_json::from_value(body_json(res).await).unwrap();
+        assert_eq!(snap.columns[0].cards.len(), 1);
+        assert_eq!(snap.columns[0].cards[0].card.id, live.id);
+
+        let res = app
+            .oneshot(req(
+                "GET",
+                &format!("/boards/{}/_full?include_archived=true", board.id),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let snap: BoardFullDto = serde_json::from_value(body_json(res).await).unwrap();
+        assert_eq!(snap.columns[0].cards.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn board_full_endpoint_host_guarded() {
+        let (app, pool, _tmp) = setup().await;
+        let board = BoardRepo::create(&pool, "B").await.unwrap();
+        let r = Request::builder()
+            .method("GET")
+            .uri(format!("/boards/{}/_full", board.id))
+            .header("host", "evil.com")
+            .header("authorization", format!("Bearer {TEST_TOKEN}"))
+            .body(Body::empty())
+            .unwrap();
+        let res = app.oneshot(r).await.unwrap();
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+        let v = body_json(res).await;
+        assert_eq!(v["error"], "forbidden_host");
+    }
+}

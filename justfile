@@ -64,8 +64,8 @@ test:
     else \
         echo "skip: ui test (no ui/package.json)"; \
     fi
-    @if [ -f .github/extensions/kanso/package.json ]; then \
-        cd .github/extensions/kanso && npm test; \
+    @if [ -f .github/extensions/package.json ]; then \
+        cd .github/extensions && npm test --workspaces --if-present; \
     else \
         echo "skip: kanso cli extension test"; \
     fi

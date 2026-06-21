@@ -1,0 +1,20 @@
+{
+    "name": "@kanso/client",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "description": "Shared client library for kanso extensions. Reads the port file, wraps fetch with auth/retry/error mapping, and exposes pure tool handler functions.",
+    "main": "./index.mjs",
+    "exports": {
+        ".": "./index.mjs",
+        "./port": "./port.mjs",
+        "./client": "./client.mjs",
+        "./tools": "./tools.mjs"
+    },
+    "scripts": {
+        "test": "vitest run"
+    },
+    "devDependencies": {
+        "vitest": "^2.1.8"
+    }
+}

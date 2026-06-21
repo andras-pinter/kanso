@@ -7,25 +7,25 @@ by the Tauri app to its app-data port file.
 ## Layout
 
 ```
-.github/extensions/kanso/
-  extension.mjs          entry — registers tools with @github/copilot-sdk
-  lib/
-    port.mjs             reads ~/Library/Application Support/dev.kanso.desktop/port
-    client.mjs           fetch wrapper (auth, timeout, 401/conn retry, error mapping)
-    tools.mjs            5 pure handler functions
-    *.test.mjs           vitest suites
-  package.json           dev dep on vitest
+.github/extensions/
+  package.json             npm workspace root
+  _shared/kanso-client/    @kanso/client — port + fetch wrapper + tool handlers (+ vitest)
+  kanso/
+    extension.mjs          entry — registers tools with @github/copilot-sdk
+    package.json           deps on @kanso/client (workspace)
 ```
+
+Logic and tests live in `@kanso/client` so the upcoming MCP server can share them.
 
 ## Install
 
 The extension is auto-discovered when running `copilot` from this repo root.
 No build step — ESM only. Node 18+ is required (uses global `fetch`).
 
-To install vitest for testing:
+The workspace symlinks `@kanso/client` into `kanso/node_modules` on install:
 
 ```sh
-npm install --prefix .github/extensions/kanso
+npm install --prefix .github/extensions
 ```
 
 ## Tools
@@ -71,11 +71,12 @@ and re-reads once on any `401` or `ECONNREFUSED` before giving up.
 ## Test
 
 ```sh
-cd .github/extensions/kanso && npm install && npm test
+cd .github/extensions && npm install && npm test --workspaces --if-present
 ```
 
-Tests are pure: they import the handlers and inject a fake `fetch` / port
-reader. They do **not** spawn the Copilot CLI or the kanso API.
+The 33 vitest specs live in `@kanso/client`. They are pure: they import the
+handlers and inject a fake `fetch` / port reader. They do **not** spawn the
+Copilot CLI or the kanso API.
 
 ## Troubleshooting
 

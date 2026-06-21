@@ -14,7 +14,7 @@ fn main() {
 
 fn stage_extensions() -> io::Result<()> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let source = manifest_dir.join("../../.github/extensions");
+    let source = manifest_dir.join("../../extensions");
     let staged = manifest_dir.join("resources/extensions");
 
     remove_path(&staged)?;

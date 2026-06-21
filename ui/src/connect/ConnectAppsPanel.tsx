@@ -3,7 +3,7 @@ import {
   cliExtSetConsent,
   mcpHostDetect,
   mcpServerPath,
-  revealInFinder,
+  revealInFileManager,
   type HostInfo,
 } from '../kanban/api/client';
 import '../kanban/kanban.css';
@@ -89,7 +89,7 @@ function HostCard({ host, serverPath }: HostCardProps) {
   const reveal = async () => {
     setError(null);
     try {
-      await revealInFinder(host.config_dir);
+      await revealInFileManager(host.config_dir);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setError(message);

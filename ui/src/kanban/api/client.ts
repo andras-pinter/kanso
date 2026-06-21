@@ -60,8 +60,8 @@ export const mcpHostDetect = (): Promise<HostInfo[]> => invoker('mcp_host_detect
 
 export const mcpServerPath = (): Promise<string | null> => invoker('mcp_server_path');
 
-export const revealInFinder = (path: string): Promise<void> =>
-  invoker('reveal_in_finder', { path });
+export const revealInFileManager = (path: string): Promise<void> =>
+  invoker('reveal_in_file_manager', { path });
 
 // ---------- boards ----------
 

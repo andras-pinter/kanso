@@ -87,8 +87,8 @@ fn mcp_server_path(app: AppHandle) -> Result<Option<String>, AppError> {
 }
 
 #[tauri::command]
-fn reveal_in_finder(path: PathBuf) -> Result<(), AppError> {
-    Ok(mcp_hosts::reveal_in_finder(&path)?)
+fn reveal_in_file_manager(path: PathBuf) -> Result<(), AppError> {
+    Ok(mcp_hosts::reveal_in_file_manager(&path)?)
 }
 
 fn main() {
@@ -167,7 +167,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             cli_ext_set_consent,
             mcp_host_detect,
             mcp_server_path,
-            reveal_in_finder,
+            reveal_in_file_manager,
             cmd_board::boards_list,
             cmd_board::board_create,
             cmd_board::board_update,

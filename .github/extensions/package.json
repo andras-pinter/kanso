@@ -6,7 +6,8 @@
     "description": "npm workspace root for kanso Copilot CLI extensions. Hosts the shared @kanso/client library and each extension package.",
     "workspaces": [
         "_shared/kanso-client",
-        "kanso"
+        "kanso",
+        "kanso-mcp"
     ],
     "scripts": {
         "test": "npm test --workspaces --if-present"

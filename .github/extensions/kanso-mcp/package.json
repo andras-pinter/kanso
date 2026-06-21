@@ -1,0 +1,23 @@
+{
+    "name": "kanso-mcp",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "description": "Model Context Protocol (MCP) stdio server for kanso. Exposes the kanso HTTP API to MCP hosts (Claude Desktop, Cursor, VS Code Copilot Chat, Zed) as tools and resources.",
+    "bin": {
+        "kanso-mcp": "./bin/kanso-mcp.mjs"
+    },
+    "main": "./lib/server.mjs",
+    "scripts": {
+        "test": "vitest run"
+    },
+    "dependencies": {
+        "@kanso/client": "*",
+        "@modelcontextprotocol/sdk": "1.29.0",
+        "yjs": "13.6.31",
+        "zod": "3.25.76"
+    },
+    "devDependencies": {
+        "vitest": "^2.1.8"
+    }
+}

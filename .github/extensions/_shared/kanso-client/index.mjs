@@ -1,5 +1,5 @@
 export { parsePortFile, portFilePath, readPortFile } from "./port.mjs";
-export { createClient } from "./client.mjs";
+export { createClient, KansoApiError } from "./client.mjs";
 export {
     kansoAdd,
     kansoDone,
@@ -7,3 +7,4 @@ export {
     kansoMove,
     kansoSearch,
 } from "./tools.mjs";
+export { boardFull, cardGet } from "./resources.mjs";

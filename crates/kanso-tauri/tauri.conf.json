@@ -36,8 +36,12 @@
     "category": "Productivity",
     "shortDescription": "Personal local-first kanban",
     "longDescription": "kanso — personal, local-first kanban with rich-text cards.",
+    "resources": {
+      "resources/extensions": "extensions"
+    },
     "macOS": {
-      "minimumSystemVersion": "12.0"
+      "minimumSystemVersion": "12.0",
+      "infoPlist": "Info.plist"
     }
   }
 }

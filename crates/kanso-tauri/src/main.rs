@@ -6,14 +6,27 @@ use kanso_core::repo::{BoardRepo, ColumnRepo};
 use rand::RngCore;
 use serde::Serialize;
 use sqlx::SqlitePool;
-use tauri::{Manager, State};
+use tauri::menu::MenuBuilder;
+use tauri::tray::TrayIconBuilder;
+use tauri::{AppHandle, Manager, State, WindowEvent};
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 
 mod commands;
 mod error;
+mod ext_install;
 
 use commands::{board as cmd_board, card as cmd_card, column as cmd_column, tag as cmd_tag};
+use error::AppError;
+use ext_install::{CliExtStatus, InstallTarget};
+
+const MENU_SHOW: &str = "show";
+const MENU_REINSTALL_CLI: &str = "reinstall_cli";
+const MENU_REINSTALL_MCP: &str = "reinstall_mcp";
+const MENU_UNINSTALL_CLI: &str = "uninstall_cli";
+const MENU_UNINSTALL_MCP: &str = "uninstall_mcp";
+const MENU_QUIT: &str = "quit";
 
 #[derive(Clone)]
 pub struct RuntimeState {
@@ -44,6 +57,22 @@ fn api_port(state: State<'_, RuntimeState>) -> u16 {
     state.api_port
 }
 
+#[tauri::command]
+fn cli_ext_status(app: AppHandle) -> Result<CliExtStatus, AppError> {
+    Ok(ext_install::cli_ext_status(&app)?)
+}
+
+#[tauri::command]
+fn cli_ext_set_consent(app: AppHandle, install: bool) -> Result<CliExtStatus, AppError> {
+    match ext_install::set_cli_ext_consent(&app, install) {
+        Ok(status) => Ok(status),
+        Err(e) => {
+            show_error(&app, "Copilot CLI extension", &e.user_message());
+            Err(e.into())
+        }
+    }
+}
+
 fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -60,6 +89,7 @@ fn main() {
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let data_dir = app
                 .path()
@@ -95,12 +125,28 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 }
             });
 
+            setup_tray(&handle).map_err(|e| format!("setup tray: {e}"))?;
+            if let Err(e) = ext_install::auto_upgrade_if_needed(&handle) {
+                show_error(&handle, "Copilot CLI extension", &e.user_message());
+                tracing::warn!(error = ?e, "extension auto-upgrade skipped");
+            }
+
             handle.manage(runtime_state);
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                if let Err(e) = window.hide() {
+                    tracing::warn!(error = ?e, "hide window on close failed");
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             default_column,
             api_port,
+            cli_ext_status,
+            cli_ext_set_consent,
             cmd_board::boards_list,
             cmd_board::board_create,
             cmd_board::board_update,
@@ -140,6 +186,102 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         ])
         .run(tauri::generate_context!())?;
     Ok(())
+}
+
+fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
+    let menu = MenuBuilder::new(app)
+        .text(MENU_SHOW, "Show kanso")
+        .separator()
+        .text(MENU_REINSTALL_CLI, "Reinstall Copilot CLI extension")
+        .text(MENU_REINSTALL_MCP, "Reinstall MCP server")
+        .text(MENU_UNINSTALL_CLI, "Uninstall Copilot CLI extension")
+        .text(MENU_UNINSTALL_MCP, "Uninstall MCP server")
+        .separator()
+        .text(MENU_QUIT, "Quit")
+        .build()?;
+
+    let mut tray = TrayIconBuilder::new()
+        .tooltip("kanso")
+        .menu(&menu)
+        .show_menu_on_left_click(true)
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            MENU_SHOW => show_main_window(app),
+            MENU_REINSTALL_CLI => confirm_and_install(app, InstallTarget::Cli),
+            MENU_REINSTALL_MCP => confirm_and_install(app, InstallTarget::Mcp),
+            MENU_UNINSTALL_CLI => confirm_and_uninstall(app, InstallTarget::Cli),
+            MENU_UNINSTALL_MCP => confirm_and_uninstall(app, InstallTarget::Mcp),
+            MENU_QUIT => app.exit(0),
+            _ => {}
+        });
+
+    if let Some(icon) = app.default_window_icon().cloned() {
+        tray = tray.icon(icon);
+    }
+
+    tray.build(app)?;
+    Ok(())
+}
+
+fn show_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        if let Err(e) = window.show().and_then(|_| window.set_focus()) {
+            tracing::warn!(error = ?e, "show main window failed");
+        }
+    }
+}
+
+fn confirm_and_install(app: &AppHandle, target: InstallTarget) {
+    let title = target.label();
+    confirm(app, title, &format!("Reinstall {title}?"), move |app| {
+        match ext_install::install_from_app(&app, target) {
+            Ok(()) => show_info(&app, title, &format!("{title} reinstalled.")),
+            Err(e) => show_error(&app, title, &e.user_message()),
+        }
+    });
+}
+
+fn confirm_and_uninstall(app: &AppHandle, target: InstallTarget) {
+    let title = target.label();
+    confirm(app, title, &format!("Uninstall {title}?"), move |app| {
+        match ext_install::uninstall_from_app(&app, target) {
+            Ok(()) => show_info(&app, title, &format!("{title} uninstalled.")),
+            Err(e) => show_error(&app, title, &e.user_message()),
+        }
+    });
+}
+
+fn confirm<F>(app: &AppHandle, title: &str, message: &str, on_yes: F)
+where
+    F: FnOnce(AppHandle) + Send + 'static,
+{
+    let handle = app.clone();
+    app.dialog()
+        .message(message)
+        .title(title)
+        .kind(MessageDialogKind::Warning)
+        .buttons(MessageDialogButtons::YesNo)
+        .show(move |yes| {
+            if yes {
+                on_yes(handle);
+            }
+        });
+}
+
+fn show_info(app: &AppHandle, title: &str, message: &str) {
+    show_message(app, title, message, MessageDialogKind::Info);
+}
+
+fn show_error(app: &AppHandle, title: &str, message: &str) {
+    show_message(app, title, message, MessageDialogKind::Error);
+}
+
+fn show_message(app: &AppHandle, title: &str, message: &str, kind: MessageDialogKind) {
+    app.dialog()
+        .message(message)
+        .title(title)
+        .kind(kind)
+        .buttons(MessageDialogButtons::Ok)
+        .show(|_| {});
 }
 
 async fn bootstrap(
@@ -248,7 +390,9 @@ mod tests {
     async fn write_port_file_writes_through_tmp_and_renames() {
         let dir = tempfile::tempdir().expect("tempdir");
         let path = dir.path().join("port");
-        write_port_file(&path, 4711, "deadbeef").await.expect("write");
+        write_port_file(&path, 4711, "deadbeef")
+            .await
+            .expect("write");
 
         let contents = tokio::fs::read_to_string(&path).await.expect("read");
         assert_eq!(contents, "port=4711\ntoken=deadbeef\n");
@@ -259,7 +403,12 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let mode = tokio::fs::metadata(&path).await.expect("meta").permissions().mode() & 0o777;
+            let mode = tokio::fs::metadata(&path)
+                .await
+                .expect("meta")
+                .permissions()
+                .mode()
+                & 0o777;
             assert_eq!(mode, 0o600, "port file should be 0600");
         }
     }
@@ -291,7 +440,9 @@ mod tests {
         });
 
         for i in 0..200u16 {
-            write_port_file(&path, 2000 + i, "bbbb").await.expect("write");
+            write_port_file(&path, 2000 + i, "bbbb")
+                .await
+                .expect("write");
         }
 
         let observed_empty = reader.await.expect("join");

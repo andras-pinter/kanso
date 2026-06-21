@@ -20,6 +20,14 @@ import type {
 
 export type InvokeFn = <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
 
+export interface CliExtStatus {
+  show_consent: boolean;
+  bundled_version: string;
+  cli_installed_version: string | null;
+  consent: boolean;
+  dismissed: boolean;
+}
+
 let invoker: InvokeFn = invoke;
 
 // Test-only seam: lets vitest swap the underlying transport without
@@ -35,13 +43,17 @@ export const isTauri = (): boolean =>
 
 export const defaultColumn = (): Promise<SeedIds> => invoker('default_column');
 
+export const cliExtStatus = (): Promise<CliExtStatus> => invoker('cli_ext_status');
+
+export const cliExtSetConsent = (install: boolean): Promise<CliExtStatus> =>
+  invoker('cli_ext_set_consent', { install });
+
 // ---------- boards ----------
 
 export const boardsList = (includeArchived = false): Promise<BoardDto[]> =>
   invoker('boards_list', { includeArchived });
 
-export const boardCreate = (name: string): Promise<BoardDto> =>
-  invoker('board_create', { name });
+export const boardCreate = (name: string): Promise<BoardDto> => invoker('board_create', { name });
 
 export const boardUpdate = (id: string, patch: BoardPatch): Promise<BoardDto> =>
   invoker('board_update', { id, patch });
@@ -57,11 +69,8 @@ export const boardDelete = (id: string): Promise<void> => invoker('board_delete'
 export const columnsList = (boardId: string, includeArchived = false): Promise<ColumnDto[]> =>
   invoker('columns_list', { boardId, includeArchived });
 
-export const columnCreate = (
-  boardId: string,
-  name: string,
-  color?: string,
-): Promise<ColumnDto> => invoker('column_create', { boardId, name, color });
+export const columnCreate = (boardId: string, name: string, color?: string): Promise<ColumnDto> =>
+  invoker('column_create', { boardId, name, color });
 
 export const columnUpdate = (id: string, patch: ColumnPatch): Promise<ColumnDto> =>
   invoker('column_update', { id, patch });
@@ -105,9 +114,8 @@ export const cardTagRemove = (cardId: string, tagId: string): Promise<void> =>
   invoker('card_tag_remove', { cardId, tagId });
 
 export const boardCardTagsList = (
-  boardId: string,
-): Promise<{ card_id: string; tag_id: string }[]> =>
-  invoker('board_card_tags_list', { boardId });
+  boardId: string
+): Promise<{ card_id: string; tag_id: string }[]> => invoker('board_card_tags_list', { boardId });
 
 // ---------- cards ----------
 
@@ -145,8 +153,5 @@ export const cardBodySet = (id: string, body: CardBodySet): Promise<void> =>
 
 // ---------- search ----------
 
-export const cardSearch = (
-  query: string,
-  includeArchived = false,
-): Promise<CardSearchHitDto[]> =>
+export const cardSearch = (query: string, includeArchived = false): Promise<CardSearchHitDto[]> =>
   invoker('card_search', { query, includeArchived });

@@ -85,6 +85,76 @@ body {
   color: var(--text-primary);
 }
 
+/* ---------- First-launch modal ---------- */
+
+.kanso-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  background: rgba(17, 24, 39, 0.18);
+}
+
+.kanso-modal {
+  width: min(420px, calc(100vw - 48px));
+  padding: 24px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-drag);
+}
+
+.kanso-modal h2 {
+  margin: 0 0 10px;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.kanso-modal p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.kanso-modal-error {
+  margin-top: 12px !important;
+  color: var(--danger) !important;
+}
+
+.kanso-modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.kanso-primary-btn,
+.kanso-secondary-btn {
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.kanso-primary-btn {
+  border: 1px solid var(--accent-strong);
+  background: var(--accent);
+  color: #fff;
+}
+
+.kanso-secondary-btn {
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+}
+
+.kanso-primary-btn:disabled,
+.kanso-secondary-btn:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
 /* ---------- Board ---------- */
 
 .kanso-board {

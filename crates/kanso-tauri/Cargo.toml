@@ -11,7 +11,7 @@ workspace = true
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon"] }
 axum = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
@@ -25,6 +25,9 @@ base64 = { workspace = true }
 sqlx = { workspace = true }
 kanso-core = { path = "../kanso-core" }
 kanso-api = { path = "../kanso-api" }
+tauri-plugin-dialog = "2"
+fs2 = "0.4"
+wait-timeout = "0.2"
 
 [dev-dependencies]
 tokio = { workspace = true }

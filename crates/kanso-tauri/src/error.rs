@@ -16,6 +16,13 @@ impl AppError {
             message: msg.into(),
         }
     }
+
+    pub fn cli_extension(msg: impl Into<String>) -> Self {
+        Self {
+            kind: "cli_extension",
+            message: msg.into(),
+        }
+    }
 }
 
 impl From<KansoError> for AppError {
@@ -31,5 +38,11 @@ impl From<KansoError> for AppError {
             kind,
             message: e.to_string(),
         }
+    }
+}
+
+impl From<crate::ext_install::ExtInstallError> for AppError {
+    fn from(e: crate::ext_install::ExtInstallError) -> Self {
+        Self::cli_extension(e.user_message())
     }
 }

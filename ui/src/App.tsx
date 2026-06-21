@@ -1,7 +1,9 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import KanbanBoard from './kanban/KanbanBoard';
 import BoardSwitcher from './kanban/BoardSwitcher';
 import ManageBoardsDrawer from './kanban/ManageBoardsDrawer';
+import CliExtConsentModal from './CliExtConsentModal';
+import { cliExtStatus, isTauri } from './kanban/api/client';
 
 const EditorDemo = lazy(() => import('./editor/EditorDemo'));
 
@@ -13,6 +15,24 @@ const DEBUG_EDITOR = false;
 export default function App() {
   const [showEditor, setShowEditor] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
+  const [showCliExtConsent, setShowCliExtConsent] = useState(false);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+
+    let alive = true;
+    cliExtStatus()
+      .then((status) => {
+        if (alive) setShowCliExtConsent(status.show_consent);
+      })
+      .catch((err: unknown) => {
+        console.warn('cli extension status failed', err);
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   return (
     <div className="kanso-app">
@@ -36,6 +56,7 @@ export default function App() {
         <KanbanBoard />
       )}
       {manageOpen && <ManageBoardsDrawer onClose={() => setManageOpen(false)} />}
+      {showCliExtConsent && <CliExtConsentModal onDone={() => setShowCliExtConsent(false)} />}
     </div>
   );
 }

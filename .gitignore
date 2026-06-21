@@ -14,6 +14,7 @@ yarn-error.log*
 
 # Tauri
 crates/kanso-tauri/gen/
+crates/kanso-tauri/resources/extensions/
 crates/kanso-tauri/target/
 
 # macOS

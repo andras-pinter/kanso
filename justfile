@@ -64,8 +64,8 @@ test:
     else \
         echo "skip: ui test (no ui/package.json)"; \
     fi
-    @if [ -f .github/extensions/package.json ]; then \
-        cd .github/extensions && npm test --workspaces --if-present; \
+    @if [ -f extensions/package.json ]; then \
+        cd extensions && npm test --workspaces --if-present; \
     else \
         echo "skip: kanso cli extension test"; \
     fi
@@ -90,3 +90,51 @@ dev:
 
 # CI entrypoint.
 ci: check test
+
+# Install the kanso Copilot CLI extension by symlinking the dev source.
+# Idempotent if our symlink is already in place; refuses if a different
+# symlink or real directory occupies the target.
+install-ext:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    src="$PWD/extensions/kanso"
+    dst="$HOME/.copilot/extensions/kanso"
+    if [ ! -d "$src" ]; then
+        echo "refusing: source $src not found"
+        exit 1
+    fi
+    mkdir -p "$HOME/.copilot/extensions"
+    if [ -L "$dst" ]; then
+        existing=$(readlink "$dst")
+        if [ "$existing" = "$src" ]; then
+            echo "kanso CLI ext already installed (symlink → $src)"
+            exit 0
+        fi
+        echo "refusing: $dst is a symlink to $existing, not $src"
+        echo "unlink manually and re-run if you want to replace it"
+        exit 1
+    fi
+    if [ -e "$dst" ]; then
+        echo "refusing: $dst exists and is not a symlink"
+        echo "this could be a previous non-dev install; back it up or remove it manually"
+        exit 1
+    fi
+    ln -s "$src" "$dst"
+    echo "installed kanso CLI ext: $dst → $src"
+
+# Uninstall the dev symlink. Never deletes a real directory.
+uninstall-ext:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    dst="$HOME/.copilot/extensions/kanso"
+    if [ ! -e "$dst" ] && [ ! -L "$dst" ]; then
+        echo "not installed (no $dst)"
+        exit 0
+    fi
+    if [ ! -L "$dst" ]; then
+        echo "refusing: $dst is not a symlink"
+        echo "this looks like a non-dev install — remove it manually if intended"
+        exit 1
+    fi
+    unlink "$dst"
+    echo "uninstalled dev symlink: $dst"

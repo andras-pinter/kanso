@@ -84,9 +84,16 @@ fmt:
         echo "skip: ui fmt (no ui/package.json)"; \
     fi
 
-# Run the app. Wired later.
-dev:
-    @echo "TODO: wired in Phase 0 Wave 3 (Tauri bridge session)"
+# Run the app in dev mode (alias for run-app).
+dev: run-app
+
+# Start Tauri dev server.
+run-app:
+    cd crates/kanso-tauri && cargo tauri dev
+
+# Build the production Tauri app.
+build-app:
+    cd crates/kanso-tauri && cargo tauri build
 
 # CI entrypoint.
 ci: check test

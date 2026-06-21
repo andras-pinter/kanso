@@ -16,7 +16,7 @@ import {
 } from '@dnd-kit/core';
 import { isTauri } from './api/client';
 import ColumnList from './ColumnList';
-import CardDetailDrawer from './CardDetailDrawer';
+import CardDetailModal from './CardDetailModal';
 import ErrorBoundary from '../ErrorBoundary';
 import { CardOverlay } from './Card';
 import { useKanbanStore } from './hooks/useKanbanStore';
@@ -197,7 +197,7 @@ export default function KanbanBoard() {
       </DndContext>
       {selectedCard && (
         <ErrorBoundary onReset={() => useKanbanStore.getState().selectCard(null)}>
-          <CardDetailDrawer key={selectedCard.id} card={selectedCard} />
+          <CardDetailModal key={selectedCard.id} card={selectedCard} />
         </ErrorBoundary>
       )}
       {manageTagsOpen && <ManageTagsDrawer onClose={() => setManageTagsOpen(false)} />}

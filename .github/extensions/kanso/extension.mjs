@@ -1,19 +1,19 @@
 // kanso — Copilot CLI extension. Talks to the in-process kanso-api over loopback
 // using the bearer token written by the Tauri app to its app-data port file.
 //
-// Handlers live in lib/tools.mjs as pure functions so they can be unit-tested
+// Handlers live in @kanso/client as pure functions so they can be unit-tested
 // without spawning the CLI or the api.
 
 import { joinSession } from "@github/copilot-sdk/extension";
 
-import { createClient } from "./lib/client.mjs";
 import {
+    createClient,
     kansoAdd,
     kansoDone,
     kansoList,
     kansoMove,
     kansoSearch,
-} from "./lib/tools.mjs";
+} from "@kanso/client";
 
 const client = createClient();
 

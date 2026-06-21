@@ -1,0 +1,14 @@
+{
+    "name": "kanso-extensions-root",
+    "version": "0.0.0",
+    "private": true,
+    "type": "module",
+    "description": "npm workspace root for kanso Copilot CLI extensions. Hosts the shared @kanso/client library and each extension package.",
+    "workspaces": [
+        "_shared/kanso-client",
+        "kanso"
+    ],
+    "scripts": {
+        "test": "npm test --workspaces --if-present"
+    }
+}

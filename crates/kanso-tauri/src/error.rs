@@ -46,3 +46,12 @@ impl From<crate::ext_install::ExtInstallError> for AppError {
         Self::cli_extension(e.user_message())
     }
 }
+
+impl From<crate::mcp_hosts::McpHostError> for AppError {
+    fn from(e: crate::mcp_hosts::McpHostError) -> Self {
+        Self {
+            kind: "mcp_host",
+            message: e.to_string(),
+        }
+    }
+}

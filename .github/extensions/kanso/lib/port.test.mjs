@@ -28,6 +28,17 @@ describe("parsePortFile", () => {
         expect(() => parsePortFile("port=notanumber\ntoken=abc\n")).toThrow(/invalid/);
         expect(() => parsePortFile("port=70000\ntoken=abc\n")).toThrow(/invalid/);
     });
+
+    it("throws KANSO_PORT_EMPTY for whitespace-only input", () => {
+        // The writer briefly truncates the file before rewriting; an empty
+        // read must be retryable, not a hard parse failure.
+        expect(() => parsePortFile("")).toThrowError(
+            expect.objectContaining({ code: "KANSO_PORT_EMPTY" }),
+        );
+        expect(() => parsePortFile("   \n\r\n")).toThrowError(
+            expect.objectContaining({ code: "KANSO_PORT_EMPTY" }),
+        );
+    });
 });
 
 describe("portFilePath", () => {

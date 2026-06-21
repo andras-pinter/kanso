@@ -1,17 +1,43 @@
 import { readPortFile } from "./port.mjs";
 
 const DEFAULT_TIMEOUT_MS = 5000;
+const EMPTY_PORT_FILE_BACKOFF_MS = 50;
 
 /**
  * @typedef {Object} ClientOptions
  * @property {() => Promise<{ port: number, token: string }>} [readPort]
  * @property {typeof fetch} [fetchImpl]
  * @property {number} [timeoutMs]
+ * @property {(ms: number) => Promise<void>} [sleep]
  */
 
 /**
- * HTTP client that lazily reads the port file and retries once on auth/conn
- * failures in case the desktop app restarted and rotated its token.
+ * @typedef {{ auth: boolean, conn: boolean }} RetryBudget
+ */
+
+/**
+ * Pull the underlying cause `code` / `name` out of a thrown error. Node 18+
+ * fetch (undici) wraps connection failures as `TypeError("fetch failed")` with
+ * the real ECONNREFUSED / AbortError on `err.cause`, so we have to look both
+ * places to detect them.
+ *
+ * @param {unknown} err
+ * @returns {{ code: string | undefined, name: string | undefined, message: string }}
+ */
+const unwrapError = (err) => {
+    const top = /** @type {any} */ (err);
+    const cause = top?.cause;
+    return {
+        code: top?.code ?? cause?.code,
+        name: top?.name ?? cause?.name,
+        message: top?.message ?? String(err),
+    };
+};
+
+/**
+ * HTTP client that lazily reads the port file and retries once per failure
+ * class (auth + conn) so a desktop restart that rotates the token recovers in
+ * a single follow-up request.
  *
  * @param {ClientOptions} [options]
  */
@@ -19,27 +45,60 @@ export const createClient = (options = {}) => {
     const readPort = options.readPort ?? (() => readPortFile());
     const fetchImpl = options.fetchImpl ?? globalThis.fetch;
     const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    const sleep =
+        options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
 
-    /** @type {{ port: number, token: string } | null} */
+    /** @type {{ gen: number, value: { port: number, token: string } } | null} */
     let cached = null;
+    /** @type {{ gen: number, promise: Promise<{ port: number, token: string }> } | null} */
+    let inflight = null;
+    let gen = 0;
 
     const load = async () => {
-        if (cached === null) cached = await readPort();
-        return cached;
+        if (cached) return cached.value;
+        if (inflight) return inflight.promise;
+        const myGen = gen;
+        const promise = (async () => {
+            const value = await readPort();
+            // Only install the result if no concurrent invalidate happened.
+            if (gen === myGen) cached = { gen: myGen, value };
+            return value;
+        })();
+        inflight = { gen: myGen, promise };
+        try {
+            return await promise;
+        } finally {
+            if (inflight?.gen === myGen) inflight = null;
+        }
     };
     const invalidate = () => {
+        gen += 1;
         cached = null;
+        inflight = null;
     };
 
     /**
      * @param {string} method
      * @param {string} path
      * @param {unknown} [body]
-     * @param {boolean} [isRetry]
+     * @param {RetryBudget} [retried]
      * @returns {Promise<any>}
      */
-    const request = async (method, path, body, isRetry = false) => {
-        const { port, token } = await load();
+    const request = async (method, path, body, retried = { auth: false, conn: false }) => {
+        /** @type {{ port: number, token: string }} */
+        let credentials;
+        try {
+            credentials = await load();
+        } catch (err) {
+            const e = unwrapError(err);
+            if (e.code === "KANSO_PORT_EMPTY" && !retried.conn) {
+                await sleep(EMPTY_PORT_FILE_BACKOFF_MS);
+                invalidate();
+                return request(method, path, body, { ...retried, conn: true });
+            }
+            throw err;
+        }
+        const { port, token } = credentials;
         const url = `http://127.0.0.1:${port}${path}`;
         /** @type {Record<string, string>} */
         const headers = { Authorization: `Bearer ${token}` };
@@ -54,26 +113,28 @@ export const createClient = (options = {}) => {
         try {
             res = await fetchImpl(url, init);
         } catch (err) {
-            const e = /** @type {NodeJS.ErrnoException & { name?: string }} */ (err);
-            // ECONNREFUSED, app restarted on a new port, etc. Retry once with a
-            // fresh port-file read before declaring the app dead.
-            const transient = e?.code === "ECONNREFUSED" || e?.code === "ECONNRESET";
-            if (transient && !isRetry) {
+            const e = unwrapError(err);
+
+            // Connection-class failures retry once with a fresh port-file read.
+            const transient = e.code === "ECONNREFUSED" || e.code === "ECONNRESET";
+            if (transient && !retried.conn) {
                 invalidate();
-                return request(method, path, body, true);
+                return request(method, path, body, { ...retried, conn: true });
             }
-            if (e?.name === "TimeoutError" || e?.name === "AbortError") {
+            if (e.name === "TimeoutError" || e.name === "AbortError") {
                 throw new Error("kanso: api request timed out");
             }
-            if (e?.code === "ECONNREFUSED") {
-                throw new Error(`kanso: desktop app is not running or not listening on port ${port}`);
+            if (e.code === "ECONNREFUSED") {
+                throw new Error(
+                    `kanso: desktop app is not running or not listening on port ${port}`,
+                );
             }
-            throw new Error(`kanso: network error (${e?.message ?? String(err)})`);
+            throw new Error(`kanso: network error (${e.message})`);
         }
 
-        if (res.status === 401 && !isRetry) {
+        if (res.status === 401 && !retried.auth) {
             invalidate();
-            return request(method, path, body, true);
+            return request(method, path, body, { ...retried, auth: true });
         }
 
         if (!res.ok) {

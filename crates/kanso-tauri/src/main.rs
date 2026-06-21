@@ -214,21 +214,87 @@ async fn write_port_file(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let contents = format!("port={port}\ntoken={token}\n");
 
+    // Write to a sibling temp file then atomic-rename into place. A reader that
+    // catches us mid-rotation either sees the previous file in full or the new
+    // file in full — never an empty/truncated state.
+    let tmp = path.with_extension("port.tmp");
+
     let mut opts = tokio::fs::OpenOptions::new();
     opts.write(true).create(true).truncate(true);
     #[cfg(unix)]
     opts.mode(0o600);
-    let mut f = opts.open(path).await?;
+    let mut f = opts.open(&tmp).await?;
     f.write_all(contents.as_bytes()).await?;
-    f.flush().await?;
+    f.sync_all().await?;
     drop(f);
 
-    // Defend against a pre-existing file that was created before we started
+    // Defend against a pre-existing tmp file that was created before we started
     // setting the mode at open time.
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        tokio::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).await?;
+        tokio::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600)).await?;
     }
+
+    tokio::fs::rename(&tmp, path).await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn write_port_file_writes_through_tmp_and_renames() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("port");
+        write_port_file(&path, 4711, "deadbeef").await.expect("write");
+
+        let contents = tokio::fs::read_to_string(&path).await.expect("read");
+        assert_eq!(contents, "port=4711\ntoken=deadbeef\n");
+
+        let tmp = path.with_extension("port.tmp");
+        assert!(!tmp.exists(), "tmp file should not remain after rename");
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = tokio::fs::metadata(&path).await.expect("meta").permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600, "port file should be 0600");
+        }
+    }
+
+    #[tokio::test]
+    async fn write_port_file_reader_never_sees_partial() {
+        // Race the writer against a reader loop. Because writes are atomic
+        // (tmp + rename), the reader should only ever observe a full file —
+        // either the previous generation or the new one — never an empty or
+        // truncated parse.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("port");
+        // Seed an initial file so the reader has something to find immediately.
+        write_port_file(&path, 1000, "aaaa").await.expect("seed");
+
+        let reader_path = path.clone();
+        let reader = tokio::spawn(async move {
+            let mut observed_empty = false;
+            for _ in 0..2_000 {
+                if let Ok(s) = tokio::fs::read_to_string(&reader_path).await {
+                    if s.is_empty() || !s.contains("port=") || !s.contains("token=") {
+                        observed_empty = true;
+                        break;
+                    }
+                }
+                tokio::task::yield_now().await;
+            }
+            observed_empty
+        });
+
+        for i in 0..200u16 {
+            write_port_file(&path, 2000 + i, "bbbb").await.expect("write");
+        }
+
+        let observed_empty = reader.await.expect("join");
+        assert!(!observed_empty, "reader observed empty/partial port file");
+    }
 }

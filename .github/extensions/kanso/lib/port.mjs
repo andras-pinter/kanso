@@ -30,6 +30,10 @@ export const portFilePath = () => {
  * Parse the `key=value` lines produced by `crates/kanso-tauri/src/main.rs`.
  * Unknown keys are ignored; whitespace around `=` and trailing CR are tolerated.
  *
+ * Throws `code: "KANSO_PORT_EMPTY"` when the file is whitespace-only — the
+ * writer briefly truncates the file before rewriting it; treat that as a
+ * transient error worth retrying rather than a hard failure.
+ *
  * @param {string} text
  * @returns {{ port: number, token: string }}
  */
@@ -44,6 +48,12 @@ export const parsePortFile = (text) => {
         const k = line.slice(0, eq).trim();
         const v = line.slice(eq + 1).trim();
         if (k !== "") fields[k] = v;
+    }
+
+    if (Object.keys(fields).length === 0) {
+        const empty = new Error("port file is empty (writer may be mid-rotation)");
+        /** @type {any} */ (empty).code = "KANSO_PORT_EMPTY";
+        throw empty;
     }
 
     const portRaw = fields.port;

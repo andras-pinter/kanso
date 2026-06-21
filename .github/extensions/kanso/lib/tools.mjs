@@ -30,14 +30,21 @@ export const kansoList = async (client, args) => {
     if (args.board_id !== undefined && args.board_id !== "") {
         const cols = await client.get(`/boards/${encodeURIComponent(args.board_id)}/columns${q}`);
         if (!Array.isArray(cols) || cols.length === 0) return "kanso: no columns on board";
-        // For each column include the (non-archived) card count. One round-trip
-        // per column is fine — there are rarely more than ~10 columns.
+        // For each column include the (non-archived unless asked) card count.
+        // limit=500 matches the API cap; render `500+` when saturated so the
+        // user knows there are more. One round-trip per column is fine — there
+        // are rarely more than ~10.
         const lines = await Promise.all(
             cols.map(async (c) => {
-                const cards = await client.get(`/columns/${encodeURIComponent(c.id)}/cards`);
-                const count = Array.isArray(cards) ? cards.length : 0;
+                const cards = await client.get(
+                    `/columns/${encodeURIComponent(c.id)}/cards?limit=500${
+                        includeArchived ? "&include_archived=true" : ""
+                    }`,
+                );
+                const n = Array.isArray(cards) ? cards.length : 0;
+                const display = n >= 500 ? "500+" : `${n}`;
                 const flag = c.archived_at ? " [archived]" : "";
-                return `- ${c.id}  ${c.name}  (${count} card${count === 1 ? "" : "s"})${flag}`;
+                return `- ${c.id}  ${c.name}  (${display} card${n === 1 ? "" : "s"})${flag}`;
             }),
         );
         return lines.join("\n");
@@ -51,12 +58,28 @@ export const kansoList = async (client, args) => {
 };
 
 /**
+ * Create a card. If `body` is provided this is two API calls: POST to create
+ * the card, then PATCH to set `body_text`. If the PATCH fails (transient
+ * network blip), the titled card persists — there is no atomic create-with-body
+ * endpoint yet. The body-size preflight below short-circuits the 413 case so
+ * we don't strand a card on the most common partial-failure path.
+ *
  * @param {Client} client
  * @param {{ column_id: string, title: string, body?: string }} args
  */
 export const kansoAdd = async (client, args) => {
     if (!args?.column_id) throw new Error("kanso: column_id is required");
     if (!args?.title || args.title.trim() === "") throw new Error("kanso: title is required");
+
+    if (args.body !== undefined && args.body !== "") {
+        // 900 KiB leaves headroom for the JSON envelope under the API's 1 MiB
+        // outer body limit; reject locally so we don't POST-then-PATCH-then-fail.
+        const bytes = Buffer.byteLength(JSON.stringify({ body_text: args.body }), "utf8");
+        const MAX = 900 * 1024;
+        if (bytes > MAX) {
+            throw new Error(`kanso: body is ${bytes} bytes, exceeds ${MAX} byte limit`);
+        }
+    }
 
     const card = await client.post(
         `/columns/${encodeURIComponent(args.column_id)}/cards`,

@@ -37,6 +37,30 @@ describe("kansoList", () => {
         const out = await kansoList(fakeClient({ get }), { board_id: "b1" });
         expect(out).toContain("To Do");
         expect(out).toContain("(2 cards)");
+        // limit=500 prevents the 100-cap from underreporting big columns.
+        expect(get).toHaveBeenCalledWith("/columns/c1/cards?limit=500");
+    });
+
+    it("column counts pass include_archived through", async () => {
+        const get = vi.fn(async (/** @type {string} */ p) => {
+            if (p.startsWith("/boards/")) return [{ id: "c1", name: "Done" }];
+            return [];
+        });
+        await kansoList(fakeClient({ get }), { board_id: "b1", include_archived: true });
+        // Outer board listing forwards include_archived as ?q=...; per-column
+        // count fetch must too, or archived cards get dropped from the tally.
+        expect(get).toHaveBeenCalledWith("/columns/c1/cards?limit=500&include_archived=true");
+    });
+
+    it("column counts render 500+ at the page cap", async () => {
+        const big = Array.from({ length: 500 }, (_, i) => ({ id: `k${i}` }));
+        const get = vi.fn(async (/** @type {string} */ p) => {
+            if (p.startsWith("/boards/")) return [{ id: "c1", name: "Backlog" }];
+            if (p.startsWith("/columns/c1/cards")) return big;
+            return [];
+        });
+        const out = await kansoList(fakeClient({ get }), { board_id: "b1" });
+        expect(out).toContain("(500+ cards)");
     });
 
     it("lists cards when column_id given", async () => {
@@ -86,6 +110,21 @@ describe("kansoAdd", () => {
         await expect(
             kansoAdd(fakeClient(), { column_id: "c", title: "   " }),
         ).rejects.toThrow(/title is required/);
+    });
+
+    it("rejects oversized body before POST", async () => {
+        // 2 MiB string blows past the 900 KiB client preflight.
+        const post = vi.fn();
+        const patch = vi.fn();
+        await expect(
+            kansoAdd(fakeClient({ post, patch }), {
+                column_id: "c",
+                title: "huge",
+                body: "x".repeat(2_000_000),
+            }),
+        ).rejects.toThrow(/exceeds .* byte limit/);
+        expect(post).not.toHaveBeenCalled();
+        expect(patch).not.toHaveBeenCalled();
     });
 });
 

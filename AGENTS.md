@@ -9,7 +9,7 @@ kanso is a personal, local-first Kanban app for a single user. It runs as a tray
 ## Stack
 
 - **Tauri 2** — desktop shell, single window, tray icon
-- **Rust** — `kanso-core` (domain + sqlx), `kanso-api` (axum routes), `kanso-tauri` (commands + tray). The Copilot CLI extension lives in `.github/extensions/kanso/` as a JS extension talking to `kanso-api` over loopback.
+- **Rust** — `kanso-core` (domain + sqlx), `kanso-api` (axum routes), `kanso-tauri` (commands + tray). The Copilot CLI extension lives in `extensions/kanso/` as a JS extension talking to `kanso-api` over loopback.
 - **axum** — in-process HTTP server (loopback) for the REST transport
 - **sqlx** + SQLite — persistence; `.sqlx/` is committed for offline mode
 - **React + Vite** — UI
@@ -47,9 +47,11 @@ crates/
 ui/                Vite + React app
 migrations/        sqlx migrations
 docs/              architecture notes, ADRs
-.github/
-  extensions/kanso/  Copilot CLI extension (JS, talks to kanso-api over loopback)
-  …                  CI + Copilot config
+extensions/        Copilot CLI + MCP extensions (npm workspaces)
+  _shared/kanso-client/  @kanso/client — shared port/fetch/handlers
+  kanso/                 Copilot CLI extension
+  kanso-mcp/             MCP stdio server
+.github/           CI + Copilot config
 ```
 
 See [CONVENTIONS.md](./CONVENTIONS.md) for commit / branch / code style rules.

@@ -7,7 +7,7 @@
 ## Stack
 
 - **Tauri 2** shell with tray
-- **Rust** workspace: `kanso-core` (domain + sqlx), `kanso-api` (axum), `kanso-tauri` (commands/tray). The Copilot CLI surface lives in `.github/extensions/kanso/` as a JS extension.
+- **Rust** workspace: `kanso-core` (domain + sqlx), `kanso-api` (axum), `kanso-tauri` (commands/tray). The Copilot CLI surface lives in `extensions/kanso/` as a JS extension.
 - **axum** in-process on loopback
 - **sqlx** + SQLite, `.sqlx/` committed for offline build
 - **React + Vite + Zustand + dnd-kit**

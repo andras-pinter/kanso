@@ -2,7 +2,7 @@
 
 A [Model Context Protocol](https://modelcontextprotocol.io) stdio server that
 exposes your local **kanso** desktop app to MCP-aware hosts. Sibling peer of the
-Copilot CLI extension at `.github/extensions/kanso/` — both consume the shared
+Copilot CLI extension at `extensions/kanso/` — both consume the shared
 `@kanso/client` workspace lib and talk to `kanso-api` over loopback.
 
 ## What it is
@@ -45,7 +45,7 @@ Replace `/absolute/path/to` below with your actual checkout.
 ```json
 {
   "command": "node",
-  "args": ["/absolute/path/to/.github/extensions/kanso-mcp/bin/kanso-mcp.mjs"]
+  "args": ["/absolute/path/to/extensions/kanso-mcp/bin/kanso-mcp.mjs"]
 }
 ```
 
@@ -59,7 +59,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
   "mcpServers": {
     "kanso": {
       "command": "node",
-      "args": ["/absolute/path/to/.github/extensions/kanso-mcp/bin/kanso-mcp.mjs"]
+      "args": ["/absolute/path/to/extensions/kanso-mcp/bin/kanso-mcp.mjs"]
     }
   }
 }
@@ -77,7 +77,7 @@ Edit `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` in your workspace root:
   "mcpServers": {
     "kanso": {
       "command": "node",
-      "args": ["/absolute/path/to/.github/extensions/kanso-mcp/bin/kanso-mcp.mjs"]
+      "args": ["/absolute/path/to/extensions/kanso-mcp/bin/kanso-mcp.mjs"]
     }
   }
 }
@@ -95,7 +95,7 @@ Create `.vscode/mcp.json` in your workspace:
     "kanso": {
       "type": "stdio",
       "command": "node",
-      "args": ["/absolute/path/to/.github/extensions/kanso-mcp/bin/kanso-mcp.mjs"]
+      "args": ["/absolute/path/to/extensions/kanso-mcp/bin/kanso-mcp.mjs"]
     }
   }
 }
@@ -115,7 +115,7 @@ Edit your Zed settings (`~/.config/zed/settings.json`):
       "kanso": {
         "command": "node",
         "args": [
-          "/absolute/path/to/.github/extensions/kanso-mcp/bin/kanso-mcp.mjs"
+          "/absolute/path/to/extensions/kanso-mcp/bin/kanso-mcp.mjs"
         ]
       }
     }

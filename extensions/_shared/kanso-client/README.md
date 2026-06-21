@@ -1,6 +1,6 @@
 # @kanso/client
 
-Shared internal library powering kanso's Copilot CLI extension (and the upcoming MCP server). Not published — consumed via npm workspaces from `.github/extensions/`.
+Shared internal library powering kanso's Copilot CLI extension (and the upcoming MCP server). Not published — consumed via npm workspaces from `extensions/`.
 
 ## Modules
 
@@ -13,19 +13,19 @@ Shared internal library powering kanso's Copilot CLI extension (and the upcoming
 
 ## Consumers
 
-- `.github/extensions/kanso/` — the Copilot CLI extension.
-- `.github/extensions/kanso-mcp/` — the MCP server (Wave C).
+- `extensions/kanso/` — the Copilot CLI extension.
+- `extensions/kanso-mcp/` — the MCP server (Wave C).
 
 ## Test
 
 ```sh
-cd .github/extensions/_shared/kanso-client && npm test
+cd extensions/_shared/kanso-client && npm test
 ```
 
 Or from the workspace root:
 
 ```sh
-cd .github/extensions && npm test --workspaces --if-present
+cd extensions && npm test --workspaces --if-present
 ```
 
 33 vitest specs, all hermetic — no spawned CLI, no live API, fake `fetch` and port reader injected.

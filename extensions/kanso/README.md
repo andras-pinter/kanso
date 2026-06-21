@@ -7,7 +7,7 @@ by the Tauri app to its app-data port file.
 ## Layout
 
 ```
-.github/extensions/
+extensions/
   package.json             npm workspace root
   _shared/kanso-client/    @kanso/client — port + fetch wrapper + tool handlers (+ vitest)
   kanso/
@@ -19,13 +19,20 @@ Logic and tests live in `@kanso/client` so the upcoming MCP server can share the
 
 ## Install
 
-The extension is auto-discovered when running `copilot` from this repo root.
-No build step — ESM only. Node 18+ is required (uses global `fetch`).
+For dev, symlink the extension into the Copilot CLI extensions dir:
+
+```sh
+just install-ext
+```
+
+This is idempotent and refuses to clobber a pre-existing non-symlink install.
+`just uninstall-ext` removes the symlink (and only the symlink). No build step
+— ESM only. Node 18+ is required (uses global `fetch`).
 
 The workspace symlinks `@kanso/client` into `kanso/node_modules` on install:
 
 ```sh
-npm install --prefix .github/extensions
+npm install --prefix extensions
 ```
 
 ## Tools
@@ -71,7 +78,7 @@ and re-reads once on any `401` or `ECONNREFUSED` before giving up.
 ## Test
 
 ```sh
-cd .github/extensions && npm install && npm test --workspaces --if-present
+cd extensions && npm install && npm test --workspaces --if-present
 ```
 
 The 33 vitest specs live in `@kanso/client`. They are pure: they import the

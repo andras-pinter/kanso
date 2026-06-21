@@ -28,6 +28,19 @@ just check       # fmt + clippy + tsc + eslint
 just test        # cargo + ui tests
 ```
 
+## Desktop install behavior
+
+The macOS bundle is a tray-only app (`LSUIElement=true`), so it does not show a
+Dock icon. Closing the window hides it; use the tray menu to show kanso again or
+quit.
+
+The app bundles the Copilot CLI extension and MCP server source as Tauri
+resources and stamps them with the workspace package version
+(`.kanso-ext-version`). On first launch, kanso asks before installing them to
+`~/.copilot/extensions/kanso/` and `~/.kanso/mcp/`. Node.js 20+ must be on
+`PATH`; install Node from https://nodejs.org/ and rerun install from the tray if
+the prerequisite check fails.
+
 ## Agent guidance
 
 - [`AGENTS.md`](./AGENTS.md) — universal agent spec (stack, constraints, verification)

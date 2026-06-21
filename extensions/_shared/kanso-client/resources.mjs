@@ -31,3 +31,25 @@ export const cardGet = async (client, { id }) => {
     if (!id) throw new Error("kanso: id is required");
     return client.get(`/cards/${encodeURIComponent(id)}`);
 };
+
+/**
+ * `GET /boards/:id`. Returns the parsed BoardDto. Throws KansoApiError on 404.
+ *
+ * @param {Client} client
+ * @param {{ id: string }} args
+ */
+export const boardGet = async (client, { id }) => {
+    if (!id) throw new Error("kanso: id is required");
+    return client.get(`/boards/${encodeURIComponent(id)}`);
+};
+
+/**
+ * `GET /columns/:id`. Returns the parsed ColumnDto. Throws KansoApiError on 404.
+ *
+ * @param {Client} client
+ * @param {{ id: string }} args
+ */
+export const columnGet = async (client, { id }) => {
+    if (!id) throw new Error("kanso: id is required");
+    return client.get(`/columns/${encodeURIComponent(id)}`);
+};

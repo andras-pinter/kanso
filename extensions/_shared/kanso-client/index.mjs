@@ -7,4 +7,4 @@ export {
     kansoMove,
     kansoSearch,
 } from "./tools.mjs";
-export { boardFull, cardGet } from "./resources.mjs";
+export { boardFull, boardGet, cardGet, columnGet } from "./resources.mjs";

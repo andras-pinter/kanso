@@ -32,7 +32,9 @@ pub fn routes() -> Router<AppState> {
         .route("/boards", axum::routing::get(list).post(create))
         .route(
             "/boards/:id",
-            axum::routing::patch(update).delete(hard_delete),
+            axum::routing::get(get_one)
+                .patch(update)
+                .delete(hard_delete),
         )
         .route("/boards/:id/archive", axum::routing::post(archive))
         .route("/boards/:id/unarchive", axum::routing::post(unarchive))
@@ -47,6 +49,19 @@ async fn list(
     let (limit, offset) = resolve_page(q.limit, q.offset);
     let rows = BoardRepo::list_all_paged(&state.pool, q.include_archived, limit, offset).await?;
     Ok(Json(rows.into_iter().map(BoardDto::from).collect()))
+}
+
+async fn get_one(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<BoardDto>, ApiError> {
+    match BoardRepo::get(&state.pool, &id).await? {
+        Some(board) => Ok(Json(BoardDto::from(board))),
+        None => Err(ApiError(KansoError::NotFound {
+            entity: "board",
+            id,
+        })),
+    }
 }
 
 async fn create(

@@ -1620,3 +1620,67 @@ mod board_full_endpoint {
         assert_eq!(v["error"], "forbidden_host");
     }
 }
+
+// ---- Phase 7 Wave B: singular GET /boards/:id and /columns/:id ------------
+
+mod singular_gets {
+    use super::*;
+
+    #[tokio::test]
+    async fn board_get_happy() {
+        let (app, pool, _tmp) = setup().await;
+        let board = BoardRepo::create(&pool, "Solo").await.unwrap();
+        let res = app
+            .oneshot(req("GET", &format!("/boards/{}", board.id)))
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let dto: BoardDto = serde_json::from_value(body_json(res).await).unwrap();
+        assert_eq!(dto.id, board.id);
+        assert_eq!(dto.name, "Solo");
+    }
+
+    #[tokio::test]
+    async fn board_get_404_for_unknown_id() {
+        let (app, _pool, _tmp) = setup().await;
+        let res = app
+            .oneshot(req("GET", "/boards/does-not-exist"))
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::NOT_FOUND);
+        let v = body_json(res).await;
+        let err = v["error"].as_str().unwrap();
+        assert!(err.contains("board not found"), "got: {err}");
+    }
+
+    #[tokio::test]
+    async fn column_get_happy() {
+        let (app, pool, _tmp) = setup().await;
+        let board = BoardRepo::create(&pool, "B").await.unwrap();
+        let col = ColumnRepo::create(&pool, &board.id, "Todo", None)
+            .await
+            .unwrap();
+        let res = app
+            .oneshot(req("GET", &format!("/columns/{}", col.id)))
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let dto: ColumnDto = serde_json::from_value(body_json(res).await).unwrap();
+        assert_eq!(dto.id, col.id);
+        assert_eq!(dto.name, "Todo");
+        assert_eq!(dto.board_id, board.id);
+    }
+
+    #[tokio::test]
+    async fn column_get_404_for_unknown_id() {
+        let (app, _pool, _tmp) = setup().await;
+        let res = app
+            .oneshot(req("GET", "/columns/does-not-exist"))
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::NOT_FOUND);
+        let v = body_json(res).await;
+        let err = v["error"].as_str().unwrap();
+        assert!(err.contains("column not found"), "got: {err}");
+    }
+}

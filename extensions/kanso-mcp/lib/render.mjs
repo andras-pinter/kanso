@@ -21,14 +21,15 @@ const EXCERPT_MAX_CHARS = 500;
  * @typedef {Object} BoardListEntryEnriched
  * @property {string} id
  * @property {string} name
- * @property {number} columns
- * @property {number} cards
+ * @property {number | string} columns
+ * @property {number | string} cards
  * @property {boolean} [truncated]
  */
 
 /**
  * Boards index. The caller fetches `/boards` and (optionally) per-board
- * column/card counts; we just format whatever shape they provide.
+ * column/card counts; we just format whatever shape they provide. Counts
+ * are rendered as-is (numbers or the `?` placeholder when enrichment failed).
  *
  * @param {{ boards: BoardListEntryEnriched[], truncated?: boolean }} dto
  * @returns {string}
@@ -41,7 +42,7 @@ export const renderBoardsIndex = ({ boards, truncated = false }) => {
     }
     lines.push("| id | name | columns | cards |", "|----|------|---------|-------|");
     for (const b of boards) {
-        const name = b.name.replace(/\|/g, "\\|");
+        const name = String(b.name).replace(/\|/g, "\\|");
         lines.push(`| ${b.id} | ${name} | ${b.columns} | ${b.cards} |`);
     }
     if (truncated) {
@@ -202,6 +203,10 @@ const excerptFromBodyText = (text) => {
  * walk its top-level shared types pulling any YText content out. Failures
  * (corrupt blob, unknown shape) return `""`.
  *
+ * Walks are bounded: as soon as the accumulator hits `EXCERPT_MAX_CHARS`
+ * we stop traversing and append `…`. This protects us from large CRDTs
+ * (a 10k-char body shouldn't walk every Item just to slice the first 500).
+ *
  * Exposed for tests and for callers that want to render from a raw blob
  * instead of relying on the API's `body_text` mirror.
  *
@@ -215,56 +220,66 @@ export const extractTextFromYjsBlob = (base64) => {
         const doc = new Y.Doc();
         Y.applyUpdate(doc, new Uint8Array(buf));
         const parts = [];
+        const ctx = { length: 0, capped: false };
         doc.share.forEach((value) => {
-            collectText(value, parts);
+            collectText(value, parts, ctx);
         });
-        return parts.join(" ").replace(/\s+/g, " ").trim();
+        const joined = parts.join(" ").replace(/\s+/g, " ").trim();
+        if (ctx.capped) {
+            return joined.slice(0, EXCERPT_MAX_CHARS) + "…";
+        }
+        return joined;
     } catch {
         return "";
     }
 };
 
 /**
- * Walk a Y.AbstractType subtree, pushing every text item into `out`.
- *
- * Yjs applies updates lazily — if a fresh `Doc` receives an update for a
- * type that was never explicitly bound (e.g. via `doc.getText('body')`),
- * the share entry is a generic `AbstractType` whose runtime class is *not*
- * `Y.Text`. We work around that by traversing the underlying `_start` linked
- * list of CRDT items and pulling out any `ContentString`/`ContentEmbed` payloads
- * directly; we recurse into `ContentType` items for nested structures.
+ * Walk a Y.AbstractType subtree, pushing every text item into `out` until
+ * `ctx.length` reaches `EXCERPT_MAX_CHARS`; on cap, sets `ctx.capped` and
+ * stops descending. Yjs applies updates lazily, so the share entry may be
+ * a generic `AbstractType` whose runtime class is *not* `Y.Text`; we
+ * traverse the underlying `_start` linked list of CRDT items directly and
+ * recurse into `ContentType` items for nested structures.
  *
  * @param {any} node
  * @param {string[]} out
+ * @param {{ length: number, capped: boolean }} ctx
  */
-const collectText = (node, out) => {
+const collectText = (node, out, ctx) => {
     if (!node || typeof node !== "object") return;
+    if (ctx.capped) return;
+    const push = (s) => {
+        if (ctx.capped) return;
+        out.push(s);
+        ctx.length += s.length;
+        if (ctx.length >= EXCERPT_MAX_CHARS) ctx.capped = true;
+    };
     let item = node._start;
-    while (item) {
+    while (item && !ctx.capped) {
         const content = item.content;
         if (content?.str !== undefined) {
-            out.push(String(content.str));
+            push(String(content.str));
         } else if (typeof content?.getContent === "function") {
-            // ContentEmbed and friends — only collect string-y values.
             try {
                 const arr = content.getContent();
                 if (Array.isArray(arr) && arr.every((c) => typeof c === "string")) {
-                    out.push(arr.join(""));
+                    push(arr.join(""));
                 }
             } catch {
                 /* skip */
             }
         }
-        if (content?.type) collectText(content.type, out);
+        if (content?.type) collectText(content.type, out, ctx);
         item = item.right;
     }
-    // YMap stores children in a Map keyed by string, not on `_start`.
-    if (node._map && typeof node._map.forEach === "function") {
+    if (!ctx.capped && node._map && typeof node._map.forEach === "function") {
         node._map.forEach((mapItem) => {
+            if (ctx.capped) return;
             if (!mapItem || mapItem.deleted) return;
             const c = mapItem.content;
-            if (c?.str !== undefined) out.push(String(c.str));
-            if (c?.type) collectText(c.type, out);
+            if (c?.str !== undefined) push(String(c.str));
+            if (c?.type) collectText(c.type, out, ctx);
         });
     }
 };

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { KansoApiError } from "./client.mjs";
-import { boardFull, cardGet } from "./resources.mjs";
+import { boardFull, boardGet, cardGet, columnGet } from "./resources.mjs";
 
 /**
  * Build a fake client whose `get` records the path it was called with and
@@ -106,5 +106,55 @@ describe("cardGet", () => {
         const c = fakeClient(() => ({}));
         await expect(cardGet(c, { id: "" })).rejects.toThrow(/id is required/);
         expect(c.calls).toEqual([]);
+    });
+});
+
+describe("boardGet", () => {
+    it("hits /boards/:id and returns the BoardDto", async () => {
+        const dto = { id: "b1", name: "Work" };
+        const c = fakeClient(() => dto);
+        await expect(boardGet(c, { id: "b1" })).resolves.toBe(dto);
+        expect(c.calls).toEqual(["/boards/b1"]);
+    });
+
+    it("url-encodes the id", async () => {
+        const c = fakeClient(() => ({ id: "x/y" }));
+        await boardGet(c, { id: "x/y" });
+        expect(c.calls).toEqual(["/boards/x%2Fy"]);
+    });
+
+    it("propagates 404 as KansoApiError", async () => {
+        const c = fakeClient(() => new KansoApiError(404, "kanso: not found (board)", "board"));
+        await expect(boardGet(c, { id: "nope" })).rejects.toBeInstanceOf(KansoApiError);
+    });
+
+    it("rejects without an id", async () => {
+        const c = fakeClient(() => ({}));
+        await expect(boardGet(c, { id: "" })).rejects.toThrow(/id is required/);
+    });
+});
+
+describe("columnGet", () => {
+    it("hits /columns/:id and returns the ColumnDto", async () => {
+        const dto = { id: "c1", board_id: "b1", name: "Todo" };
+        const c = fakeClient(() => dto);
+        await expect(columnGet(c, { id: "c1" })).resolves.toBe(dto);
+        expect(c.calls).toEqual(["/columns/c1"]);
+    });
+
+    it("url-encodes the id", async () => {
+        const c = fakeClient(() => ({ id: "a b" }));
+        await columnGet(c, { id: "a b" });
+        expect(c.calls).toEqual(["/columns/a%20b"]);
+    });
+
+    it("propagates 404 as KansoApiError", async () => {
+        const c = fakeClient(() => new KansoApiError(404, "kanso: not found (column)", "column"));
+        await expect(columnGet(c, { id: "nope" })).rejects.toBeInstanceOf(KansoApiError);
+    });
+
+    it("rejects without an id", async () => {
+        const c = fakeClient(() => ({}));
+        await expect(columnGet(c, { id: "" })).rejects.toThrow(/id is required/);
     });
 });

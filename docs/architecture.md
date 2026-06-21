@@ -15,7 +15,7 @@ kanso is a single-user, local-first Kanban app. One Tauri window, one tray icon,
 - **`kanso-core`** — domain types (Board, Column, Card), repository traits, sqlx-backed implementations. Knows nothing about HTTP, Tauri, or React.
 - **`kanso-api`** — axum router and handlers. Depends on `kanso-core`. Stateless; takes a repository handle.
 - **`kanso-tauri`** — Tauri commands, tray menu, window lifecycle, axum bootstrap on loopback. Depends on `kanso-core` and `kanso-api`.
-- **`kanso-cli-ext`** — Copilot CLI / MCP surface. Deferred to Phase 2+.
+- **`.github/extensions/kanso/`** — Copilot CLI extension (JS, ESM). Reads the loopback port + token from the app-data port file and calls `kanso-api`. Lives outside the Rust workspace because the Copilot CLI extension protocol is Node-only.
 
 ## Data model
 
@@ -36,7 +36,7 @@ Tray app, single window, axum in-process on loopback, SQLite file in the platfor
 
 1. **Tauri commands** — primary path for the UI. Typed structs in / out.
 2. **REST** (axum) — for scripts and external tools talking to the running app.
-3. **MCP / CLI extension** — Phase 2+, reuses `kanso-core`.
+3. **Copilot CLI extension** — JS extension under `.github/extensions/kanso/` that talks to `kanso-api` over loopback.
 
 ## Diagram
 
@@ -44,9 +44,8 @@ Tray app, single window, axum in-process on loopback, SQLite file in the platfor
 flowchart LR
     UI[React UI] -->|Tauri cmd| Tauri[kanso-tauri]
     Scripts[Scripts / curl] -->|HTTP loopback| API[kanso-api]
-    CLI[Copilot CLI ext] -.->|future| CoreExt[kanso-cli-ext]
+    CLI[Copilot CLI ext] -->|HTTP loopback| API
     Tauri --> Core[kanso-core]
     API --> Core
-    CoreExt -.-> Core
     Core --> DB[(SQLite)]
 ```

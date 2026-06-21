@@ -28,3 +28,4 @@ kanso-api = { path = "../kanso-api" }
 
 [dev-dependencies]
 tokio = { workspace = true }
+tempfile = "3"

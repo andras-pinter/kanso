@@ -9,7 +9,8 @@
         ".": "./index.mjs",
         "./port": "./port.mjs",
         "./client": "./client.mjs",
-        "./tools": "./tools.mjs"
+        "./tools": "./tools.mjs",
+        "./resources": "./resources.mjs"
     },
     "scripts": {
         "test": "vitest run"

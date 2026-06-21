@@ -4,6 +4,25 @@ const DEFAULT_TIMEOUT_MS = 5000;
 const EMPTY_PORT_FILE_BACKOFF_MS = 50;
 
 /**
+ * Typed HTTP error so resource fetchers can branch on `.status` (e.g. render
+ * a friendly "board too large" for 409 and "not found" for 404). Extends
+ * `Error` so existing `toThrow(/regex/)` assertions continue to match.
+ */
+export class KansoApiError extends Error {
+    /**
+     * @param {number} status
+     * @param {string} message
+     * @param {string} [detail]
+     */
+    constructor(status, message, detail = "") {
+        super(message);
+        this.name = "KansoApiError";
+        this.status = status;
+        this.detail = detail;
+    }
+}
+
+/**
  * @typedef {Object} ClientOptions
  * @property {() => Promise<{ port: number, token: string }>} [readPort]
  * @property {typeof fetch} [fetchImpl]
@@ -178,18 +197,39 @@ const readErrorBody = async (res) => {
 /**
  * @param {number} status
  * @param {string} detail
- * @returns {Error}
+ * @returns {KansoApiError}
  */
 const mapHttpError = (status, detail) => {
-    if (status === 401) return new Error("kanso: auth failed, restart kanso app");
-    if (status === 403) return new Error("kanso: host check failed");
+    if (status === 401)
+        return new KansoApiError(401, "kanso: auth failed, restart kanso app", detail);
+    if (status === 403) return new KansoApiError(403, "kanso: host check failed", detail);
     if (status === 404) {
-        return new Error(`kanso: not found${detail ? ` (${detail})` : ""}`);
+        return new KansoApiError(
+            404,
+            `kanso: not found${detail ? ` (${detail})` : ""}`,
+            detail,
+        );
     }
-    if (status === 413) return new Error("kanso: payload too large (1 MiB API limit)");
+    if (status === 409) {
+        return new KansoApiError(
+            409,
+            `kanso: conflict${detail ? ` (${detail})` : ""}`,
+            detail,
+        );
+    }
+    if (status === 413)
+        return new KansoApiError(413, "kanso: payload too large (1 MiB API limit)", detail);
     if (status === 422 || status === 400) {
-        return new Error(`kanso: invalid request${detail ? ` (${detail})` : ""}`);
+        return new KansoApiError(
+            status,
+            `kanso: invalid request${detail ? ` (${detail})` : ""}`,
+            detail,
+        );
     }
-    if (status >= 500) return new Error("kanso: api server error");
-    return new Error(`kanso: http ${status}${detail ? ` (${detail})` : ""}`);
+    if (status >= 500) return new KansoApiError(status, "kanso: api server error", detail);
+    return new KansoApiError(
+        status,
+        `kanso: http ${status}${detail ? ` (${detail})` : ""}`,
+        detail,
+    );
 };

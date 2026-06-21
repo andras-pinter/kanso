@@ -14,6 +14,7 @@ use crate::dto::{
 use crate::error::{require_non_empty, ApiError};
 use crate::handlers::resolve_page;
 use crate::AppState;
+use kanso_core::KansoError;
 
 #[derive(Debug, Deserialize)]
 struct ListCardsQuery {
@@ -49,7 +50,10 @@ pub fn routes() -> Router<AppState> {
             "/columns/:column_id/cards",
             axum::routing::get(list).post(create),
         )
-        .route("/cards/:id", axum::routing::patch(update))
+        .route(
+            "/cards/:id",
+            axum::routing::get(get_one).patch(update),
+        )
         .route("/cards/:id/move", axum::routing::post(move_card))
         .route("/cards/:id/archive", axum::routing::post(archive))
         .route("/cards/:id/unarchive", axum::routing::post(unarchive))
@@ -90,6 +94,19 @@ async fn update(
 ) -> Result<Json<CardDto>, ApiError> {
     let card = CardRepo::update(&state.pool, &id, patch.into()).await?;
     Ok(Json(CardDto::from(card)))
+}
+
+async fn get_one(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<CardDto>, ApiError> {
+    match CardRepo::get(&state.pool, &id).await? {
+        Some(card) => Ok(Json(CardDto::from(card))),
+        None => Err(ApiError(KansoError::NotFound {
+            entity: "card",
+            id,
+        })),
+    }
 }
 
 async fn move_card(

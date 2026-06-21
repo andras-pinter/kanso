@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createClient } from "./client.mjs";
+import { createClient, KansoApiError } from "./client.mjs";
 
 /**
  * @param {number} status
@@ -175,5 +175,23 @@ describe("createClient", () => {
             id: "c1",
             title: "hi",
         });
+    });
+
+    it("throws KansoApiError with .status for HTTP error responses", async () => {
+        const fetchImpl = vi.fn(async () =>
+            jsonRes(409, { error: "board has 1500 cards, cap is 1000" }),
+        );
+        const client = createClient({
+            readPort: async () => ({ port: 1, token: "a" }),
+            fetchImpl,
+        });
+        try {
+            await client.get("/boards/huge/_full");
+            throw new Error("expected throw");
+        } catch (err) {
+            expect(err).toBeInstanceOf(KansoApiError);
+            expect(err.status).toBe(409);
+            expect(err.detail).toMatch(/1500 cards/);
+        }
     });
 });

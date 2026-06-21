@@ -576,6 +576,33 @@ async fn archive_missing_card_returns_404() {
 }
 
 #[tokio::test]
+async fn get_card_via_http() {
+    let (app, pool, _tmp) = setup().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
+    let card = CardRepo::create(&pool, &col.id, "Pick").await.unwrap();
+
+    let res = app
+        .clone()
+        .oneshot(req("GET", &format!("/cards/{}", card.id)))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let got: CardDto = serde_json::from_value(body_json(res).await).unwrap();
+    assert_eq!(got.id, card.id);
+    assert_eq!(got.title, "Pick");
+    assert_eq!(got.column_id, col.id);
+
+    let miss = app
+        .oneshot(req("GET", "/cards/00000000000000000000000000"))
+        .await
+        .unwrap();
+    assert_eq!(miss.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
 async fn card_body_put_get_roundtrip_via_http() {
     use base64::engine::general_purpose::STANDARD as B64;
     use base64::Engine as _;

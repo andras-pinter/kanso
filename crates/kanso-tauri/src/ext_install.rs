@@ -1,12 +1,16 @@
 use std::ffi::OsString;
-use std::fs;
+use std::fs::{self, File, OpenOptions};
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::sync::{Mutex, MutexGuard};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 use thiserror::Error;
+use wait_timeout::ChildExt;
 
 const VERSION_FILE: &str = ".kanso-ext-version";
 const SETTINGS_FILE: &str = "settings.json";
@@ -14,6 +18,8 @@ const RESOURCE_EXTENSIONS: &str = "extensions";
 const CLI_REL: &str = ".copilot/extensions/kanso";
 const MCP_REL: &str = ".kanso/mcp";
 const NODE_REQUIRED: u64 = 20;
+const NODE_TIMEOUT: Duration = Duration::from_secs(3);
+static INSTALL_MUTEX: Mutex<()> = Mutex::new(());
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InstallTarget {
@@ -70,6 +76,10 @@ pub enum ExtInstallError {
     NodeTooOld { found: u64 },
     #[error("bundled extension resources are missing at {0}")]
     BundleMissing(PathBuf),
+    #[error("bundled extension resources are invalid: {0}")]
+    BundleInvalid(String),
+    #[error("another install is already in progress, try again in a moment")]
+    InstallBusy,
     #[error("invalid node version output: {0}")]
     InvalidNodeVersion(String),
     #[error("{op} {path}: {source}")]
@@ -102,6 +112,7 @@ pub struct InstallContext {
     settings_path: PathBuf,
     cli_target: PathBuf,
     mcp_target: PathBuf,
+    lock_path: PathBuf,
 }
 
 impl InstallContext {
@@ -141,6 +152,7 @@ impl InstallContext {
             settings_path: data_dir.join(SETTINGS_FILE),
             cli_target: home.join(CLI_REL),
             mcp_target: home.join(MCP_REL),
+            lock_path: home.join(".kanso/.install.lock"),
         }
     }
 
@@ -181,6 +193,7 @@ pub fn set_cli_ext_consent(
 
 pub fn auto_upgrade_if_needed(app: &AppHandle) -> Result<(), ExtInstallError> {
     let ctx = InstallContext::from_app(app)?;
+    recover_install_state(&ctx)?;
     auto_upgrade(&ctx, system_node_check()?)
 }
 
@@ -195,22 +208,33 @@ pub fn uninstall_from_app(app: &AppHandle, target: InstallTarget) -> Result<(), 
 }
 
 fn auto_upgrade(ctx: &InstallContext, node: NodeCheck) -> Result<(), ExtInstallError> {
-    if is_symlink(&ctx.cli_target)? || is_symlink(&ctx.mcp_target)? {
-        return Ok(());
-    }
+    with_install_lock(ctx, || {
+        if is_symlink(&ctx.cli_target)? || is_symlink(&ctx.mcp_target)? {
+            return Ok(());
+        }
 
-    let bundled = bundled_version(ctx)?;
-    let installed = installed_version(&ctx.cli_target)?;
-    let settings = load_settings(ctx)?;
-    let should_install = match installed {
-        Some(version) => version != bundled,
-        None => settings.cli_ext_consent,
-    };
+        let bundled = bundled_version(ctx)?;
+        let settings = load_settings(ctx)?;
+        let cli_needs_install =
+            target_needs_install(&ctx.cli_target, &bundled, settings.cli_ext_consent)?;
+        let mcp_needs_install =
+            target_needs_install(&ctx.mcp_target, &bundled, settings.cli_ext_consent)?;
 
-    if should_install {
-        install_all(ctx, node)?;
-    }
-    Ok(())
+        if cli_needs_install || mcp_needs_install {
+            ensure_node(node)?;
+        }
+        if cli_needs_install {
+            install_target_without_node_check(ctx, InstallTarget::Cli)?;
+        }
+        if mcp_needs_install {
+            install_target_without_node_check(ctx, InstallTarget::Mcp)?;
+        }
+        Ok(())
+    })
+}
+
+fn recover_install_state(ctx: &InstallContext) -> Result<(), ExtInstallError> {
+    with_install_lock(ctx, || recover_installs(ctx))
 }
 
 fn status(ctx: &InstallContext) -> Result<CliExtStatus, ExtInstallError> {
@@ -231,9 +255,11 @@ fn status(ctx: &InstallContext) -> Result<CliExtStatus, ExtInstallError> {
 }
 
 fn install_all(ctx: &InstallContext, node: NodeCheck) -> Result<(), ExtInstallError> {
-    ensure_node(node)?;
-    install_target_without_node_check(ctx, InstallTarget::Cli)?;
-    install_target_without_node_check(ctx, InstallTarget::Mcp)
+    with_install_lock(ctx, || {
+        ensure_node(node)?;
+        install_target_without_node_check(ctx, InstallTarget::Cli)?;
+        install_target_without_node_check(ctx, InstallTarget::Mcp)
+    })
 }
 
 fn install_target(
@@ -241,8 +267,10 @@ fn install_target(
     target: InstallTarget,
     node: NodeCheck,
 ) -> Result<(), ExtInstallError> {
-    ensure_node(node)?;
-    install_target_without_node_check(ctx, target)
+    with_install_lock(ctx, || {
+        ensure_node(node)?;
+        install_target_without_node_check(ctx, target)
+    })
 }
 
 fn install_target_without_node_check(
@@ -251,6 +279,7 @@ fn install_target_without_node_check(
 ) -> Result<(), ExtInstallError> {
     let target_path = ctx.target_path(target);
     ensure_not_symlink(target_path, target.label())?;
+    validate_bundle(ctx, target)?;
 
     let src = ctx.bundle_root.join(target.source_dir());
     if !src.is_dir() {
@@ -263,11 +292,11 @@ fn install_target_without_node_check(
     }
 
     let version = bundled_version(ctx)?;
-    let new_path = sibling_with_suffix(target_path, "new");
-    let old_path = sibling_with_suffix(target_path, "old");
+    let suffix = unique_install_suffix();
+    let new_path = sibling_with_suffix(target_path, &format!("new.{suffix}"));
+    let old_path = sibling_with_suffix(target_path, &format!("old.{suffix}"));
 
     remove_path_if_exists(&new_path)?;
-    remove_path_if_exists(&old_path)?;
     create_dir_all(&new_path)?;
     copy_dir_contents(&src, &new_path)?;
     copy_dir_contents(&shared, &new_path.join("_shared/kanso-client"))?;
@@ -279,9 +308,18 @@ fn install_target_without_node_check(
 }
 
 fn uninstall_target(ctx: &InstallContext, target: InstallTarget) -> Result<(), ExtInstallError> {
-    let target_path = ctx.target_path(target);
-    ensure_not_symlink(target_path, target.label())?;
-    remove_path_if_exists(target_path)
+    with_install_lock(ctx, || {
+        let target_path = ctx.target_path(target);
+        ensure_not_symlink(target_path, target.label())?;
+        remove_path_if_exists(target_path)?;
+        if target == InstallTarget::Cli {
+            let mut settings = load_settings(ctx)?;
+            settings.cli_ext_consent = false;
+            settings.cli_ext_consent_dismissed = true;
+            save_settings(ctx, &settings)?;
+        }
+        Ok(())
+    })
 }
 
 fn swap_install(new_path: &Path, target: &Path, old_path: &Path) -> Result<(), ExtInstallError> {
@@ -310,6 +348,208 @@ fn installed_version(target: &Path) -> Result<Option<String>, ExtInstallError> {
         return Ok(None);
     }
     Ok(Some(read_trimmed(&version_path)?))
+}
+
+fn target_needs_install(
+    target: &Path,
+    bundled: &str,
+    consent: bool,
+) -> Result<bool, ExtInstallError> {
+    match installed_version(target)? {
+        Some(version) => Ok(version != bundled),
+        None => Ok(consent),
+    }
+}
+
+fn validate_bundle(ctx: &InstallContext, target: InstallTarget) -> Result<(), ExtInstallError> {
+    let version = bundled_version(ctx)?;
+    if !is_semverish(&version) {
+        return Err(ExtInstallError::BundleInvalid(format!(
+            "invalid bundled version stamp `{version}`"
+        )));
+    }
+
+    let shared = ctx.bundle_root.join("_shared/kanso-client/package.json");
+    ensure_bundle_file(&shared)?;
+
+    match target {
+        InstallTarget::Cli => {
+            ensure_bundle_file(&ctx.bundle_root.join("kanso/extension.mjs"))?;
+            ensure_bundle_file(&ctx.bundle_root.join("kanso/package.json"))?;
+        }
+        InstallTarget::Mcp => {
+            ensure_bundle_file(&ctx.bundle_root.join("kanso-mcp/bin/kanso-mcp.mjs"))?;
+            ensure_bundle_file(&ctx.bundle_root.join("kanso-mcp/package.json"))?;
+            ensure_bundle_file(
+                &ctx.bundle_root
+                    .join("kanso-mcp/node_modules/@modelcontextprotocol/sdk/package.json"),
+            )?;
+            ensure_bundle_file(
+                &ctx.bundle_root
+                    .join("kanso-mcp/node_modules/yjs/package.json"),
+            )?;
+            ensure_bundle_file(
+                &ctx.bundle_root
+                    .join("kanso-mcp/node_modules/zod/package.json"),
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn ensure_bundle_file(path: &Path) -> Result<(), ExtInstallError> {
+    if path.is_file() {
+        Ok(())
+    } else {
+        Err(ExtInstallError::BundleMissing(path.to_path_buf()))
+    }
+}
+
+fn is_semverish(version: &str) -> bool {
+    let (core, pre) = version
+        .split_once('-')
+        .map_or((version, None), |(core, pre)| (core, Some(pre)));
+    let mut parts = core.split('.');
+    let valid_core = (0..3).all(|_| {
+        parts
+            .next()
+            .is_some_and(|part| !part.is_empty() && part.chars().all(|c| c.is_ascii_digit()))
+    }) && parts.next().is_none();
+    let valid_pre = match pre {
+        Some(pre) => {
+            !pre.is_empty()
+                && pre
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.')
+        }
+        None => true,
+    };
+    valid_core && valid_pre
+}
+
+fn recover_installs(ctx: &InstallContext) -> Result<(), ExtInstallError> {
+    recover_target(&ctx.cli_target)?;
+    recover_target(&ctx.mcp_target)
+}
+
+fn recover_target(target: &Path) -> Result<(), ExtInstallError> {
+    let old_paths = sibling_paths_with_kind(target, "old")?;
+    if !target.exists() {
+        if let Some(old_path) = newest_path(old_paths.iter())? {
+            rename_path(&old_path, target)?;
+        }
+    }
+
+    if target.exists() {
+        for path in sibling_paths_with_kind(target, "new")? {
+            remove_path_if_exists(&path)?;
+        }
+    }
+    Ok(())
+}
+
+fn sibling_paths_with_kind(target: &Path, kind: &str) -> Result<Vec<PathBuf>, ExtInstallError> {
+    let Some(parent) = target.parent() else {
+        return Ok(Vec::new());
+    };
+    if !parent.exists() {
+        return Ok(Vec::new());
+    }
+    let Some(name) = target.file_name().and_then(|n| n.to_str()) else {
+        return Ok(Vec::new());
+    };
+    let prefix = format!("{name}.{kind}.");
+    let mut paths = Vec::new();
+    for entry in fs::read_dir(parent).map_err(|source| ExtInstallError::Io {
+        op: "read_dir",
+        path: parent.to_path_buf(),
+        source,
+    })? {
+        let entry = entry.map_err(|source| ExtInstallError::Io {
+            op: "read_dir entry",
+            path: parent.to_path_buf(),
+            source,
+        })?;
+        if entry.file_name().to_string_lossy().starts_with(&prefix) {
+            paths.push(entry.path());
+        }
+    }
+    Ok(paths)
+}
+
+fn newest_path<'a>(
+    paths: impl Iterator<Item = &'a PathBuf>,
+) -> Result<Option<PathBuf>, ExtInstallError> {
+    let mut newest: Option<(SystemTime, PathBuf)> = None;
+    for path in paths {
+        let modified = fs::metadata(path)
+            .map_err(|source| ExtInstallError::Io {
+                op: "metadata",
+                path: path.clone(),
+                source,
+            })?
+            .modified()
+            .map_err(|source| ExtInstallError::Io {
+                op: "metadata modified",
+                path: path.clone(),
+                source,
+            })?;
+        if newest.as_ref().map_or(true, |(time, _)| modified > *time) {
+            newest = Some((modified, path.clone()));
+        }
+    }
+    Ok(newest.map(|(_, path)| path))
+}
+
+struct InstallLock<'a> {
+    _guard: MutexGuard<'a, ()>,
+    file: File,
+}
+
+impl Drop for InstallLock<'_> {
+    fn drop(&mut self) {
+        let _ = FileExt::unlock(&self.file);
+    }
+}
+
+fn with_install_lock<T>(
+    ctx: &InstallContext,
+    op: impl FnOnce() -> Result<T, ExtInstallError>,
+) -> Result<T, ExtInstallError> {
+    let _lock = acquire_install_lock(ctx)?;
+    op()
+}
+
+fn acquire_install_lock(ctx: &InstallContext) -> Result<InstallLock<'_>, ExtInstallError> {
+    let guard = INSTALL_MUTEX
+        .try_lock()
+        .map_err(|_| ExtInstallError::InstallBusy)?;
+    if let Some(parent) = ctx.lock_path.parent() {
+        create_dir_all(parent)?;
+    }
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(&ctx.lock_path)
+        .map_err(|source| ExtInstallError::Io {
+            op: "open lock",
+            path: ctx.lock_path.clone(),
+            source,
+        })?;
+    match file.try_lock_exclusive() {
+        Ok(()) => Ok(InstallLock {
+            _guard: guard,
+            file,
+        }),
+        Err(e) if e.kind() == io::ErrorKind::WouldBlock => Err(ExtInstallError::InstallBusy),
+        Err(source) => Err(ExtInstallError::Io {
+            op: "lock",
+            path: ctx.lock_path.clone(),
+            source,
+        }),
+    }
 }
 
 fn read_trimmed(path: &Path) -> Result<String, ExtInstallError> {
@@ -353,17 +593,52 @@ fn save_settings(ctx: &InstallContext, settings: &CliExtSettings) -> Result<(), 
 }
 
 fn system_node_check() -> Result<NodeCheck, ExtInstallError> {
-    let output = match Command::new("node").arg("--version").output() {
-        Ok(output) => output,
+    command_node_check("node", &["--version"], NODE_TIMEOUT)
+}
+
+fn command_node_check(
+    program: &str,
+    args: &[&str],
+    timeout: Duration,
+) -> Result<NodeCheck, ExtInstallError> {
+    let mut child = match Command::new(program)
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+    {
+        Ok(child) => child,
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(NodeCheck::Missing),
         Err(source) => {
             return Err(ExtInstallError::Io {
-                op: "run node --version",
-                path: PathBuf::from("node"),
+                op: "run node version check",
+                path: PathBuf::from(program),
                 source,
             });
         }
     };
+
+    if child
+        .wait_timeout(timeout)
+        .map_err(|source| ExtInstallError::Io {
+            op: "wait node version check",
+            path: PathBuf::from(program),
+            source,
+        })?
+        .is_none()
+    {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Ok(NodeCheck::Missing);
+    }
+
+    let output = child
+        .wait_with_output()
+        .map_err(|source| ExtInstallError::Io {
+            op: "read node version check",
+            path: PathBuf::from(program),
+            source,
+        })?;
 
     if !output.status.success() {
         return Ok(NodeCheck::Missing);
@@ -534,9 +809,23 @@ fn sibling_with_suffix(path: &Path, suffix: &str) -> PathBuf {
     path.with_file_name(name)
 }
 
+fn unique_install_suffix() -> String {
+    let pid = std::process::id();
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |duration| duration.as_nanos());
+    format!("{pid}.{nanos}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    static TEST_MUTEX: Mutex<()> = Mutex::new(());
+
+    fn test_guard() -> MutexGuard<'static, ()> {
+        TEST_MUTEX.lock().expect("test mutex")
+    }
 
     fn context(version: &str) -> Result<(tempfile::TempDir, InstallContext), ExtInstallError> {
         let dir = tempfile::tempdir().map_err(|source| ExtInstallError::Io {
@@ -560,12 +849,19 @@ mod tests {
         write_text(&root.join("kanso/extension.mjs"), marker)?;
         write_text(&root.join("kanso-mcp/package.json"), "{}")?;
         write_text(&root.join("kanso-mcp/bin/kanso-mcp.mjs"), marker)?;
+        write_text(
+            &root.join("kanso-mcp/node_modules/@modelcontextprotocol/sdk/package.json"),
+            "{}",
+        )?;
+        write_text(&root.join("kanso-mcp/node_modules/yjs/package.json"), "{}")?;
+        write_text(&root.join("kanso-mcp/node_modules/zod/package.json"), "{}")?;
         write_text(&root.join("_shared/kanso-client/package.json"), "{}")?;
         write_text(&root.join("_shared/kanso-client/index.mjs"), marker)
     }
 
     #[test]
     fn fresh_install_copies_cli_mcp_shared_and_versions() -> Result<(), ExtInstallError> {
+        let _guard = test_guard();
         let (_dir, ctx) = context("1.0.0")?;
 
         install_all(&ctx, NodeCheck::Present(20))?;
@@ -584,6 +880,18 @@ mod tests {
         assert!(ctx.mcp_target.join("bin/kanso-mcp.mjs").is_file());
         assert!(ctx
             .mcp_target
+            .join("node_modules/@modelcontextprotocol/sdk/package.json")
+            .is_file());
+        assert!(ctx
+            .mcp_target
+            .join("node_modules/yjs/package.json")
+            .is_file());
+        assert!(ctx
+            .mcp_target
+            .join("node_modules/zod/package.json")
+            .is_file());
+        assert!(ctx
+            .mcp_target
             .join("_shared/kanso-client/index.mjs")
             .is_file());
         assert!(ctx
@@ -595,6 +903,7 @@ mod tests {
 
     #[test]
     fn reinstall_is_idempotent() -> Result<(), ExtInstallError> {
+        let _guard = test_guard();
         let (_dir, ctx) = context("1.0.0")?;
 
         install_all(&ctx, NodeCheck::Present(20))?;
@@ -604,13 +913,14 @@ mod tests {
             read_trimmed(&ctx.cli_target.join("extension.mjs"))?,
             "initial"
         );
-        assert!(!sibling_with_suffix(&ctx.cli_target, "new").exists());
-        assert!(!sibling_with_suffix(&ctx.cli_target, "old").exists());
+        assert!(sibling_paths_with_kind(&ctx.cli_target, "new")?.is_empty());
+        assert!(sibling_paths_with_kind(&ctx.cli_target, "old")?.is_empty());
         Ok(())
     }
 
     #[test]
     fn version_bump_auto_upgrade_reinstalls() -> Result<(), ExtInstallError> {
+        let _guard = test_guard();
         let (_dir, ctx) = context("1.0.0")?;
         install_all(&ctx, NodeCheck::Present(20))?;
         write_fixture_bundle(&ctx.bundle_root, "2.0.0", "upgraded")?;
@@ -626,8 +936,149 @@ mod tests {
     }
 
     #[test]
+    fn mcp_version_drift_reinstalls_only_mcp() -> Result<(), ExtInstallError> {
+        let _guard = test_guard();
+        let (_dir, ctx) = context("1.0.0")?;
+        install_all(&ctx, NodeCheck::Present(20))?;
+        write_text(&ctx.cli_target.join("extension.mjs"), "local")?;
+        write_text(&ctx.mcp_target.join(VERSION_FILE), "0.9.0\n")?;
+        write_fixture_bundle(&ctx.bundle_root, "1.0.0", "repaired")?;
+
+        auto_upgrade(&ctx, NodeCheck::Present(20))?;
+
+        assert_eq!(
+            read_trimmed(&ctx.cli_target.join("extension.mjs"))?,
+            "local"
+        );
+        assert_eq!(
+            read_trimmed(&ctx.mcp_target.join("bin/kanso-mcp.mjs"))?,
+            "repaired"
+        );
+        assert_eq!(read_trimmed(&ctx.mcp_target.join(VERSION_FILE))?, "1.0.0");
+        Ok(())
+    }
+
+    #[test]
+    fn missing_mcp_with_consent_reinstalls_mcp_only() -> Result<(), ExtInstallError> {
+        let _guard = test_guard();
+        let (_dir, ctx) = context("1.0.0")?;
+        install_all(&ctx, NodeCheck::Present(20))?;
+        write_text(&ctx.cli_target.join("extension.mjs"), "local")?;
+        remove_path_if_exists(&ctx.mcp_target)?;
+        save_settings(
+            &ctx,
+            &CliExtSettings {
+                cli_ext_consent: true,
+                cli_ext_consent_dismissed: false,
+            },
+        )?;
+        write_fixture_bundle(&ctx.bundle_root, "1.0.0", "repaired")?;
+
+        auto_upgrade(&ctx, NodeCheck::Present(20))?;
+
+        assert_eq!(
+            read_trimmed(&ctx.cli_target.join("extension.mjs"))?,
+            "local"
+        );
+        assert_eq!(
+            read_trimmed(&ctx.mcp_target.join("bin/kanso-mcp.mjs"))?,
+            "repaired"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn concurrent_install_refuses_when_lock_held() -> Result<(), ExtInstallError> {
+        let _guard = test_guard();
+        let (_dir, ctx) = context("1.0.0")?;
+        let _lock = acquire_install_lock(&ctx)?;
+
+        let err = install_all(&ctx, NodeCheck::Present(20)).err();
+
+        assert!(matches!(err, Some(ExtInstallError::InstallBusy)));
+        Ok(())
+    }
+
+    #[test]
+    fn recovery_restores_old_target_when_target_missing() -> Result<(), ExtInstallError> {
+        let _guard = test_guard();
+        let (_dir, ctx) = context("1.0.0")?;
+        let old = sibling_with_suffix(&ctx.cli_target, "old.test");
+        write_text(&old.join(VERSION_FILE), "1.0.0\n")?;
+        write_text(&old.join("extension.mjs"), "restored")?;
+
+        recover_install_state(&ctx)?;
+
+        assert_eq!(
+            read_trimmed(&ctx.cli_target.join("extension.mjs"))?,
+            "restored"
+        );
+        assert!(!old.exists());
+        Ok(())
+    }
+
+    #[test]
+    fn uninstall_cli_clears_consent_flags() -> Result<(), ExtInstallError> {
+        let _guard = test_guard();
+        let (_dir, ctx) = context("1.0.0")?;
+        install_all(&ctx, NodeCheck::Present(20))?;
+        save_settings(
+            &ctx,
+            &CliExtSettings {
+                cli_ext_consent: true,
+                cli_ext_consent_dismissed: false,
+            },
+        )?;
+
+        uninstall_target(&ctx, InstallTarget::Cli)?;
+
+        let settings = load_settings(&ctx)?;
+        assert!(!settings.cli_ext_consent);
+        assert!(settings.cli_ext_consent_dismissed);
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn node_check_timeout_returns_missing() -> Result<(), ExtInstallError> {
+        assert_eq!(
+            command_node_check("sleep", &["10"], Duration::from_millis(10))?,
+            NodeCheck::Missing
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn malformed_bundle_stamp_refuses_install() -> Result<(), ExtInstallError> {
+        let _guard = test_guard();
+        let (_dir, ctx) = context("bad")?;
+
+        let err = install_all(&ctx, NodeCheck::Present(20)).err();
+
+        assert!(matches!(err, Some(ExtInstallError::BundleInvalid(_))));
+        assert!(!ctx.cli_target.exists());
+        Ok(())
+    }
+
+    #[test]
+    fn missing_mcp_entry_file_refuses_install() -> Result<(), ExtInstallError> {
+        let _guard = test_guard();
+        let (_dir, ctx) = context("1.0.0")?;
+        remove_path_if_exists(&ctx.bundle_root.join("kanso-mcp/bin/kanso-mcp.mjs"))?;
+
+        let err = install_target(&ctx, InstallTarget::Mcp, NodeCheck::Present(20)).err();
+
+        assert!(
+            matches!(err, Some(ExtInstallError::BundleMissing(path)) if path.ends_with("kanso-mcp/bin/kanso-mcp.mjs"))
+        );
+        assert!(!ctx.mcp_target.exists());
+        Ok(())
+    }
+
+    #[test]
     #[cfg(unix)]
     fn dev_symlink_refuses_install() -> Result<(), ExtInstallError> {
+        let _guard = test_guard();
         use std::os::unix::fs as unix_fs;
 
         let dir = tempfile::tempdir().map_err(|source| ExtInstallError::Io {
@@ -658,6 +1109,7 @@ mod tests {
 
     #[test]
     fn missing_node_fails_without_touching_install() -> Result<(), ExtInstallError> {
+        let _guard = test_guard();
         let (_dir, ctx) = context("1.0.0")?;
 
         let err = install_all(&ctx, NodeCheck::Missing).err();

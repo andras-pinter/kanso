@@ -7,12 +7,17 @@ use kanso_core::repo::ColumnRepo;
 
 use crate::dto::{ColumnDto, ColumnPatchDto, CreateColumnBody, MoveColumnBody};
 use crate::error::{require_non_empty, ApiError};
+use crate::handlers::resolve_page;
 use crate::AppState;
 
 #[derive(Debug, Deserialize)]
 struct ListColumnsQuery {
     #[serde(default)]
     include_archived: bool,
+    #[serde(default)]
+    limit: Option<u32>,
+    #[serde(default)]
+    offset: Option<u32>,
 }
 
 pub fn routes() -> Router<AppState> {
@@ -32,7 +37,10 @@ async fn list(
     Path(board_id): Path<String>,
     Query(q): Query<ListColumnsQuery>,
 ) -> Result<Json<Vec<ColumnDto>>, ApiError> {
-    let rows = ColumnRepo::list_by_board(&state.pool, &board_id, q.include_archived).await?;
+    let (limit, offset) = resolve_page(q.limit, q.offset);
+    let rows =
+        ColumnRepo::list_by_board_paged(&state.pool, &board_id, q.include_archived, limit, offset)
+            .await?;
     Ok(Json(rows.into_iter().map(ColumnDto::from).collect()))
 }
 

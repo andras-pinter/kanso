@@ -8,12 +8,17 @@ use kanso_core::KansoError;
 
 use crate::dto::{BoardDto, BoardPatchDto, CardTagLinkDto, CreateBoardBody};
 use crate::error::{require_non_empty, ApiError};
+use crate::handlers::resolve_page;
 use crate::AppState;
 
 #[derive(Debug, Deserialize)]
 struct ListBoardsQuery {
     #[serde(default)]
     include_archived: bool,
+    #[serde(default)]
+    limit: Option<u32>,
+    #[serde(default)]
+    offset: Option<u32>,
 }
 
 pub fn routes() -> Router<AppState> {
@@ -32,7 +37,8 @@ async fn list(
     State(state): State<AppState>,
     Query(q): Query<ListBoardsQuery>,
 ) -> Result<Json<Vec<BoardDto>>, ApiError> {
-    let rows = BoardRepo::list_all(&state.pool, q.include_archived).await?;
+    let (limit, offset) = resolve_page(q.limit, q.offset);
+    let rows = BoardRepo::list_all_paged(&state.pool, q.include_archived, limit, offset).await?;
     Ok(Json(rows.into_iter().map(BoardDto::from).collect()))
 }
 

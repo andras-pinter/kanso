@@ -145,6 +145,29 @@ impl CardRepo {
         Ok(rows)
     }
 
+    pub async fn list_by_column_paged(
+        pool: &SqlitePool,
+        column_id: &str,
+        include_archived: bool,
+        limit: u32,
+        offset: u32,
+    ) -> Result<Vec<Card>> {
+        let sql = if include_archived {
+            "SELECT * FROM cards WHERE column_id = ?1 \
+             ORDER BY position ASC, id ASC LIMIT ?2 OFFSET ?3"
+        } else {
+            "SELECT * FROM cards WHERE column_id = ?1 AND archived_at IS NULL \
+             ORDER BY position ASC, id ASC LIMIT ?2 OFFSET ?3"
+        };
+        let rows = sqlx::query_as::<_, Card>(sql)
+            .bind(column_id)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(pool)
+            .await?;
+        Ok(rows)
+    }
+
     pub async fn update(pool: &SqlitePool, id: &str, patch: CardPatch) -> Result<Card> {
         let now = now_ms();
         let mut qb = sqlx::QueryBuilder::new("UPDATE cards SET updated_at = ");
@@ -474,6 +497,72 @@ impl CardRepo {
         Ok(rows.into_iter().map(SearchRow::into_hit).collect())
     }
 
+    /// Paginated form of [`search_with_context`]. Same ordering and FTS rules.
+    pub async fn search_with_context_paged(
+        pool: &SqlitePool,
+        query: &str,
+        include_archived: bool,
+        limit: u32,
+        offset: u32,
+    ) -> Result<Vec<CardSearchHit>> {
+        let trimmed = query.trim();
+        if trimmed.is_empty() {
+            return Ok(Vec::new());
+        }
+        let match_expr = fts5_quote(trimmed);
+        let sql = if include_archived {
+            "SELECT c.id          AS card_id, \
+                    c.column_id   AS card_column_id, \
+                    c.title       AS title, \
+                    c.body_text   AS body_text, \
+                    c.position    AS position, \
+                    c.due_at      AS due_at, \
+                    c.created_at  AS created_at, \
+                    c.updated_at  AS updated_at, \
+                    c.archived_at AS archived_at, \
+                    col.id        AS col_id, \
+                    col.name      AS col_name, \
+                    b.id          AS board_id, \
+                    b.name        AS board_name \
+             FROM cards c \
+             JOIN cards_fts f ON f.rowid = c.rowid \
+             JOIN columns col ON col.id = c.column_id \
+             JOIN boards b ON b.id = col.board_id \
+             WHERE cards_fts MATCH ?1 \
+             ORDER BY rank, c.updated_at DESC, c.id ASC LIMIT ?2 OFFSET ?3"
+        } else {
+            "SELECT c.id          AS card_id, \
+                    c.column_id   AS card_column_id, \
+                    c.title       AS title, \
+                    c.body_text   AS body_text, \
+                    c.position    AS position, \
+                    c.due_at      AS due_at, \
+                    c.created_at  AS created_at, \
+                    c.updated_at  AS updated_at, \
+                    c.archived_at AS archived_at, \
+                    col.id        AS col_id, \
+                    col.name      AS col_name, \
+                    b.id          AS board_id, \
+                    b.name        AS board_name \
+             FROM cards c \
+             JOIN cards_fts f ON f.rowid = c.rowid \
+             JOIN columns col ON col.id = c.column_id \
+             JOIN boards b ON b.id = col.board_id \
+             WHERE cards_fts MATCH ?1 \
+               AND c.archived_at IS NULL \
+               AND col.archived_at IS NULL \
+               AND b.archived_at IS NULL \
+             ORDER BY rank, c.updated_at DESC, c.id ASC LIMIT ?2 OFFSET ?3"
+        };
+        let rows = sqlx::query_as::<_, SearchRow>(sql)
+            .bind(match_expr)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(pool)
+            .await?;
+        Ok(rows.into_iter().map(SearchRow::into_hit).collect())
+    }
+
     /// Idempotently associate `card_id` with `tag_id`. Both entities must
     /// exist; otherwise returns `NotFound`. Re-linking is a no-op.
     pub async fn add_tag(pool: &SqlitePool, card_id: &str, tag_id: &str) -> Result<()> {
@@ -543,6 +632,37 @@ impl CardRepo {
         Ok(rows)
     }
 
+    /// Paginated form of [`tags_for_card`]. Same ordering + existence check.
+    pub async fn tags_for_card_paged(
+        pool: &SqlitePool,
+        card_id: &str,
+        include_archived: bool,
+        limit: u32,
+        offset: u32,
+    ) -> Result<Vec<Tag>> {
+        let mut tx = pool.begin().await?;
+        ensure_exists(&mut tx, "cards", "card", card_id).await?;
+        let sql = if include_archived {
+            "SELECT t.* FROM tags t \
+             JOIN card_tags ct ON ct.tag_id = t.id \
+             WHERE ct.card_id = ?1 \
+             ORDER BY t.name COLLATE NOCASE ASC, t.id ASC LIMIT ?2 OFFSET ?3"
+        } else {
+            "SELECT t.* FROM tags t \
+             JOIN card_tags ct ON ct.tag_id = t.id \
+             WHERE ct.card_id = ?1 AND t.archived_at IS NULL \
+             ORDER BY t.name COLLATE NOCASE ASC, t.id ASC LIMIT ?2 OFFSET ?3"
+        };
+        let rows = sqlx::query_as::<_, Tag>(sql)
+            .bind(card_id)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        Ok(rows)
+    }
+
     /// Cards linked to `tag_id`, ordered by board layout (column position
     /// then card position) so callers receive them in the same order they
     /// appear visually on the board. `NotFound` if the tag does not exist.
@@ -574,25 +694,72 @@ impl CardRepo {
         Ok(rows)
     }
 
+    /// Paginated form of [`cards_with_tag`]. Same ordering and existence check.
+    pub async fn cards_with_tag_paged(
+        pool: &SqlitePool,
+        tag_id: &str,
+        include_archived: bool,
+        limit: u32,
+        offset: u32,
+    ) -> Result<Vec<Card>> {
+        let mut tx = pool.begin().await?;
+        ensure_exists(&mut tx, "tags", "tag", tag_id).await?;
+        let sql = if include_archived {
+            "SELECT c.* FROM cards c \
+             JOIN card_tags ct ON ct.card_id = c.id \
+             JOIN columns col ON col.id = c.column_id \
+             WHERE ct.tag_id = ?1 \
+             ORDER BY col.position ASC, col.id ASC, c.position ASC, c.id ASC \
+             LIMIT ?2 OFFSET ?3"
+        } else {
+            "SELECT c.* FROM cards c \
+             JOIN card_tags ct ON ct.card_id = c.id \
+             JOIN columns col ON col.id = c.column_id \
+             WHERE ct.tag_id = ?1 AND c.archived_at IS NULL \
+             ORDER BY col.position ASC, col.id ASC, c.position ASC, c.id ASC \
+             LIMIT ?2 OFFSET ?3"
+        };
+        let rows = sqlx::query_as::<_, Card>(sql)
+            .bind(tag_id)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        Ok(rows)
+    }
+
     /// Every `(card_id, tag_id)` link for a board. Walks `card_tags` joined
     /// through `cards`/`columns` and filters by `columns.board_id`. Includes
     /// archived cards/columns/tags — the UI decides what to render. Returned
     /// pairs are ordered by `(card_id, tag_id)` for determinism.
+    ///
+    /// Bounded by a generous 10_000-row hard cap as defense-in-depth — the
+    /// link table is naturally tag-density-bounded, but if it ever grows past
+    /// that, surface a `Conflict` so the UI can warn instead of OOMing.
     pub async fn card_tags_for_board(
         pool: &SqlitePool,
         board_id: &str,
     ) -> Result<Vec<(String, String)>> {
+        const HARD_CAP: usize = 10_000;
         let rows: Vec<(String, String)> = sqlx::query_as(
             "SELECT ct.card_id, ct.tag_id FROM card_tags ct \
              JOIN cards c ON c.id = ct.card_id \
              JOIN columns col ON col.id = c.column_id \
              JOIN tags t ON t.id = ct.tag_id \
              WHERE col.board_id = ?1 \
-             ORDER BY ct.card_id, t.name COLLATE NOCASE ASC, ct.tag_id",
+             ORDER BY ct.card_id, t.name COLLATE NOCASE ASC, ct.tag_id \
+             LIMIT ?2",
         )
         .bind(board_id)
+        .bind((HARD_CAP + 1) as i64)
         .fetch_all(pool)
         .await?;
+        if rows.len() > HARD_CAP {
+            return Err(KansoError::Conflict(format!(
+                "board has more than {HARD_CAP} card-tag links; refusing to load"
+            )));
+        }
         Ok(rows)
     }
 

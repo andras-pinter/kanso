@@ -12,12 +12,17 @@ use crate::dto::{
     MoveCardBody,
 };
 use crate::error::{require_non_empty, ApiError};
+use crate::handlers::resolve_page;
 use crate::AppState;
 
 #[derive(Debug, Deserialize)]
 struct ListCardsQuery {
     #[serde(default)]
     include_archived: bool,
+    #[serde(default)]
+    limit: Option<u32>,
+    #[serde(default)]
+    offset: Option<u32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -26,6 +31,10 @@ struct SearchCardsQuery {
     q: String,
     #[serde(default)]
     include_archived: bool,
+    #[serde(default)]
+    limit: Option<u32>,
+    #[serde(default)]
+    offset: Option<u32>,
 }
 
 // Cap PUT /cards/:id/body payloads at 8 MiB. Typical bodies are <100 KiB;
@@ -57,7 +66,10 @@ async fn list(
     Path(column_id): Path<String>,
     Query(q): Query<ListCardsQuery>,
 ) -> Result<Json<Vec<CardDto>>, ApiError> {
-    let rows = CardRepo::list_by_column(&state.pool, &column_id, q.include_archived).await?;
+    let (limit, offset) = resolve_page(q.limit, q.offset);
+    let rows =
+        CardRepo::list_by_column_paged(&state.pool, &column_id, q.include_archived, limit, offset)
+            .await?;
     Ok(Json(rows.into_iter().map(CardDto::from).collect()))
 }
 
@@ -144,6 +156,9 @@ async fn search(
     State(state): State<AppState>,
     Query(q): Query<SearchCardsQuery>,
 ) -> Result<Json<Vec<CardSearchHitDto>>, ApiError> {
-    let rows = CardRepo::search_with_context(&state.pool, &q.q, q.include_archived).await?;
+    let (limit, offset) = resolve_page(q.limit, q.offset);
+    let rows =
+        CardRepo::search_with_context_paged(&state.pool, &q.q, q.include_archived, limit, offset)
+            .await?;
     Ok(Json(rows.into_iter().map(CardSearchHitDto::from).collect()))
 }

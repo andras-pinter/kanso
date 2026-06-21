@@ -1298,3 +1298,29 @@ async fn test_card_tags_for_board_returns_all_links_and_isolates_boards() {
         .unwrap()
         .is_empty());
 }
+
+#[tokio::test]
+async fn boards_paged_with_tied_positions_is_stable_across_pages() {
+    // Insert 4 boards, then force-tie their positions. With a stable
+    // (position, id) order, paginating (0..2) and (2..4) must cover all
+    // four with no overlap.
+    let pool = fixture_pool().await;
+    for n in ["A", "B", "C", "D"] {
+        BoardRepo::create(&pool, n).await.unwrap();
+    }
+    sqlx::query("UPDATE boards SET position = 0.0")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let p0 = BoardRepo::list_all_paged(&pool, false, 2, 0).await.unwrap();
+    let p1 = BoardRepo::list_all_paged(&pool, false, 2, 2).await.unwrap();
+    assert_eq!(p0.len(), 2);
+    assert_eq!(p1.len(), 2);
+
+    let ids0: std::collections::HashSet<_> = p0.iter().map(|b| b.id.clone()).collect();
+    let ids1: std::collections::HashSet<_> = p1.iter().map(|b| b.id.clone()).collect();
+    assert!(ids0.is_disjoint(&ids1), "pages overlap: {ids0:?} vs {ids1:?}");
+    let union: std::collections::HashSet<_> = ids0.union(&ids1).cloned().collect();
+    assert_eq!(union.len(), 4, "union must cover all 4 boards");
+}

@@ -65,6 +65,29 @@ impl BoardRepo {
         Ok(rows)
     }
 
+    /// Paginated form of [`list_all`]. The HTTP layer clamps `limit` upstream;
+    /// repos take whatever they're given and trust the caller to bound it.
+    pub async fn list_all_paged(
+        pool: &SqlitePool,
+        include_archived: bool,
+        limit: u32,
+        offset: u32,
+    ) -> Result<Vec<Board>> {
+        let sql = if include_archived {
+            "SELECT * FROM boards \
+             ORDER BY position ASC, id ASC LIMIT ?1 OFFSET ?2"
+        } else {
+            "SELECT * FROM boards WHERE archived_at IS NULL \
+             ORDER BY position ASC, id ASC LIMIT ?1 OFFSET ?2"
+        };
+        let rows = sqlx::query_as::<_, Board>(sql)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(pool)
+            .await?;
+        Ok(rows)
+    }
+
     pub async fn update(pool: &SqlitePool, id: &str, patch: BoardPatch) -> Result<Board> {
         let now = now_ms();
         let mut qb = sqlx::QueryBuilder::new("UPDATE boards SET updated_at = ");

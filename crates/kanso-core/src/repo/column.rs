@@ -84,6 +84,30 @@ impl ColumnRepo {
         Ok(rows)
     }
 
+    pub async fn list_by_board_paged(
+        pool: &SqlitePool,
+        board_id: &str,
+        include_archived: bool,
+        limit: u32,
+        offset: u32,
+    ) -> Result<Vec<Column>> {
+        let sql = if include_archived {
+            "SELECT * FROM columns WHERE board_id = ?1 \
+             ORDER BY position ASC, id ASC LIMIT ?2 OFFSET ?3"
+        } else {
+            "SELECT * FROM columns \
+             WHERE board_id = ?1 AND archived_at IS NULL \
+             ORDER BY position ASC, id ASC LIMIT ?2 OFFSET ?3"
+        };
+        let rows = sqlx::query_as::<_, Column>(sql)
+            .bind(board_id)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(pool)
+            .await?;
+        Ok(rows)
+    }
+
     pub async fn update(pool: &SqlitePool, id: &str, patch: ColumnPatch) -> Result<Column> {
         let now = now_ms();
         let mut qb = sqlx::QueryBuilder::new("UPDATE columns SET updated_at = ");

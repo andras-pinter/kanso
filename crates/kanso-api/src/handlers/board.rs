@@ -6,7 +6,7 @@ use serde::Deserialize;
 use kanso_core::repo::{BoardRepo, CardRepo};
 use kanso_core::KansoError;
 
-use crate::dto::{BoardDto, BoardPatchDto, CardTagLinkDto, CreateBoardBody};
+use crate::dto::{BoardDto, BoardFullDto, BoardPatchDto, CardTagLinkDto, CreateBoardBody};
 use crate::error::{require_non_empty, ApiError};
 use crate::handlers::resolve_page;
 use crate::AppState;
@@ -21,6 +21,12 @@ struct ListBoardsQuery {
     offset: Option<u32>,
 }
 
+#[derive(Debug, Deserialize)]
+struct FullBoardQuery {
+    #[serde(default)]
+    include_archived: bool,
+}
+
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/boards", axum::routing::get(list).post(create))
@@ -31,6 +37,7 @@ pub fn routes() -> Router<AppState> {
         .route("/boards/:id/archive", axum::routing::post(archive))
         .route("/boards/:id/unarchive", axum::routing::post(unarchive))
         .route("/boards/:id/card_tags", axum::routing::get(card_tags))
+        .route("/boards/:id/_full", axum::routing::get(full))
 }
 
 async fn list(
@@ -100,4 +107,13 @@ async fn card_tags(
             .map(|(card_id, tag_id)| CardTagLinkDto { card_id, tag_id })
             .collect(),
     ))
+}
+
+async fn full(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Query(q): Query<FullBoardQuery>,
+) -> Result<Json<BoardFullDto>, ApiError> {
+    let snap = BoardRepo::full_with_context(&state.pool, &id, q.include_archived).await?;
+    Ok(Json(BoardFullDto::from(snap)))
 }

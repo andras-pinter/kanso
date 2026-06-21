@@ -3,7 +3,7 @@ pub mod card;
 pub mod column;
 pub mod tag;
 
-pub use board::{BoardPatch, BoardRepo};
+pub use board::{BoardFull, BoardPatch, BoardRepo, CardWithTagIds, ColumnWithCards};
 pub use card::{CardBody, CardPatch, CardRepo, CardSearchHit};
 pub use column::{ColumnPatch, ColumnRepo};
 pub use tag::{TagPatch, TagRepo};

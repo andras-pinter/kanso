@@ -1473,4 +1473,169 @@ mod board_full {
         assert!(full.columns.is_empty());
         assert!(full.tags.is_empty());
     }
+
+    /// Boundary check: 1000 cards must pass; 1001 must 409.
+    #[tokio::test]
+    async fn test_full_with_context_exact_cap_boundary() {
+        let pool = fixture_pool().await;
+        let board = BoardRepo::create(&pool, "Edge").await.unwrap();
+        let col = ColumnRepo::create(&pool, &board.id, "c", None).await.unwrap();
+        let mut tx = pool.begin().await.unwrap();
+        for i in 0..1000 {
+            sqlx::query(
+                "INSERT INTO cards (id, column_id, title, position, created_at, updated_at) \
+                 VALUES (?1, ?2, ?3, ?4, 0, 0)",
+            )
+            .bind(format!("card-{i:04}"))
+            .bind(&col.id)
+            .bind(format!("c{i}"))
+            .bind(format!("{i:05}"))
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+        }
+        tx.commit().await.unwrap();
+
+        let ok = BoardRepo::full_with_context(&pool, &board.id, false)
+            .await
+            .unwrap();
+        assert_eq!(ok.columns[0].cards.len(), 1000);
+
+        sqlx::query(
+            "INSERT INTO cards (id, column_id, title, position, created_at, updated_at) \
+             VALUES ('card-1000', ?1, 'one more', '99999', 0, 0)",
+        )
+        .bind(&col.id)
+        .execute(&pool)
+        .await
+        .unwrap();
+        let err = BoardRepo::full_with_context(&pool, &board.id, false)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, KansoError::Conflict(_)), "got {err:?}");
+    }
+
+    /// Active column whose cards are all archived → column appears with empty
+    /// cards array, not omitted.
+    #[tokio::test]
+    async fn test_full_with_context_active_column_with_only_archived_cards() {
+        let pool = fixture_pool().await;
+        let board = BoardRepo::create(&pool, "B").await.unwrap();
+        let col = ColumnRepo::create(&pool, &board.id, "Active", None).await.unwrap();
+        let c1 = CardRepo::create(&pool, &col.id, "x").await.unwrap();
+        let c2 = CardRepo::create(&pool, &col.id, "y").await.unwrap();
+        CardRepo::archive(&pool, &c1.id).await.unwrap();
+        CardRepo::archive(&pool, &c2.id).await.unwrap();
+
+        let snap = BoardRepo::full_with_context(&pool, &board.id, false)
+            .await
+            .unwrap();
+        assert_eq!(snap.columns.len(), 1);
+        assert_eq!(snap.columns[0].column.id, col.id);
+        assert!(snap.columns[0].cards.is_empty());
+    }
+
+    /// Archived column with active cards → column hidden entirely, cards
+    /// don't leak through a different column's slot.
+    #[tokio::test]
+    async fn test_full_with_context_archived_column_hides_its_cards() {
+        let pool = fixture_pool().await;
+        let board = BoardRepo::create(&pool, "B").await.unwrap();
+        let hidden = ColumnRepo::create(&pool, &board.id, "Hidden", None).await.unwrap();
+        let _live = CardRepo::create(&pool, &hidden.id, "still here").await.unwrap();
+        ColumnRepo::archive(&pool, &hidden.id).await.unwrap();
+
+        let snap = BoardRepo::full_with_context(&pool, &board.id, false)
+            .await
+            .unwrap();
+        assert!(snap.columns.is_empty());
+        let total_cards: usize = snap.columns.iter().map(|c| c.cards.len()).sum();
+        assert_eq!(total_cards, 0);
+    }
+
+    /// 100 visible + 900 archived cards × 15 tags each ≈ 15_000 raw links —
+    /// the unfiltered link query would 409, but the visible-filtered query
+    /// only sees ~1500 and succeeds. Guards #2.
+    #[tokio::test]
+    async fn test_full_with_context_archive_heavy_does_not_trip_link_cap() {
+        let pool = fixture_pool().await;
+        let board = BoardRepo::create(&pool, "Big").await.unwrap();
+        let col = ColumnRepo::create(&pool, &board.id, "c", None).await.unwrap();
+
+        let mut tag_ids = Vec::with_capacity(15);
+        for i in 0..15 {
+            let t = TagRepo::create(&pool, &format!("t{i:02}"), None).await.unwrap();
+            tag_ids.push(t.id);
+        }
+
+        let mut tx = pool.begin().await.unwrap();
+        for i in 0..1000 {
+            let archived = if i < 100 { "NULL" } else { "1" };
+            sqlx::query(&format!(
+                "INSERT INTO cards (id, column_id, title, position, created_at, updated_at, archived_at) \
+                 VALUES (?1, ?2, ?3, ?4, 0, 0, {archived})",
+            ))
+            .bind(format!("card-{i:04}"))
+            .bind(&col.id)
+            .bind(format!("c{i}"))
+            .bind(format!("{i:05}"))
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+            for tid in &tag_ids {
+                sqlx::query(
+                    "INSERT INTO card_tags (card_id, tag_id) VALUES (?1, ?2)",
+                )
+                .bind(format!("card-{i:04}"))
+                .bind(tid)
+                .execute(&mut *tx)
+                .await
+                .unwrap();
+            }
+        }
+        tx.commit().await.unwrap();
+
+        let snap = BoardRepo::full_with_context(&pool, &board.id, false)
+            .await
+            .unwrap();
+        assert_eq!(snap.columns.len(), 1);
+        assert_eq!(snap.columns[0].cards.len(), 100);
+        assert_eq!(snap.tags.len(), 15);
+    }
+
+    /// Archived tag linked from a visible card: hidden from top-level `tags`
+    /// AND stripped from the card's `tag_ids` so no dangling references.
+    #[tokio::test]
+    async fn test_full_with_context_strips_archived_tag_references() {
+        let pool = fixture_pool().await;
+        let board = BoardRepo::create(&pool, "B").await.unwrap();
+        let col = ColumnRepo::create(&pool, &board.id, "c", None).await.unwrap();
+        let card = CardRepo::create(&pool, &col.id, "k").await.unwrap();
+        let active = TagRepo::create(&pool, "active", None).await.unwrap();
+        let ghost = TagRepo::create(&pool, "ghost", None).await.unwrap();
+        CardRepo::add_tag(&pool, &card.id, &active.id).await.unwrap();
+        CardRepo::add_tag(&pool, &card.id, &ghost.id).await.unwrap();
+        TagRepo::archive(&pool, &ghost.id).await.unwrap();
+
+        let filtered = BoardRepo::full_with_context(&pool, &board.id, false)
+            .await
+            .unwrap();
+        assert_eq!(filtered.tags.len(), 1);
+        assert_eq!(filtered.tags[0].id, active.id);
+        assert_eq!(
+            filtered.columns[0].cards[0].tag_ids,
+            vec![active.id.clone()],
+            "archived tag id must be stripped from card.tag_ids"
+        );
+
+        let unfiltered = BoardRepo::full_with_context(&pool, &board.id, true)
+            .await
+            .unwrap();
+        assert_eq!(unfiltered.tags.len(), 2);
+        let mut ids = unfiltered.columns[0].cards[0].tag_ids.clone();
+        ids.sort();
+        let mut expected = vec![active.id.clone(), ghost.id.clone()];
+        expected.sort();
+        assert_eq!(ids, expected);
+    }
 }

@@ -737,10 +737,13 @@ impl CardRepo {
     /// Bounded by a generous 10_000-row hard cap as defense-in-depth — the
     /// link table is naturally tag-density-bounded, but if it ever grows past
     /// that, surface a `Conflict` so the UI can warn instead of OOMing.
-    pub async fn card_tags_for_board(
-        pool: &SqlitePool,
+    pub async fn card_tags_for_board<'e, E>(
+        executor: E,
         board_id: &str,
-    ) -> Result<Vec<(String, String)>> {
+    ) -> Result<Vec<(String, String)>>
+    where
+        E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
+    {
         const HARD_CAP: usize = 10_000;
         let rows: Vec<(String, String)> = sqlx::query_as(
             "SELECT ct.card_id, ct.tag_id FROM card_tags ct \
@@ -753,11 +756,56 @@ impl CardRepo {
         )
         .bind(board_id)
         .bind((HARD_CAP + 1) as i64)
-        .fetch_all(pool)
+        .fetch_all(executor)
         .await?;
         if rows.len() > HARD_CAP {
             return Err(KansoError::Conflict(format!(
                 "board has more than {HARD_CAP} card-tag links; refusing to load"
+            )));
+        }
+        Ok(rows)
+    }
+
+    /// Visible-subset variant of [`card_tags_for_board`]: filters archived
+    /// cards/columns in SQL when `include_archived` is false, so a board with
+    /// a huge archive can't 409 the full-board snapshot before we even reach
+    /// the filter step. Same 10_000-row hard cap for symmetry.
+    pub async fn card_tags_for_board_visible<'e, E>(
+        executor: E,
+        board_id: &str,
+        include_archived: bool,
+    ) -> Result<Vec<(String, String)>>
+    where
+        E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
+    {
+        const HARD_CAP: usize = 10_000;
+        let sql = if include_archived {
+            "SELECT ct.card_id, ct.tag_id FROM card_tags ct \
+             JOIN cards c ON c.id = ct.card_id \
+             JOIN columns col ON col.id = c.column_id \
+             JOIN tags t ON t.id = ct.tag_id \
+             WHERE col.board_id = ?1 \
+             ORDER BY ct.card_id, t.name COLLATE NOCASE ASC, ct.tag_id \
+             LIMIT ?2"
+        } else {
+            "SELECT ct.card_id, ct.tag_id FROM card_tags ct \
+             JOIN cards c ON c.id = ct.card_id \
+             JOIN columns col ON col.id = c.column_id \
+             JOIN tags t ON t.id = ct.tag_id \
+             WHERE col.board_id = ?1 \
+               AND c.archived_at IS NULL \
+               AND col.archived_at IS NULL \
+             ORDER BY ct.card_id, t.name COLLATE NOCASE ASC, ct.tag_id \
+             LIMIT ?2"
+        };
+        let rows: Vec<(String, String)> = sqlx::query_as(sql)
+            .bind(board_id)
+            .bind((HARD_CAP + 1) as i64)
+            .fetch_all(executor)
+            .await?;
+        if rows.len() > HARD_CAP {
+            return Err(KansoError::Conflict(format!(
+                "board has more than {HARD_CAP} visible card-tag links; refusing to load"
             )));
         }
         Ok(rows)

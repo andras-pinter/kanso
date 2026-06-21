@@ -114,7 +114,7 @@ function mockInvoke(path: string | null, hosts: HostInfo[]) {
     if (cmd === 'mcp_server_path') return path as never;
     if (cmd === 'mcp_host_detect') return hosts as never;
     if (cmd === 'cli_ext_set_consent') return {} as never;
-    if (cmd === 'reveal_in_finder') return undefined as never;
+    if (cmd === 'reveal_in_file_manager') return undefined as never;
     throw new Error(`unexpected command: ${cmd}`);
   };
   __setInvoker(invoker);

@@ -80,7 +80,8 @@ fn should_bundle(path: &Path) -> bool {
 }
 
 fn install_mcp_dependencies(staged: &Path) -> io::Result<()> {
-    let status = Command::new("npm")
+    let npm = if cfg!(windows) { "npm.cmd" } else { "npm" };
+    let status = Command::new(npm)
         .args([
             "install",
             "--omit=dev",

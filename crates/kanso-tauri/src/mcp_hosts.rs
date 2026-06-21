@@ -26,7 +26,7 @@ pub enum McpHostError {
     },
     #[error("reveal {path}: {source}")]
     Reveal { path: PathBuf, source: io::Error },
-    #[error("Finder failed to open {path} (status {status})")]
+    #[error("file manager failed to open {path} (status {status})")]
     RevealStatus { path: PathBuf, status: String },
 }
 
@@ -52,15 +52,32 @@ pub fn mcp_server_path_from_app(app: &AppHandle) -> Result<Option<String>, McpHo
     Ok(mcp_server_path(&home))
 }
 
-pub fn reveal_in_finder(path: &Path) -> Result<(), McpHostError> {
-    let status =
-        Command::new("open")
-            .arg(path)
-            .status()
-            .map_err(|source| McpHostError::Reveal {
-                path: path.to_path_buf(),
-                source,
-            })?;
+pub fn reveal_in_file_manager(path: &Path) -> Result<(), McpHostError> {
+    let opener = if cfg!(target_os = "macos") {
+        "open"
+    } else if cfg!(target_os = "windows") {
+        "explorer"
+    } else {
+        "xdg-open"
+    };
+
+    let mut command = Command::new(opener);
+    command.arg(path);
+
+    // explorer.exe returns a non-zero exit code even on success, so treat
+    // a successful spawn as success on Windows.
+    if cfg!(target_os = "windows") {
+        command.spawn().map_err(|source| McpHostError::Reveal {
+            path: path.to_path_buf(),
+            source,
+        })?;
+        return Ok(());
+    }
+
+    let status = command.status().map_err(|source| McpHostError::Reveal {
+        path: path.to_path_buf(),
+        source,
+    })?;
     if status.success() {
         return Ok(());
     }
@@ -72,43 +89,75 @@ pub fn reveal_in_finder(path: &Path) -> Result<(), McpHostError> {
 }
 
 pub fn detect_hosts(home: &Path) -> Vec<HostInfo> {
-    vec![
-        host(
-            home,
-            "claude",
-            "Claude Desktop",
-            &["Library/Application Support/Claude"],
-            Some("claude_desktop_config.json"),
-        ),
-        host(
-            home,
-            "cursor",
-            "Cursor",
-            &["Library/Application Support/Cursor/User", ".cursor"],
-            Some("mcp.json"),
-        ),
-        host(
-            home,
-            "vscode",
-            "VS Code Copilot Chat",
-            &["Library/Application Support/Code/User"],
-            Some("settings.json"),
-        ),
-        host(
-            home,
-            "zed",
-            "Zed",
-            &[".config/zed", "Library/Application Support/Zed"],
-            Some("settings.json"),
-        ),
-        host(
-            home,
-            "cline",
-            "Cline",
-            &["Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings"],
-            Some("cline_mcp_settings.json"),
-        ),
-    ]
+    let mut hosts = vec![
+        host(home, "claude", "Claude Desktop", claude_dirs(), Some("claude_desktop_config.json")),
+        host(home, "cursor", "Cursor", cursor_dirs(), Some("mcp.json")),
+        host(home, "vscode", "VS Code Copilot Chat", vscode_dirs(), Some("settings.json")),
+    ];
+
+    if let Some(dirs) = zed_dirs() {
+        hosts.push(host(home, "zed", "Zed", dirs, Some("settings.json")));
+    }
+
+    hosts.push(host(
+        home,
+        "cline",
+        "Cline",
+        cline_dirs(),
+        Some("cline_mcp_settings.json"),
+    ));
+
+    hosts
+}
+
+fn claude_dirs() -> &'static [&'static str] {
+    if cfg!(target_os = "macos") {
+        &["Library/Application Support/Claude"]
+    } else if cfg!(target_os = "windows") {
+        &["AppData/Roaming/Claude"]
+    } else {
+        &[".config/Claude"]
+    }
+}
+
+fn cursor_dirs() -> &'static [&'static str] {
+    if cfg!(target_os = "macos") {
+        &["Library/Application Support/Cursor/User", ".cursor"]
+    } else if cfg!(target_os = "windows") {
+        &["AppData/Roaming/Cursor/User", ".cursor"]
+    } else {
+        &[".config/Cursor/User", ".cursor"]
+    }
+}
+
+fn vscode_dirs() -> &'static [&'static str] {
+    if cfg!(target_os = "macos") {
+        &["Library/Application Support/Code/User"]
+    } else if cfg!(target_os = "windows") {
+        &["AppData/Roaming/Code/User"]
+    } else {
+        &[".config/Code/User"]
+    }
+}
+
+fn zed_dirs() -> Option<&'static [&'static str]> {
+    if cfg!(target_os = "macos") {
+        Some(&[".config/zed", "Library/Application Support/Zed"])
+    } else if cfg!(target_os = "windows") {
+        None
+    } else {
+        Some(&[".config/zed"])
+    }
+}
+
+fn cline_dirs() -> &'static [&'static str] {
+    if cfg!(target_os = "macos") {
+        &["Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings"]
+    } else if cfg!(target_os = "windows") {
+        &["AppData/Roaming/Code/User/globalStorage/saoudrizwan.claude-dev/settings"]
+    } else {
+        &[".config/Code/User/globalStorage/saoudrizwan.claude-dev/settings"]
+    }
 }
 
 pub fn mcp_server_path(home: &Path) -> Option<String> {
@@ -150,6 +199,7 @@ mod tests {
         hosts.iter().map(|host| (host.id.as_str(), host)).collect()
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn detect_hosts_marks_all_existing_config_dirs_detected() -> Result<(), io::Error> {
         let dir = tempfile::tempdir()?;
@@ -171,16 +221,62 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn detect_hosts_marks_all_existing_config_dirs_detected() -> Result<(), io::Error> {
+        let dir = tempfile::tempdir()?;
+        let home = dir.path();
+        for path in [
+            ".config/Claude",
+            ".config/Cursor/User",
+            ".config/Code/User",
+            ".config/zed",
+            ".config/Code/User/globalStorage/saoudrizwan.claude-dev/settings",
+        ] {
+            fs::create_dir_all(home.join(path))?;
+        }
+
+        let hosts = detect_hosts(home);
+
+        assert_eq!(hosts.len(), 5);
+        assert!(hosts.iter().all(|host| host.detected));
+        Ok(())
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn detect_hosts_marks_all_existing_config_dirs_detected() -> Result<(), io::Error> {
+        let dir = tempfile::tempdir()?;
+        let home = dir.path();
+        for path in [
+            "AppData/Roaming/Claude",
+            "AppData/Roaming/Cursor/User",
+            "AppData/Roaming/Code/User",
+            "AppData/Roaming/Code/User/globalStorage/saoudrizwan.claude-dev/settings",
+        ] {
+            fs::create_dir_all(home.join(path))?;
+        }
+
+        let hosts = detect_hosts(home);
+
+        // Zed is intentionally omitted on Windows.
+        assert_eq!(hosts.len(), 4);
+        assert!(hosts.iter().all(|host| host.detected));
+        Ok(())
+    }
+
     #[test]
     fn detect_hosts_marks_none_detected_when_config_dirs_are_absent() -> Result<(), io::Error> {
         let dir = tempfile::tempdir()?;
         let hosts = detect_hosts(dir.path());
 
-        assert_eq!(hosts.len(), 5);
+        let expected_len = if cfg!(target_os = "windows") { 4 } else { 5 };
+        assert_eq!(hosts.len(), expected_len);
         assert!(hosts.iter().all(|host| !host.detected));
         Ok(())
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn detect_hosts_marks_only_existing_config_dirs_detected() -> Result<(), io::Error> {
         let dir = tempfile::tempdir()?;
@@ -200,6 +296,45 @@ mod tests {
             hosts["zed"].config_dir,
             home.join("Library/Application Support/Zed")
         );
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn detect_hosts_marks_only_existing_config_dirs_detected() -> Result<(), io::Error> {
+        let dir = tempfile::tempdir()?;
+        let home = dir.path();
+        fs::create_dir_all(home.join(".config/Claude"))?;
+        fs::create_dir_all(home.join(".config/zed"))?;
+
+        let detected = detect_hosts(home);
+        let hosts = by_id(&detected);
+
+        assert!(hosts["claude"].detected);
+        assert!(hosts["zed"].detected);
+        assert!(!hosts["cursor"].detected);
+        assert!(!hosts["vscode"].detected);
+        assert!(!hosts["cline"].detected);
+        assert_eq!(hosts["zed"].config_dir, home.join(".config/zed"));
+        Ok(())
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn detect_hosts_marks_only_existing_config_dirs_detected() -> Result<(), io::Error> {
+        let dir = tempfile::tempdir()?;
+        let home = dir.path();
+        fs::create_dir_all(home.join("AppData/Roaming/Claude"))?;
+        fs::create_dir_all(home.join("AppData/Roaming/Cursor/User"))?;
+
+        let detected = detect_hosts(home);
+        let hosts = by_id(&detected);
+
+        assert!(hosts["claude"].detected);
+        assert!(hosts["cursor"].detected);
+        assert!(!hosts["vscode"].detected);
+        assert!(!hosts["cline"].detected);
+        assert!(!hosts.contains_key("zed"));
         Ok(())
     }
 

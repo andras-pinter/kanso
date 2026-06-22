@@ -1665,3 +1665,31 @@ body {
   align-items: center;
   gap: 12px;
 }
+
+/* ---------- Quick-add modal ---------- */
+
+.kanso-modal.kanso-quick-add {
+  width: min(480px, 100%);
+  max-height: 80vh;
+}
+
+.kanso-select {
+  font: inherit;
+  font-size: 14px;
+  color: var(--kanso-fg);
+  padding: 7px 10px;
+  border: 1px solid var(--kanso-border);
+  border-radius: var(--kanso-radius-sm);
+  background: var(--kanso-bg-elevated);
+  transition: border-color 120ms ease;
+}
+
+.kanso-select:focus {
+  outline: none;
+  border-color: var(--kanso-accent);
+}
+
+.kanso-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

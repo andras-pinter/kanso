@@ -26,6 +26,11 @@ bootstrap:
     else \
         echo "skip: ui/package.json not present yet"; \
     fi
+    @if [ -f extensions/package.json ]; then \
+        npm install --prefix extensions; \
+    else \
+        echo "skip: extensions/package.json not present yet"; \
+    fi
     @if [ -f Cargo.toml ]; then \
         cargo fetch; \
     else \

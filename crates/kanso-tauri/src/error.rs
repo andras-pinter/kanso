@@ -23,6 +23,13 @@ impl AppError {
             message: msg.into(),
         }
     }
+
+    pub fn io(msg: impl Into<String>) -> Self {
+        Self {
+            kind: "io",
+            message: msg.into(),
+        }
+    }
 }
 
 impl From<KansoError> for AppError {
@@ -52,6 +59,36 @@ impl From<crate::mcp_hosts::McpHostError> for AppError {
         Self {
             kind: "mcp_host",
             message: e.to_string(),
+        }
+    }
+}
+
+impl From<crate::snapshot::SnapshotError> for AppError {
+    fn from(e: crate::snapshot::SnapshotError) -> Self {
+        match &e {
+            crate::snapshot::SnapshotError::UnsupportedSchemaVersion { .. } => Self {
+                kind: "unsupported_schema_version",
+                message: e.to_string(),
+            },
+            crate::snapshot::SnapshotError::Json(_)
+            | crate::snapshot::SnapshotError::InvalidBase64 { .. } => Self::invalid(e.to_string()),
+            crate::snapshot::SnapshotError::Db(_) => Self {
+                kind: "db",
+                message: e.to_string(),
+            },
+            crate::snapshot::SnapshotError::Core(source) => {
+                let kind = match source {
+                    KansoError::NotFound { .. } => "not_found",
+                    KansoError::InvalidInput(_) => "invalid_input",
+                    KansoError::InvalidMove(_) => "invalid_move",
+                    KansoError::Conflict(_) => "conflict",
+                    KansoError::Db(_) | KansoError::Migrate(_) => "db",
+                };
+                Self {
+                    kind,
+                    message: e.to_string(),
+                }
+            }
         }
     }
 }

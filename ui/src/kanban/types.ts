@@ -100,3 +100,35 @@ export interface AppError {
   kind: string;
   message: string;
 }
+
+export interface SnapshotCardDto {
+  id: string;
+  column_id: string;
+  title: string;
+  body_blocksuite: string | null;
+  body_text: string | null;
+  position: string;
+  due_at: number | null;
+  created_at: number;
+  updated_at: number;
+  archived_at: number | null;
+}
+
+export interface CardTagLinkDto {
+  card_id: string;
+  tag_id: string;
+}
+
+export interface SnapshotDataDto {
+  boards: BoardDto[];
+  columns: ColumnDto[];
+  cards: SnapshotCardDto[];
+  tags: TagDto[];
+  card_tags: CardTagLinkDto[];
+}
+
+export interface SnapshotEnvelopeDto {
+  schema_version: 1;
+  exported_at: string;
+  data: SnapshotDataDto;
+}

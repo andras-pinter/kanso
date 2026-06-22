@@ -14,6 +14,7 @@ import type {
   ColumnMoveArgs,
   ColumnPatch,
   SeedIds,
+  SnapshotEnvelopeDto,
   TagDto,
   TagPatch,
 } from '../types';
@@ -62,6 +63,17 @@ export const mcpServerPath = (): Promise<string | null> => invoker('mcp_server_p
 
 export const revealInFileManager = (path: string): Promise<void> =>
   invoker('reveal_in_file_manager', { path });
+
+export const exportData = (): Promise<SnapshotEnvelopeDto> => invoker('export_data');
+
+export const importData = (jsonString: string): Promise<void> =>
+  invoker('import_data', { jsonString });
+
+export const writeExportFile = (path: string, jsonString: string): Promise<void> =>
+  invoker('write_export_file', { path, jsonString });
+
+export const readImportFile = (path: string): Promise<string> =>
+  invoker('read_import_file', { path });
 
 // ---------- boards ----------
 

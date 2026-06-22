@@ -145,6 +145,15 @@ impl CardRepo {
         Ok(rows)
     }
 
+    pub async fn list_all(pool: &SqlitePool) -> Result<Vec<Card>> {
+        let rows = sqlx::query_as::<_, Card>(
+            "SELECT * FROM cards ORDER BY column_id ASC, position ASC, id ASC",
+        )
+        .fetch_all(pool)
+        .await?;
+        Ok(rows)
+    }
+
     pub async fn list_by_column_paged(
         pool: &SqlitePool,
         column_id: &str,
@@ -808,6 +817,15 @@ impl CardRepo {
                 "board has more than {HARD_CAP} visible card-tag links; refusing to load"
             )));
         }
+        Ok(rows)
+    }
+
+    pub async fn card_tags_all(pool: &SqlitePool) -> Result<Vec<(String, String)>> {
+        let rows = sqlx::query_as(
+            "SELECT card_id, tag_id FROM card_tags ORDER BY card_id ASC, tag_id ASC",
+        )
+        .fetch_all(pool)
+        .await?;
         Ok(rows)
     }
 

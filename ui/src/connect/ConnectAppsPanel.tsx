@@ -1,9 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { disable, enable, isEnabled } from '@tauri-apps/plugin-autostart';
+import { open, save } from '@tauri-apps/plugin-dialog';
 import {
   cliExtSetConsent,
+  exportData,
+  importData,
+  isTauri,
   mcpHostDetect,
   mcpServerPath,
+  readImportFile,
   revealInFileManager,
+  writeExportFile,
   type HostInfo,
 } from '../kanban/api/client';
 import '../kanban/kanban.css';
@@ -162,12 +169,22 @@ function GenericCard({ serverPath }: GenericCardProps) {
   );
 }
 
+function messageFrom(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 export default function ConnectAppsPanel() {
   const [state, setState] = useState<LoadState>('loading');
   const [hosts, setHosts] = useState<HostInfo[]>([]);
   const [serverPath, setServerPath] = useState<string | null>(null);
   const [pendingInstall, setPendingInstall] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [settingsNotice, setSettingsNotice] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [autostartEnabled, setAutostartEnabled] = useState(false);
+  const [autostartPending, setAutostartPending] = useState(false);
 
   const load = useCallback(async () => {
     setState('loading');
@@ -178,8 +195,7 @@ export default function ConnectAppsPanel() {
       setHosts(detectedHosts);
       setState('ready');
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setError(message);
+      setError(messageFrom(err));
       setState('error');
     }
   }, []);
@@ -195,10 +211,26 @@ export default function ConnectAppsPanel() {
       })
       .catch((err: unknown) => {
         if (!alive) return;
-        const message = err instanceof Error ? err.message : String(err);
-        setError(message);
+        setError(messageFrom(err));
         setState('error');
       });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+
+    let alive = true;
+    isEnabled()
+      .then((enabled) => {
+        if (alive) setAutostartEnabled(enabled);
+      })
+      .catch((err: unknown) => {
+        if (alive) setSettingsError(messageFrom(err));
+      });
+
     return () => {
       alive = false;
     };
@@ -213,10 +245,71 @@ export default function ConnectAppsPanel() {
       await cliExtSetConsent(true);
       await load();
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setError(message);
+      setError(messageFrom(err));
     } finally {
       setPendingInstall(false);
+    }
+  };
+
+  const exportJson = async () => {
+    setExporting(true);
+    setSettingsError(null);
+    setSettingsNotice(null);
+    try {
+      const snapshot = await exportData();
+      const path = await save({
+        defaultPath: `kanso-export-${snapshot.exported_at.slice(0, 10)}.json`,
+        filters: [{ name: 'JSON', extensions: ['json'] }],
+      });
+      if (path === null) return;
+      await writeExportFile(path, `${JSON.stringify(snapshot, null, 2)}\n`);
+      setSettingsNotice('Export saved.');
+    } catch (err) {
+      setSettingsError(messageFrom(err));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const importJson = async () => {
+    setImporting(true);
+    setSettingsError(null);
+    setSettingsNotice(null);
+    try {
+      const path = await open({
+        multiple: false,
+        filters: [{ name: 'JSON', extensions: ['json'] }],
+      });
+      if (typeof path !== 'string') return;
+      const confirmed = window.confirm(
+        'Replace all data with imported file? This cannot be undone.'
+      );
+      if (!confirmed) return;
+      const json = await readImportFile(path);
+      await importData(json);
+      setSettingsNotice('Import complete.');
+    } catch (err) {
+      setSettingsError(messageFrom(err));
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const toggleAutostart = async () => {
+    setAutostartPending(true);
+    setSettingsError(null);
+    setSettingsNotice(null);
+    try {
+      if (autostartEnabled) {
+        await disable();
+      } else {
+        await enable();
+      }
+      setAutostartEnabled(await isEnabled());
+    } catch (err) {
+      setSettingsError(messageFrom(err));
+    } finally {
+      setAutostartPending(false);
     }
   };
 
@@ -230,6 +323,49 @@ export default function ConnectAppsPanel() {
             Wire kanso into AI hosts by copying the snippet for each detected app. kanso never
             writes these host configs for you.
           </p>
+        </div>
+      </section>
+
+      <section className="kanso-connect-card kanso-settings-card" aria-labelledby="kanso-settings">
+        <div className="kanso-connect-card-header">
+          <div>
+            <p className="kanso-eyebrow">Settings</p>
+            <h2 id="kanso-settings">Data and startup</h2>
+            <p>Export/import a full JSON snapshot or choose whether kanso starts at login.</p>
+          </div>
+        </div>
+        {settingsError && (
+          <p className="kanso-connect-error" role="alert">
+            {settingsError}
+          </p>
+        )}
+        {settingsNotice && <p className="kanso-settings-notice">{settingsNotice}</p>}
+        <div className="kanso-connect-actions">
+          <button
+            type="button"
+            className="kanso-btn kanso-btn--primary"
+            disabled={exporting}
+            onClick={() => void exportJson()}
+          >
+            {exporting ? 'Exporting…' : 'Export JSON'}
+          </button>
+          <button
+            type="button"
+            className="kanso-btn"
+            disabled={importing}
+            onClick={() => void importJson()}
+          >
+            {importing ? 'Importing…' : 'Import JSON'}
+          </button>
+          <button
+            type="button"
+            className="kanso-btn"
+            disabled={autostartPending}
+            aria-pressed={autostartEnabled}
+            onClick={() => void toggleAutostart()}
+          >
+            {autostartEnabled ? 'Start at login: on' : 'Start at login: off'}
+          </button>
         </div>
       </section>
 

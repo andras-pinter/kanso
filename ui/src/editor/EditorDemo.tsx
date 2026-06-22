@@ -53,7 +53,7 @@ export default function EditorDemo() {
           display: 'flex',
           gap: 8,
           alignItems: 'center',
-          borderBottom: '1px solid #eee',
+          borderBottom: '1px solid var(--kanso-border)',
         }}
       >
         <code>status: {statusLabel}</code>
@@ -61,9 +61,20 @@ export default function EditorDemo() {
           Extract plaintext
         </button>
       </div>
-      <div ref={hostRef} style={{ minHeight: 400, border: '1px solid #ddd' }} />
+      <div
+        ref={hostRef}
+        style={{ minHeight: 400, border: '1px solid var(--kanso-border)' }}
+      />
       {plaintext && (
-        <pre style={{ padding: 8, background: '#f5f5f5', whiteSpace: 'pre-wrap' }}>{plaintext}</pre>
+        <pre
+          style={{
+            padding: 8,
+            background: 'var(--kanso-bg-subtle)',
+            whiteSpace: 'pre-wrap',
+          }}
+        >
+          {plaintext}
+        </pre>
       )}
     </div>
   );

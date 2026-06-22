@@ -23,6 +23,8 @@ import { useKanbanStore } from './hooks/useKanbanStore';
 import { useCmdK } from './hooks/useCmdK';
 import ManageTagsDrawer from './ManageTagsDrawer';
 import SearchPalette from './SearchPalette';
+import QuickAddModal from '../quick-add/QuickAddModal';
+import { useQuickAddOpenEvent } from '../quick-add/useQuickAddOpenEvent';
 import { resolveDragEnd } from './dragEnd';
 import { COLUMN_DRAG_PREFIX, filterCollidersForActive, parseColumnDragId, resolveColumnDragEnd } from './columnDragEnd';
 import type { CardDto } from './types';
@@ -45,8 +47,10 @@ export default function KanbanBoard() {
   const [draggingCardId, setDraggingCardId] = useState<string | null>(null);
   const [manageTagsOpen, setManageTagsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
 
   useCmdK(useCallback(() => setPaletteOpen(true), []));
+  useQuickAddOpenEvent(useCallback(() => setQuickAddOpen(true), []));
 
   useEffect(() => {
     if (!isTauri()) return;
@@ -202,6 +206,7 @@ export default function KanbanBoard() {
       )}
       {manageTagsOpen && <ManageTagsDrawer onClose={() => setManageTagsOpen(false)} />}
       {paletteOpen && <SearchPalette onClose={() => setPaletteOpen(false)} />}
+      {quickAddOpen && <QuickAddModal onClose={() => setQuickAddOpen(false)} />}
       {error && status === 'ready' && (
         <div className="kanso-error" role="status">
           {error}

@@ -9,8 +9,9 @@ use serde::Serialize;
 use sqlx::SqlitePool;
 use tauri::menu::MenuBuilder;
 use tauri::tray::TrayIconBuilder;
-use tauri::{AppHandle, Manager, State, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 
@@ -25,11 +26,25 @@ use ext_install::{CliExtStatus, InstallTarget};
 use mcp_hosts::HostInfo;
 
 const MENU_SHOW: &str = "show";
+const MENU_QUICK_ADD: &str = "quick_add";
 const MENU_REINSTALL_CLI: &str = "reinstall_cli";
 const MENU_REINSTALL_MCP: &str = "reinstall_mcp";
 const MENU_UNINSTALL_CLI: &str = "uninstall_cli";
 const MENU_UNINSTALL_MCP: &str = "uninstall_mcp";
 const MENU_QUIT: &str = "quit";
+
+const QUICK_ADD_EVENT: &str = "quick-add:open";
+
+// CmdOrCtrl+Shift+K — SUPER on macOS, CONTROL elsewhere. Not a `const`
+// because `Shortcut::new` isn't `const fn` in the plugin.
+#[cfg(target_os = "macos")]
+fn quick_add_shortcut() -> Shortcut {
+    Shortcut::new(Some(Modifiers::SHIFT.union(Modifiers::SUPER)), Code::KeyK)
+}
+#[cfg(not(target_os = "macos"))]
+fn quick_add_shortcut() -> Shortcut {
+    Shortcut::new(Some(Modifiers::SHIFT.union(Modifiers::CONTROL)), Code::KeyK)
+}
 
 #[derive(Clone)]
 pub struct RuntimeState {
@@ -108,6 +123,17 @@ fn main() {
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, shortcut, event| {
+                    if event.state() == ShortcutState::Pressed
+                        && shortcut == &quick_add_shortcut()
+                    {
+                        open_quick_add(app);
+                    }
+                })
+                .build(),
+        )
         .setup(|app| {
             let data_dir = app
                 .path()
@@ -144,6 +170,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             });
 
             setup_tray(&handle).map_err(|e| format!("setup tray: {e}"))?;
+            if let Err(e) = handle.global_shortcut().register(quick_add_shortcut()) {
+                tracing::warn!(
+                    error = ?e,
+                    "global shortcut registration failed; quick-add hotkey unavailable",
+                );
+            }
             if let Err(e) = ext_install::auto_upgrade_if_needed(&handle) {
                 show_error(&handle, "Copilot CLI extension", &e.user_message());
                 tracing::warn!(error = ?e, "extension auto-upgrade skipped");
@@ -211,6 +243,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
 fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
     let menu = MenuBuilder::new(app)
+        .text(MENU_QUICK_ADD, "Quick add card…")
+        .separator()
         .text(MENU_SHOW, "Show kanso")
         .separator()
         .text(MENU_REINSTALL_CLI, "Reinstall Copilot CLI extension")
@@ -226,6 +260,7 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
         .menu(&menu)
         .show_menu_on_left_click(true)
         .on_menu_event(|app, event| match event.id().as_ref() {
+            MENU_QUICK_ADD => open_quick_add(app),
             MENU_SHOW => show_main_window(app),
             MENU_REINSTALL_CLI => confirm_and_install(app, InstallTarget::Cli),
             MENU_REINSTALL_MCP => confirm_and_install(app, InstallTarget::Mcp),
@@ -248,6 +283,16 @@ fn show_main_window(app: &AppHandle) {
         if let Err(e) = window.show().and_then(|_| window.set_focus()) {
             tracing::warn!(error = ?e, "show main window failed");
         }
+    }
+}
+
+// Surface the window (it may be hidden in the tray) and tell the frontend to
+// open its quick-add modal. The window-show is best-effort: if focusing
+// fails we still emit so an already-visible window opens the modal.
+fn open_quick_add(app: &AppHandle) {
+    show_main_window(app);
+    if let Err(e) = app.emit(QUICK_ADD_EVENT, ()) {
+        tracing::warn!(error = ?e, "emit quick-add event failed");
     }
 }
 

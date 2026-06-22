@@ -5,6 +5,7 @@ import ManageBoardsDrawer from './kanban/ManageBoardsDrawer';
 import CliExtConsentModal from './CliExtConsentModal';
 import { cliExtStatus, isTauri } from './kanban/api/client';
 import ConnectAppsPanel from './connect/ConnectAppsPanel';
+import ThemeToggle from './theme/ThemeToggle';
 
 const EditorDemo = lazy(() => import('./editor/EditorDemo'));
 
@@ -59,15 +60,18 @@ export default function App() {
             </button>
           </nav>
         </div>
-        {DEBUG_EDITOR && (
-          <button
-            type="button"
-            className="kanso-debug-btn"
-            onClick={() => setShowEditor((v) => !v)}
-          >
-            {showEditor ? 'Hide editor demo' : 'Show editor demo'}
-          </button>
-        )}
+        <div className="kanso-header-actions">
+          <ThemeToggle />
+          {DEBUG_EDITOR && (
+            <button
+              type="button"
+              className="kanso-debug-btn"
+              onClick={() => setShowEditor((v) => !v)}
+            >
+              {showEditor ? 'Hide editor demo' : 'Show editor demo'}
+            </button>
+          )}
+        </div>
       </header>
       {showEditor ? (
         <Suspense fallback={<p>Loading editor…</p>}>

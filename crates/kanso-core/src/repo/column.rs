@@ -84,6 +84,15 @@ impl ColumnRepo {
         Ok(rows)
     }
 
+    pub async fn list_all(pool: &SqlitePool) -> Result<Vec<Column>> {
+        let rows = sqlx::query_as::<_, Column>(
+            "SELECT * FROM columns ORDER BY board_id ASC, position ASC, id ASC",
+        )
+        .fetch_all(pool)
+        .await?;
+        Ok(rows)
+    }
+
     pub async fn list_by_board_paged(
         pool: &SqlitePool,
         board_id: &str,

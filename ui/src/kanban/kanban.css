@@ -705,6 +705,16 @@ body {
   gap: 8px;
 }
 
+.kanso-settings-card {
+  max-width: 960px;
+  margin: 0 auto 20px;
+}
+
+.kanso-settings-notice {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
 .kanso-connect-error {
   color: var(--kanso-danger) !important;
 }

@@ -15,10 +15,13 @@ use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut,
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 
+mod backup;
 mod commands;
 mod error;
 mod ext_install;
 mod mcp_hosts;
+mod snapshot;
+mod time;
 
 use commands::{board as cmd_board, card as cmd_card, column as cmd_column, tag as cmd_tag};
 use error::AppError;
@@ -134,6 +137,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 })
                 .build(),
         )
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .setup(|app| {
             let data_dir = app
                 .path()
@@ -144,6 +151,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
             let db_path = data_dir.join("kanso.db");
             let port_path = data_dir.join("port");
+            if let Err(e) =
+                tauri::async_runtime::block_on(backup::backup_on_launch(&db_path, &data_dir))
+            {
+                tracing::warn!(error = ?e, "launch backup skipped");
+            }
 
             let handle = app.handle().clone();
             let Bootstrap {
@@ -200,6 +212,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             mcp_host_detect,
             mcp_server_path,
             reveal_in_file_manager,
+            snapshot::export_data,
+            snapshot::import_data,
+            snapshot::write_export_file,
+            snapshot::read_import_file,
             cmd_board::boards_list,
             cmd_board::board_create,
             cmd_board::board_update,

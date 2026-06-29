@@ -120,6 +120,16 @@
   --kanso-shadow-drag: 0 8px 24px rgba(0, 0, 0, 0.6);
   --kanso-shadow-drawer: -2px 0 16px rgba(0, 0, 0, 0.5);
   --kanso-shadow-modal: 0 16px 40px rgba(0, 0, 0, 0.7);
+
+  /* Semantic z-index ladder. Order matters more than the raw numbers;
+     each layer must stay above everything that can co-occur beneath it. */
+  --kanso-z-overlay: 2;
+  --kanso-z-popover: 30;
+  --kanso-z-drawer-backdrop: 50;
+  --kanso-z-drawer: 51;
+  --kanso-z-palette: 55;
+  --kanso-z-modal: 60;
+  --kanso-z-shortcuts: 70;
 }
 
 /* System default (no manual override) honors prefers-color-scheme. */
@@ -265,18 +275,18 @@ body {
   color: var(--kanso-fg);
 }
 
-/* ---------- First-launch modal ---------- */
+/* ---------- First-launch alert modal ---------- */
 
-.kanso-modal-backdrop {
+.kanso-alert-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: var(--kanso-z-modal);
   display: grid;
   place-items: center;
   background: var(--kanso-overlay-soft);
 }
 
-.kanso-modal {
+.kanso-alert {
   width: min(420px, calc(100vw - 48px));
   padding: 24px;
   border-radius: var(--kanso-radius-lg);
@@ -285,23 +295,23 @@ body {
   box-shadow: var(--kanso-shadow-drag);
 }
 
-.kanso-modal h2 {
+.kanso-alert h2 {
   margin: 0 0 10px;
   font-size: 18px;
   letter-spacing: -0.02em;
 }
 
-.kanso-modal p {
+.kanso-alert p {
   margin: 0;
   color: var(--kanso-fg-muted);
 }
 
-.kanso-modal-error {
+.kanso-alert-error {
   margin-top: 12px !important;
   color: var(--kanso-danger) !important;
 }
 
-.kanso-modal-actions {
+.kanso-alert-actions {
   display: flex;
   gap: 10px;
   justify-content: flex-end;
@@ -772,7 +782,7 @@ body {
   position: fixed;
   inset: 0;
   background: transparent;
-  z-index: 50;
+  z-index: var(--kanso-z-drawer-backdrop);
 }
 
 .kanso-drawer {
@@ -785,7 +795,7 @@ body {
   border-left: 1px solid var(--kanso-border);
   display: flex;
   flex-direction: column;
-  z-index: 51;
+  z-index: var(--kanso-z-drawer);
   box-shadow: var(--kanso-shadow-drawer);
 }
 
@@ -930,7 +940,7 @@ body {
   align-items: center;
   justify-content: center;
   padding: 16px;
-  z-index: 60;
+  z-index: var(--kanso-z-modal);
 }
 
 .kanso-modal {
@@ -1040,7 +1050,7 @@ body {
   border-radius: var(--kanso-radius-md);
   box-shadow: var(--kanso-shadow-card-hover);
   padding: 4px;
-  z-index: 60;
+  z-index: var(--kanso-z-popover);
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -1264,7 +1274,7 @@ body {
   position: absolute;
   top: 0;
   right: 0;
-  z-index: 2;
+  z-index: var(--kanso-z-overlay);
 }
 
 .kanso-toggle {
@@ -1458,7 +1468,7 @@ body {
 }
 .kanso-tag-popover {
   position: absolute;
-  z-index: 30;
+  z-index: var(--kanso-z-popover);
   margin-top: 6px;
   background: var(--kanso-bg-elevated);
   border: 1px solid var(--kanso-border);
@@ -1577,7 +1587,7 @@ body {
   align-items: flex-start;
   justify-content: center;
   padding-top: 20vh;
-  z-index: 50;
+  z-index: var(--kanso-z-palette);
 }
 .kanso-palette {
   width: 600px;

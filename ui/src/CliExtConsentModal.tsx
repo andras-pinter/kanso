@@ -24,9 +24,9 @@ export default function CliExtConsentModal({ onDone }: Props) {
   };
 
   return (
-    <div className="kanso-modal-backdrop">
+    <div className="kanso-alert-backdrop">
       <section
-        className="kanso-modal"
+        className="kanso-alert"
         role="dialog"
         aria-modal="true"
         aria-labelledby="kanso-cli-ext-title"
@@ -36,8 +36,8 @@ export default function CliExtConsentModal({ onDone }: Props) {
           kanso can install its Copilot CLI extension and MCP server so assistants can read and
           update your local boards while the app is running.
         </p>
-        {error && <p className="kanso-modal-error">{error}</p>}
-        <div className="kanso-modal-actions">
+        {error && <p className="kanso-alert-error">{error}</p>}
+        <div className="kanso-alert-actions">
           <button
             type="button"
             className="kanso-primary-btn"

@@ -82,6 +82,21 @@ lifted to `#5b8cff` for AA contrast on dark surfaces.
 Shadows are theme-aware (heavier in dark mode). Five named depths:
 `card` (resting), `card-hover`, `drag`, `drawer`, `modal`. Never inline.
 
+### Z-index scale
+
+Semantic ladder defined as CSS custom properties on `:root`. Never use
+raw z-index numbers in component styles.
+
+| Token | Value | Use |
+|---|---|---|
+| `--kanso-z-overlay` | 2 | in-card absolutely-positioned affordances |
+| `--kanso-z-popover` | 30 | tag picker, board switcher menu |
+| `--kanso-z-drawer-backdrop` | 50 | dim layer behind drawers |
+| `--kanso-z-drawer` | 51 | drawer surface (Manage tags / boards) |
+| `--kanso-z-palette` | 55 | ⌘K search palette |
+| `--kanso-z-modal` | 60 | modal backdrop + content (card detail, alerts) |
+| `--kanso-z-shortcuts` | 70 | global keyboard shortcuts overlay |
+
 ## Layout
 
 - **App shell:** `flex column`, `height: 100vh`, `overflow: hidden`.

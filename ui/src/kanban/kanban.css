@@ -568,6 +568,35 @@ body {
   border-color: var(--kanso-danger);
 }
 
+.kanso-btn--icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.kanso-btn--icon svg {
+  color: var(--kanso-fg-muted);
+  flex-shrink: 0;
+}
+
+.kanso-btn--icon:hover svg {
+  color: var(--kanso-fg);
+}
+
+.kanso-kbd {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  margin-left: 2px;
+  border: 1px solid var(--kanso-border);
+  border-radius: var(--kanso-radius-sm);
+  background: var(--kanso-bg-subtle);
+  color: var(--kanso-fg-subtle);
+  font-family: var(--kanso-font);
+  font-size: 10px;
+  line-height: 1.2;
+}
+
 /* ---------- Error toast ---------- */
 
 .kanso-error {

@@ -2,6 +2,7 @@
 // card and column drags — they're disambiguated by the active id prefix
 // (`col:` for columns).
 
+import { Search, Tag } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   DndContext,
@@ -152,19 +153,22 @@ export default function KanbanBoard() {
         </label>
         <button
           type="button"
-          className="kanso-btn"
+          className="kanso-btn kanso-btn--icon"
           onClick={() => setManageTagsOpen(true)}
           title="Manage tags"
         >
-          🏷 Manage tags
+          <Tag size={14} aria-hidden="true" />
+          <span>Manage tags</span>
         </button>
         <button
           type="button"
-          className="kanso-btn"
+          className="kanso-btn kanso-btn--icon"
           onClick={() => setPaletteOpen(true)}
           title="Search (⌘K)"
         >
-          🔍 Search
+          <Search size={14} aria-hidden="true" />
+          <span>Search</span>
+          <kbd className="kanso-kbd">⌘K</kbd>
         </button>
       </div>
       <DndContext

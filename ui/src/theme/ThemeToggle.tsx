@@ -1,9 +1,10 @@
+import { Moon, Monitor, Sun, type LucideIcon } from 'lucide-react';
 import { useTheme, type ThemePreference } from './useTheme';
 
-const OPTIONS: ReadonlyArray<{ value: ThemePreference; label: string; icon: string }> = [
-  { value: 'light', label: 'Light', icon: '☀' },
-  { value: 'system', label: 'System', icon: '⌂' },
-  { value: 'dark', label: 'Dark', icon: '☾' },
+const OPTIONS: ReadonlyArray<{ value: ThemePreference; label: string; Icon: LucideIcon }> = [
+  { value: 'light', label: 'Light', Icon: Sun },
+  { value: 'system', label: 'System', Icon: Monitor },
+  { value: 'dark', label: 'Dark', Icon: Moon },
 ];
 
 export default function ThemeToggle() {
@@ -11,19 +12,19 @@ export default function ThemeToggle() {
 
   return (
     <div className="kanso-theme-toggle" role="group" aria-label="Theme">
-      {OPTIONS.map((opt) => {
-        const active = preference === opt.value;
+      {OPTIONS.map(({ value, label, Icon }) => {
+        const active = preference === value;
         return (
           <button
-            key={opt.value}
+            key={value}
             type="button"
             className={`kanso-theme-btn${active ? ' kanso-theme-btn--active' : ''}`}
             aria-pressed={active}
-            aria-label={`${opt.label} theme`}
-            title={`${opt.label} theme`}
-            onClick={() => setPreference(opt.value)}
+            aria-label={`${label} theme`}
+            title={`${label} theme`}
+            onClick={() => setPreference(value)}
           >
-            <span aria-hidden="true">{opt.icon}</span>
+            <Icon size={14} aria-hidden="true" />
           </button>
         );
       })}

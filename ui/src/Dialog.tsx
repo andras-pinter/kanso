@@ -15,14 +15,17 @@ interface ShellProps {
 function DialogShell({ open, labelledBy, onCancel, children }: ShellProps) {
   useEffect(() => {
     if (!open) return;
+    // Capture phase + stopImmediatePropagation: we run before any
+    // ancestor drawer's bubble-phase Esc handler and prevent it from
+    // firing, so closing a nested confirm doesn't also close its drawer.
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        e.stopPropagation();
+        e.stopImmediatePropagation();
         onCancel();
       }
     };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
   }, [open, onCancel]);
 
   if (!open) return null;

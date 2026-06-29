@@ -51,12 +51,12 @@ export default function ShortcutsOverlay({ open, onClose }: Props) {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        e.stopPropagation();
+        e.stopImmediatePropagation();
         onClose();
       }
     };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
   }, [open, onClose]);
 
   if (!open) return null;

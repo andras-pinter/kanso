@@ -16,6 +16,7 @@ export function useShortcutsHotkey(onToggle: () => void): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== '?') return;
+      if (e.repeat) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (isEditableTarget(e.target)) return;
       e.preventDefault();

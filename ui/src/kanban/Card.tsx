@@ -33,6 +33,8 @@ export default function Card({ card }: Props) {
     .filter(Boolean)
     .join(' ');
 
+  const { onKeyDown: dndKeyDown, ...dragListeners } = listeners ?? {};
+
   return (
     <div
       ref={setNodeRef}
@@ -44,7 +46,7 @@ export default function Card({ card }: Props) {
       aria-label={card.title}
       aria-keyshortcuts="Space Enter Escape"
       {...attributes}
-      {...listeners}
+      {...dragListeners}
       onClick={(e) => {
         if (isDragging) return;
         e.stopPropagation();
@@ -55,7 +57,10 @@ export default function Card({ card }: Props) {
           e.preventDefault();
           e.stopPropagation();
           selectCard(card.id);
+          return;
         }
+        // Hand everything else (Space-to-drag, arrows) to dnd-kit.
+        dndKeyDown?.(e);
       }}
     >
       <GripVertical

@@ -1123,6 +1123,12 @@ body {
   align-items: center;
 }
 
+.kanso-modal-error {
+  margin: 12px 0 0;
+  color: var(--kanso-danger);
+  font-size: 13px;
+}
+
 /* ---------- Board switcher ---------- */
 
 .kanso-switcher-root {

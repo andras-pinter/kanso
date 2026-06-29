@@ -615,15 +615,6 @@ body {
   color: var(--kanso-fg-muted);
 }
 
-.kanso-eyebrow {
-  margin: 0 0 6px !important;
-  color: var(--kanso-fg-subtle) !important;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
 .kanso-connect-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
@@ -753,11 +744,9 @@ body {
 
 .kanso-drawer-title {
   margin: 0;
-  font-size: 11px;
+  font-size: 15px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--kanso-fg-subtle);
+  color: var(--kanso-fg);
 }
 
 .kanso-saved-pill {
@@ -791,11 +780,9 @@ body {
 }
 
 .kanso-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--kanso-fg-subtle);
+  color: var(--kanso-fg-muted);
 }
 
 .kanso-title-input {
@@ -913,11 +900,9 @@ body {
 
 .kanso-modal-title {
   margin: 0;
-  font-size: 11px;
+  font-size: 15px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--kanso-fg-subtle);
+  color: var(--kanso-fg);
 }
 
 .kanso-modal-body {
@@ -1154,12 +1139,10 @@ body {
   opacity: 0.7;
 }
 
-.kanso-eyebrow {
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--kanso-fg-subtle);
+.kanso-column-archived-tag {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--kanso-fg-muted);
   margin-right: auto;
 }
 

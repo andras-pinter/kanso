@@ -99,7 +99,7 @@ export default function Column({ column, cards }: Props) {
         {...attributes}
         {...(isArchived ? {} : listeners)}
       >
-        {isArchived && <span className="kanso-eyebrow">Archived</span>}
+        {isArchived && <span className="kanso-column-archived-tag">Archived</span>}
         {renaming ? (
           <input
             ref={inputRef}

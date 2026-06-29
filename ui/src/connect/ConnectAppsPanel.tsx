@@ -317,7 +317,6 @@ export default function ConnectAppsPanel() {
     <main className="kanso-connect">
       <section className="kanso-connect-hero">
         <div>
-          <p className="kanso-eyebrow">MCP</p>
           <h1>Connect Apps</h1>
           <p>
             Wire kanso into AI hosts by copying the snippet for each detected app. kanso never
@@ -329,7 +328,6 @@ export default function ConnectAppsPanel() {
       <section className="kanso-connect-card kanso-settings-card" aria-labelledby="kanso-settings">
         <div className="kanso-connect-card-header">
           <div>
-            <p className="kanso-eyebrow">Settings</p>
             <h2 id="kanso-settings">Data and startup</h2>
             <p>Export/import a full JSON snapshot or choose whether kanso starts at login.</p>
           </div>

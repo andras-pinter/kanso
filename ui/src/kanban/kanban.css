@@ -421,6 +421,7 @@ body {
 /* ---------- Card ---------- */
 
 .kanso-card {
+  position: relative;
   background: var(--kanso-bg-elevated);
   border: 1px solid var(--kanso-border);
   border-radius: var(--kanso-radius-md);
@@ -431,6 +432,32 @@ body {
   transition:
     border-color 120ms ease,
     box-shadow 120ms ease;
+}
+
+.kanso-card:focus {
+  outline: none;
+}
+
+.kanso-card:focus-visible {
+  outline: none;
+  border-color: var(--kanso-accent);
+  box-shadow: 0 0 0 3px var(--kanso-accent-ring);
+}
+
+.kanso-card-grip {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  color: var(--kanso-fg-subtle);
+  opacity: 0;
+  transition: opacity 120ms ease;
+  pointer-events: none;
+}
+
+.kanso-card:hover .kanso-card-grip,
+.kanso-card:focus-visible .kanso-card-grip,
+.kanso-card--selected .kanso-card-grip {
+  opacity: 0.6;
 }
 
 .kanso-card:hover {
@@ -1537,9 +1564,8 @@ body {
   line-height: 1.4;
 }
 .kanso-due-badge--overdue {
-  background: var(--kanso-accent-bg);
-  color: var(--kanso-danger);
   background: var(--kanso-danger-bg);
+  color: var(--kanso-danger);
 }
 
 /* Cmd+K search palette */
@@ -1714,4 +1740,18 @@ body {
 .kanso-select:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* Respect users who prefer reduced motion.
+   Strips transitions and animations across the UI while preserving
+   instant state changes (focus rings, hover backgrounds, dnd-kit drops). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }

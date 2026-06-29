@@ -120,6 +120,16 @@
   --kanso-shadow-drag: 0 8px 24px rgba(0, 0, 0, 0.6);
   --kanso-shadow-drawer: -2px 0 16px rgba(0, 0, 0, 0.5);
   --kanso-shadow-modal: 0 16px 40px rgba(0, 0, 0, 0.7);
+
+  /* Semantic z-index ladder. Order matters more than the raw numbers;
+     each layer must stay above everything that can co-occur beneath it. */
+  --kanso-z-overlay: 2;
+  --kanso-z-popover: 30;
+  --kanso-z-drawer-backdrop: 50;
+  --kanso-z-drawer: 51;
+  --kanso-z-palette: 55;
+  --kanso-z-modal: 60;
+  --kanso-z-shortcuts: 70;
 }
 
 /* System default (no manual override) honors prefers-color-scheme. */
@@ -265,18 +275,18 @@ body {
   color: var(--kanso-fg);
 }
 
-/* ---------- First-launch modal ---------- */
+/* ---------- First-launch alert modal ---------- */
 
-.kanso-modal-backdrop {
+.kanso-alert-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: var(--kanso-z-modal);
   display: grid;
   place-items: center;
   background: var(--kanso-overlay-soft);
 }
 
-.kanso-modal {
+.kanso-alert {
   width: min(420px, calc(100vw - 48px));
   padding: 24px;
   border-radius: var(--kanso-radius-lg);
@@ -285,23 +295,23 @@ body {
   box-shadow: var(--kanso-shadow-drag);
 }
 
-.kanso-modal h2 {
+.kanso-alert h2 {
   margin: 0 0 10px;
   font-size: 18px;
   letter-spacing: -0.02em;
 }
 
-.kanso-modal p {
+.kanso-alert p {
   margin: 0;
   color: var(--kanso-fg-muted);
 }
 
-.kanso-modal-error {
+.kanso-alert-error {
   margin-top: 12px !important;
   color: var(--kanso-danger) !important;
 }
 
-.kanso-modal-actions {
+.kanso-alert-actions {
   display: flex;
   gap: 10px;
   justify-content: flex-end;
@@ -333,6 +343,30 @@ body {
 .kanso-secondary-btn:disabled {
   cursor: default;
   opacity: 0.65;
+}
+
+.kanso-primary-btn--danger {
+  border-color: var(--kanso-danger);
+  background: var(--kanso-danger);
+  color: var(--kanso-fg-on-accent);
+}
+
+.kanso-dialog-input {
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--kanso-border);
+  border-radius: var(--kanso-radius-sm);
+  background: var(--kanso-bg-elevated);
+  color: var(--kanso-fg);
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.kanso-dialog-input:focus {
+  outline: none;
+  border-color: var(--kanso-accent);
+  box-shadow: 0 0 0 3px var(--kanso-accent-ring);
 }
 
 /* ---------- Board ---------- */
@@ -421,6 +455,7 @@ body {
 /* ---------- Card ---------- */
 
 .kanso-card {
+  position: relative;
   background: var(--kanso-bg-elevated);
   border: 1px solid var(--kanso-border);
   border-radius: var(--kanso-radius-md);
@@ -431,6 +466,32 @@ body {
   transition:
     border-color 120ms ease,
     box-shadow 120ms ease;
+}
+
+.kanso-card:focus {
+  outline: none;
+}
+
+.kanso-card:focus-visible {
+  outline: none;
+  border-color: var(--kanso-accent);
+  box-shadow: 0 0 0 3px var(--kanso-accent-ring);
+}
+
+.kanso-card-grip {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  color: var(--kanso-fg-subtle);
+  opacity: 0;
+  transition: opacity 120ms ease;
+  pointer-events: none;
+}
+
+.kanso-card:hover .kanso-card-grip,
+.kanso-card:focus-visible .kanso-card-grip,
+.kanso-card--selected .kanso-card-grip {
+  opacity: 0.6;
 }
 
 .kanso-card:hover {
@@ -568,6 +629,146 @@ body {
   border-color: var(--kanso-danger);
 }
 
+.kanso-btn--icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.kanso-btn--icon svg {
+  color: var(--kanso-fg-muted);
+  flex-shrink: 0;
+}
+
+.kanso-btn--icon:hover svg {
+  color: var(--kanso-fg);
+}
+
+.kanso-kbd {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  margin-left: 2px;
+  border: 1px solid var(--kanso-border);
+  border-radius: var(--kanso-radius-sm);
+  background: var(--kanso-bg-subtle);
+  color: var(--kanso-fg-subtle);
+  font-family: var(--kanso-font);
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.kanso-kbd--lg {
+  padding: 3px 8px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--kanso-fg);
+  background: var(--kanso-bg-elevated);
+  border-color: var(--kanso-border-strong);
+  box-shadow: inset 0 -1px 0 var(--kanso-border);
+}
+
+/* ---------- Shortcuts overlay ---------- */
+
+.kanso-shortcuts-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--kanso-z-shortcuts);
+  background: var(--kanso-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: kanso-fade-in 120ms ease-out;
+}
+
+.kanso-shortcuts {
+  background: var(--kanso-bg-elevated);
+  color: var(--kanso-fg);
+  border-radius: var(--kanso-radius-lg);
+  box-shadow: var(--kanso-shadow-modal);
+  width: min(560px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 24px 28px 20px;
+}
+
+.kanso-shortcuts-header {
+  margin-bottom: 18px;
+}
+
+.kanso-shortcuts-header h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.kanso-shortcuts-header p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--kanso-fg-muted);
+}
+
+.kanso-shortcuts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px 28px;
+}
+
+.kanso-shortcuts-group h3 {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--kanso-fg-muted);
+}
+
+.kanso-shortcuts-group dl {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kanso-shortcuts-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.kanso-shortcuts-row dt {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.kanso-shortcuts-row dd {
+  margin: 0;
+  font-size: 13px;
+  color: var(--kanso-fg);
+  text-align: right;
+}
+
+.kanso-shortcuts-sep {
+  margin: 0 4px;
+  color: var(--kanso-fg-subtle);
+  font-size: 11px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kanso-shortcuts-backdrop {
+    animation: none;
+  }
+}
+
+@keyframes kanso-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
 /* ---------- Error toast ---------- */
 
 .kanso-error {
@@ -613,15 +814,6 @@ body {
   max-width: 640px;
   margin: 0;
   color: var(--kanso-fg-muted);
-}
-
-.kanso-eyebrow {
-  margin: 0 0 6px !important;
-  color: var(--kanso-fg-subtle) !important;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .kanso-connect-grid {
@@ -725,7 +917,7 @@ body {
   position: fixed;
   inset: 0;
   background: transparent;
-  z-index: 50;
+  z-index: var(--kanso-z-drawer-backdrop);
 }
 
 .kanso-drawer {
@@ -738,7 +930,7 @@ body {
   border-left: 1px solid var(--kanso-border);
   display: flex;
   flex-direction: column;
-  z-index: 51;
+  z-index: var(--kanso-z-drawer);
   box-shadow: var(--kanso-shadow-drawer);
 }
 
@@ -753,11 +945,9 @@ body {
 
 .kanso-drawer-title {
   margin: 0;
-  font-size: 11px;
+  font-size: 15px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--kanso-fg-subtle);
+  color: var(--kanso-fg);
 }
 
 .kanso-saved-pill {
@@ -791,11 +981,9 @@ body {
 }
 
 .kanso-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--kanso-fg-subtle);
+  color: var(--kanso-fg-muted);
 }
 
 .kanso-title-input {
@@ -887,7 +1075,7 @@ body {
   align-items: center;
   justify-content: center;
   padding: 16px;
-  z-index: 60;
+  z-index: var(--kanso-z-modal);
 }
 
 .kanso-modal {
@@ -913,11 +1101,9 @@ body {
 
 .kanso-modal-title {
   margin: 0;
-  font-size: 11px;
+  font-size: 15px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--kanso-fg-subtle);
+  color: var(--kanso-fg);
 }
 
 .kanso-modal-body {
@@ -935,6 +1121,12 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.kanso-modal-error {
+  margin: 12px 0 0;
+  color: var(--kanso-danger);
+  font-size: 13px;
 }
 
 /* ---------- Board switcher ---------- */
@@ -999,7 +1191,7 @@ body {
   border-radius: var(--kanso-radius-md);
   box-shadow: var(--kanso-shadow-card-hover);
   padding: 4px;
-  z-index: 60;
+  z-index: var(--kanso-z-popover);
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -1154,12 +1346,10 @@ body {
   opacity: 0.7;
 }
 
-.kanso-eyebrow {
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--kanso-fg-subtle);
+.kanso-column-archived-tag {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--kanso-fg-muted);
   margin-right: auto;
 }
 
@@ -1225,7 +1415,7 @@ body {
   position: absolute;
   top: 0;
   right: 0;
-  z-index: 2;
+  z-index: var(--kanso-z-overlay);
 }
 
 .kanso-toggle {
@@ -1419,7 +1609,7 @@ body {
 }
 .kanso-tag-popover {
   position: absolute;
-  z-index: 30;
+  z-index: var(--kanso-z-popover);
   margin-top: 6px;
   background: var(--kanso-bg-elevated);
   border: 1px solid var(--kanso-border);
@@ -1525,9 +1715,8 @@ body {
   line-height: 1.4;
 }
 .kanso-due-badge--overdue {
-  background: var(--kanso-accent-bg);
-  color: var(--kanso-danger);
   background: var(--kanso-danger-bg);
+  color: var(--kanso-danger);
 }
 
 /* Cmd+K search palette */
@@ -1539,7 +1728,7 @@ body {
   align-items: flex-start;
   justify-content: center;
   padding-top: 20vh;
-  z-index: 50;
+  z-index: var(--kanso-z-palette);
 }
 .kanso-palette {
   width: 600px;
@@ -1702,4 +1891,18 @@ body {
 .kanso-select:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* Respect users who prefer reduced motion.
+   Strips transitions and animations across the UI while preserving
+   instant state changes (focus rings, hover backgrounds, dnd-kit drops). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -3,6 +3,11 @@ name = "kanso-tauri"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+# build.rs stages extensions/ (with a real npm install) into
+# resources/extensions/. Keep cargo's package-fingerprint scanner out
+# of there so it doesn't race with the build script mutating
+# node_modules and bail with `failed to read directory`.
+exclude = ["resources/**"]
 
 [lints]
 workspace = true

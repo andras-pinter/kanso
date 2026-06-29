@@ -3,6 +3,8 @@
 // UTC midnight millis value, and the overdue check uses UTC midnight today
 // so the same date renders the same label everywhere.
 
+import { AlertTriangle, Calendar } from 'lucide-react';
+
 interface Props {
   dueAt: number;
 }
@@ -33,9 +35,11 @@ export default function DueBadge({ dueAt }: Props) {
   const cls = overdue ? 'kanso-due-badge kanso-due-badge--overdue' : 'kanso-due-badge';
   const label = formatLabel(dueAt);
   const title = new Date(dueAt).toLocaleDateString(undefined, { timeZone: 'UTC' });
+  const Icon = overdue ? AlertTriangle : Calendar;
   return (
-    <span className={cls} title={title} aria-label={`Due ${label}`}>
-      📅 {label}
+    <span className={cls} title={title} aria-label={overdue ? `Overdue, due ${label}` : `Due ${label}`}>
+      <Icon size={11} aria-hidden="true" />
+      {label}
     </span>
   );
 }

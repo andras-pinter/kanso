@@ -162,21 +162,21 @@ describe('ConnectAppsPanel', () => {
 
   it('confirms before importing and sends the picked JSON to IPC', async () => {
     const calls = mockInvoke(serverPath, []);
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
     dialog.open.mockResolvedValue('/tmp/kanso-import.json');
 
     render(<ConnectAppsPanel />);
     await screen.findByText('Data and startup');
     fireEvent.click(screen.getByText('Import JSON'));
 
+    // Confirm the destructive import dialog.
+    const replaceBtn = await screen.findByRole('button', { name: 'Replace' });
+    fireEvent.click(replaceBtn);
+
     await waitFor(() =>
       expect(calls).toContainEqual({
         cmd: 'import_data',
         args: { jsonString: '{"schema_version":1}' },
       })
-    );
-    expect(confirm).toHaveBeenCalledWith(
-      'Replace all data with imported file? This cannot be undone.'
     );
     expect(calls).toContainEqual({
       cmd: 'read_import_file',

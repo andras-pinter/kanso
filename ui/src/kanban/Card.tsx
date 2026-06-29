@@ -1,3 +1,4 @@
+import { GripVertical } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { CardDto } from './types';
@@ -32,20 +33,41 @@ export default function Card({ card }: Props) {
     .filter(Boolean)
     .join(' ');
 
+  const { onKeyDown: dndKeyDown, ...dragListeners } = listeners ?? {};
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       className={cls}
+      tabIndex={0}
+      role="button"
+      aria-roledescription="Draggable card"
+      aria-label={card.title}
+      aria-keyshortcuts="Space Enter Escape"
       {...attributes}
-      {...listeners}
+      {...dragListeners}
       onClick={(e) => {
-        // Suppress click triggered at drag-end (no movement = click).
         if (isDragging) return;
         e.stopPropagation();
         selectCard(card.id);
       }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          e.stopPropagation();
+          selectCard(card.id);
+          return;
+        }
+        // Hand everything else (Space-to-drag, arrows) to dnd-kit.
+        dndKeyDown?.(e);
+      }}
     >
+      <GripVertical
+        size={14}
+        aria-hidden="true"
+        className="kanso-card-grip"
+      />
       <div className="kanso-card-title">{card.title}</div>
       {firstBodyLine && <div className="kanso-card-body">{firstBodyLine}</div>}
       <TagChips cardId={card.id} />

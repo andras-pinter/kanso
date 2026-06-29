@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import ColorPicker from './ColorPicker';
 import { useKanbanStore } from './hooks/useKanbanStore';
 import type { TagDto } from './types';
+import { ConfirmDialog, PromptDialog } from '../Dialog';
 
 interface Props {
   onClose: () => void;
@@ -20,6 +21,8 @@ export default function ManageTagsDrawer({ onClose }: Props) {
   const tagDelete = useKanbanStore((s) => s.tagDelete);
   const tagCreate = useKanbanStore((s) => s.tagCreate);
   const [showArchived, setShowArchived] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<{ tag: TagDto; archived: boolean } | null>(null);
 
   useEffect(() => {
     if (!tagsLoaded) void loadTags();
@@ -36,11 +39,6 @@ export default function ManageTagsDrawer({ onClose }: Props) {
   const live = tags.filter((t) => t.archived_at === null);
   const archived = tags.filter((t) => t.archived_at !== null);
 
-  const onCreate = () => {
-    const name = window.prompt('Tag name');
-    if (name && name.trim()) void tagCreate(name.trim());
-  };
-
   return (
     <>
       <div
@@ -52,7 +50,7 @@ export default function ManageTagsDrawer({ onClose }: Props) {
       <aside className="kanso-drawer" aria-label="Manage tags">
         <header className="kanso-drawer-header">
           <h3 className="kanso-drawer-title">Tags</h3>
-          <button type="button" className="kanso-btn" onClick={onCreate}>
+          <button type="button" className="kanso-btn" onClick={() => setCreateOpen(true)}>
             + New
           </button>
           <button type="button" className="kanso-btn" onClick={onClose}>
@@ -70,11 +68,7 @@ export default function ManageTagsDrawer({ onClose }: Props) {
                 onRename={(name) => void tagUpdate(t.id, { name })}
                 onColor={(c) => void tagUpdate(t.id, { color: c })}
                 onArchive={() => void tagArchive(t.id)}
-                onDelete={() => {
-                  if (window.confirm(`Delete tag "${t.name}"? This removes it from all cards.`)) {
-                    void tagDelete(t.id);
-                  }
-                }}
+                onDelete={() => setPendingDelete({ tag: t, archived: false })}
               />
             ))}
           </section>
@@ -96,16 +90,41 @@ export default function ManageTagsDrawer({ onClose }: Props) {
                   onRename={(name) => void tagUpdate(t.id, { name })}
                   onColor={(c) => void tagUpdate(t.id, { color: c })}
                   onUnarchive={() => void tagUnarchive(t.id)}
-                  onDelete={() => {
-                    if (window.confirm(`Delete tag "${t.name}"? This can't be undone.`)) {
-                      void tagDelete(t.id);
-                    }
-                  }}
+                  onDelete={() => setPendingDelete({ tag: t, archived: true })}
                 />
               ))}
           </section>
         </div>
       </aside>
+      <PromptDialog
+        open={createOpen}
+        title="New tag"
+        label="Tag name"
+        submitLabel="Create"
+        onSubmit={(name) => {
+          setCreateOpen(false);
+          void tagCreate(name);
+        }}
+        onCancel={() => setCreateOpen(false)}
+      />
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Delete tag"
+        message={
+          pendingDelete
+            ? pendingDelete.archived
+              ? `Delete tag "${pendingDelete.tag.name}"? This can't be undone.`
+              : `Delete tag "${pendingDelete.tag.name}"? This removes it from all cards.`
+            : ''
+        }
+        confirmLabel="Delete"
+        destructive
+        onConfirm={() => {
+          if (pendingDelete) void tagDelete(pendingDelete.tag.id);
+          setPendingDelete(null);
+        }}
+        onCancel={() => setPendingDelete(null)}
+      />
     </>
   );
 }

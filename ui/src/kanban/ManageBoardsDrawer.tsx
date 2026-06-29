@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import ColorPicker from './ColorPicker';
 import { useKanbanStore } from './hooks/useKanbanStore';
 import type { BoardDto } from './types';
+import { ConfirmDialog } from '../Dialog';
 
 interface Props {
   onClose: () => void;
@@ -19,6 +20,7 @@ export default function ManageBoardsDrawer({ onClose }: Props) {
   const unarchive = useKanbanStore((s) => s.boardUnarchive);
   const remove = useKanbanStore((s) => s.boardDelete);
   const [showArchived, setShowArchived] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<BoardDto | null>(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -59,11 +61,7 @@ export default function ManageBoardsDrawer({ onClose }: Props) {
                 onRename={(name) => void rename(b.id, name)}
                 onColor={(c) => void setColor(b.id, c)}
                 onArchive={() => void archive(b.id)}
-                onDelete={() => {
-                  if (window.confirm(`Delete board "${b.name}" and all its data? This can't be undone.`)) {
-                    void remove(b.id);
-                  }
-                }}
+                onDelete={() => setPendingDelete(b)}
               />
             ))}
           </section>
@@ -85,16 +83,28 @@ export default function ManageBoardsDrawer({ onClose }: Props) {
                   onRename={(name) => void rename(b.id, name)}
                   onColor={(c) => void setColor(b.id, c)}
                   onUnarchive={() => void unarchive(b.id)}
-                  onDelete={() => {
-                    if (window.confirm(`Delete board "${b.name}" and all its data? This can't be undone.`)) {
-                      void remove(b.id);
-                    }
-                  }}
+                  onDelete={() => setPendingDelete(b)}
                 />
               ))}
           </section>
         </div>
       </aside>
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Delete board"
+        message={
+          pendingDelete
+            ? `Delete board "${pendingDelete.name}" and all its data? This can't be undone.`
+            : ''
+        }
+        confirmLabel="Delete"
+        destructive
+        onConfirm={() => {
+          if (pendingDelete) void remove(pendingDelete.id);
+          setPendingDelete(null);
+        }}
+        onCancel={() => setPendingDelete(null)}
+      />
     </>
   );
 }

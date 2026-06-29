@@ -35,3 +35,6 @@ coverage/
 *.tsbuildinfo
 
 # NOTE: .sqlx/ is intentionally NOT ignored — we commit sqlx offline query metadata.
+
+# Impeccable critique snapshots are local-only session logs.
+.impeccable/

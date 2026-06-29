@@ -2,10 +2,12 @@
 // card and column drags — they're disambiguated by the active id prefix
 // (`col:` for columns).
 
+import { Keyboard, Plus, Search, Tag } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   DndContext,
   DragOverlay,
+  KeyboardSensor,
   PointerSensor,
   closestCorners,
   useSensor,
@@ -14,6 +16,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
+import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { isTauri } from './api/client';
 import ColumnList from './ColumnList';
 import CardDetailModal from './CardDetailModal';
@@ -28,6 +31,9 @@ import { useQuickAddOpenEvent } from '../quick-add/useQuickAddOpenEvent';
 import { resolveDragEnd } from './dragEnd';
 import { COLUMN_DRAG_PREFIX, filterCollidersForActive, parseColumnDragId, resolveColumnDragEnd } from './columnDragEnd';
 import type { CardDto } from './types';
+import { PromptDialog } from '../Dialog';
+import ShortcutsOverlay from '../ShortcutsOverlay';
+import { useShortcutsHotkey } from '../useShortcutsHotkey';
 import './kanban.css';
 
 export default function KanbanBoard() {
@@ -48,8 +54,11 @@ export default function KanbanBoard() {
   const [manageTagsOpen, setManageTagsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [boardPromptOpen, setBoardPromptOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   useCmdK(useCallback(() => setPaletteOpen(true), []));
+  useShortcutsHotkey(useCallback(() => setShortcutsOpen((v) => !v), []));
   useQuickAddOpenEvent(useCallback(() => setQuickAddOpen(true), []));
 
   useEffect(() => {
@@ -60,6 +69,14 @@ export default function KanbanBoard() {
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+      keyboardCodes: {
+        start: ['Space'],
+        cancel: ['Escape'],
+        end: ['Space'],
+      },
+    }),
   );
 
   // Custom collision detection: during a column drag we only want to consider
@@ -152,19 +169,32 @@ export default function KanbanBoard() {
         </label>
         <button
           type="button"
-          className="kanso-btn"
+          className="kanso-btn kanso-btn--icon"
           onClick={() => setManageTagsOpen(true)}
           title="Manage tags"
         >
-          🏷 Manage tags
+          <Tag size={14} aria-hidden="true" />
+          <span>Manage tags</span>
         </button>
         <button
           type="button"
-          className="kanso-btn"
+          className="kanso-btn kanso-btn--icon"
           onClick={() => setPaletteOpen(true)}
           title="Search (⌘K)"
         >
-          🔍 Search
+          <Search size={14} aria-hidden="true" />
+          <span>Search</span>
+          <kbd className="kanso-kbd">⌘K</kbd>
+        </button>
+        <button
+          type="button"
+          className="kanso-btn kanso-btn--icon"
+          onClick={() => setShortcutsOpen(true)}
+          title="Keyboard shortcuts (?)"
+          aria-label="Keyboard shortcuts"
+        >
+          <Keyboard size={14} aria-hidden="true" />
+          <kbd className="kanso-kbd">?</kbd>
         </button>
       </div>
       <DndContext
@@ -186,13 +216,11 @@ export default function KanbanBoard() {
             <p>Create a board to start organizing your cards.</p>
             <button
               type="button"
-              className="kanso-btn kanso-btn--primary"
-              onClick={() => {
-                const name = window.prompt('Board name', 'My board');
-                if (name) void boardCreate(name);
-              }}
+              className="kanso-btn kanso-btn--primary kanso-btn--icon"
+              onClick={() => setBoardPromptOpen(true)}
             >
-              + Create board
+              <Plus size={14} aria-hidden="true" />
+              <span>Create board</span>
             </button>
           </div>
         )}
@@ -207,6 +235,19 @@ export default function KanbanBoard() {
       {manageTagsOpen && <ManageTagsDrawer onClose={() => setManageTagsOpen(false)} />}
       {paletteOpen && <SearchPalette onClose={() => setPaletteOpen(false)} />}
       {quickAddOpen && <QuickAddModal onClose={() => setQuickAddOpen(false)} />}
+      <PromptDialog
+        open={boardPromptOpen}
+        title="Create board"
+        label="Board name"
+        initialValue="My board"
+        submitLabel="Create"
+        onSubmit={(name) => {
+          setBoardPromptOpen(false);
+          void boardCreate(name);
+        }}
+        onCancel={() => setBoardPromptOpen(false)}
+      />
+      <ShortcutsOverlay open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       {error && status === 'ready' && (
         <div className="kanso-error" role="status">
           {error}

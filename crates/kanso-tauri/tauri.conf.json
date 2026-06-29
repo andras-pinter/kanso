@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "dev.kanso.desktop",
   "build": {
-    "beforeDevCommand": "bash kanso-tauri/scripts/ui.sh dev",
+    "beforeDevCommand": "bash -c 'bash \"$(git rev-parse --show-toplevel)/crates/kanso-tauri/scripts/ui.sh\" dev'",
     "devUrl": "http://localhost:5173",
-    "beforeBuildCommand": "bash kanso-tauri/scripts/ui.sh build",
+    "beforeBuildCommand": "bash -c 'bash \"$(git rev-parse --show-toplevel)/crates/kanso-tauri/scripts/ui.sh\" build'",
     "frontendDist": "../../ui/dist"
   },
   "app": {

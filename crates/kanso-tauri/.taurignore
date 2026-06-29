@@ -1,0 +1,4 @@
+# Keep tauri-cli's dev watcher out of resources/ — the build script
+# stages a copy of extensions/ (with its own node_modules) here, and
+# watching it triggers an infinite rebuild loop.
+resources/

@@ -2,7 +2,7 @@
 // card and column drags — they're disambiguated by the active id prefix
 // (`col:` for columns).
 
-import { Plus, Search, Tag } from 'lucide-react';
+import { Keyboard, Plus, Search, Tag } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   DndContext,
@@ -32,6 +32,8 @@ import { resolveDragEnd } from './dragEnd';
 import { COLUMN_DRAG_PREFIX, filterCollidersForActive, parseColumnDragId, resolveColumnDragEnd } from './columnDragEnd';
 import type { CardDto } from './types';
 import { PromptDialog } from '../Dialog';
+import ShortcutsOverlay from '../ShortcutsOverlay';
+import { useShortcutsHotkey } from '../useShortcutsHotkey';
 import './kanban.css';
 
 export default function KanbanBoard() {
@@ -53,8 +55,10 @@ export default function KanbanBoard() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [boardPromptOpen, setBoardPromptOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   useCmdK(useCallback(() => setPaletteOpen(true), []));
+  useShortcutsHotkey(useCallback(() => setShortcutsOpen((v) => !v), []));
   useQuickAddOpenEvent(useCallback(() => setQuickAddOpen(true), []));
 
   useEffect(() => {
@@ -182,6 +186,16 @@ export default function KanbanBoard() {
           <span>Search</span>
           <kbd className="kanso-kbd">⌘K</kbd>
         </button>
+        <button
+          type="button"
+          className="kanso-btn kanso-btn--icon"
+          onClick={() => setShortcutsOpen(true)}
+          title="Keyboard shortcuts (?)"
+          aria-label="Keyboard shortcuts"
+        >
+          <Keyboard size={14} aria-hidden="true" />
+          <kbd className="kanso-kbd">?</kbd>
+        </button>
       </div>
       <DndContext
         sensors={sensors}
@@ -233,6 +247,7 @@ export default function KanbanBoard() {
         }}
         onCancel={() => setBoardPromptOpen(false)}
       />
+      <ShortcutsOverlay open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       {error && status === 'ready' && (
         <div className="kanso-error" role="status">
           {error}

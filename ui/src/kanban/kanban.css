@@ -345,6 +345,30 @@ body {
   opacity: 0.65;
 }
 
+.kanso-primary-btn--danger {
+  border-color: var(--kanso-danger);
+  background: var(--kanso-danger);
+  color: var(--kanso-fg-on-accent);
+}
+
+.kanso-dialog-input {
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--kanso-border);
+  border-radius: var(--kanso-radius-sm);
+  background: var(--kanso-bg-elevated);
+  color: var(--kanso-fg);
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.kanso-dialog-input:focus {
+  outline: none;
+  border-color: var(--kanso-accent);
+  box-shadow: 0 0 0 3px var(--kanso-accent-ring);
+}
+
 /* ---------- Board ---------- */
 
 .kanso-board {

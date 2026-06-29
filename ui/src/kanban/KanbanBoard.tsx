@@ -2,7 +2,7 @@
 // card and column drags — they're disambiguated by the active id prefix
 // (`col:` for columns).
 
-import { Search, Tag } from 'lucide-react';
+import { Plus, Search, Tag } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   DndContext,
@@ -31,6 +31,7 @@ import { useQuickAddOpenEvent } from '../quick-add/useQuickAddOpenEvent';
 import { resolveDragEnd } from './dragEnd';
 import { COLUMN_DRAG_PREFIX, filterCollidersForActive, parseColumnDragId, resolveColumnDragEnd } from './columnDragEnd';
 import type { CardDto } from './types';
+import { PromptDialog } from '../Dialog';
 import './kanban.css';
 
 export default function KanbanBoard() {
@@ -51,6 +52,7 @@ export default function KanbanBoard() {
   const [manageTagsOpen, setManageTagsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [boardPromptOpen, setBoardPromptOpen] = useState(false);
 
   useCmdK(useCallback(() => setPaletteOpen(true), []));
   useQuickAddOpenEvent(useCallback(() => setQuickAddOpen(true), []));
@@ -200,13 +202,11 @@ export default function KanbanBoard() {
             <p>Create a board to start organizing your cards.</p>
             <button
               type="button"
-              className="kanso-btn kanso-btn--primary"
-              onClick={() => {
-                const name = window.prompt('Board name', 'My board');
-                if (name) void boardCreate(name);
-              }}
+              className="kanso-btn kanso-btn--primary kanso-btn--icon"
+              onClick={() => setBoardPromptOpen(true)}
             >
-              + Create board
+              <Plus size={14} aria-hidden="true" />
+              <span>Create board</span>
             </button>
           </div>
         )}
@@ -221,6 +221,18 @@ export default function KanbanBoard() {
       {manageTagsOpen && <ManageTagsDrawer onClose={() => setManageTagsOpen(false)} />}
       {paletteOpen && <SearchPalette onClose={() => setPaletteOpen(false)} />}
       {quickAddOpen && <QuickAddModal onClose={() => setQuickAddOpen(false)} />}
+      <PromptDialog
+        open={boardPromptOpen}
+        title="Create board"
+        label="Board name"
+        initialValue="My board"
+        submitLabel="Create"
+        onSubmit={(name) => {
+          setBoardPromptOpen(false);
+          void boardCreate(name);
+        }}
+        onCancel={() => setBoardPromptOpen(false)}
+      />
       {error && status === 'ready' && (
         <div className="kanso-error" role="status">
           {error}

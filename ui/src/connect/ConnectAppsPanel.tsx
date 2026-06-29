@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { disable, enable, isEnabled } from '@tauri-apps/plugin-autostart';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import {
@@ -13,6 +13,7 @@ import {
   writeExportFile,
   type HostInfo,
 } from '../kanban/api/client';
+import { ConfirmDialog } from '../Dialog';
 import '../kanban/kanban.css';
 
 type LoadState = 'loading' | 'ready' | 'error';
@@ -185,6 +186,17 @@ export default function ConnectAppsPanel() {
   const [importing, setImporting] = useState(false);
   const [autostartEnabled, setAutostartEnabled] = useState(false);
   const [autostartPending, setAutostartPending] = useState(false);
+  const [confirmImport, setConfirmImport] = useState<{ path: string } | null>(null);
+  const importResumeRef = useRef<((ok: boolean) => void) | null>(null);
+
+  const askConfirm = useCallback(
+    (path: string) =>
+      new Promise<boolean>((resolve) => {
+        importResumeRef.current = resolve;
+        setConfirmImport({ path });
+      }),
+    [],
+  );
 
   const load = useCallback(async () => {
     setState('loading');
@@ -281,9 +293,7 @@ export default function ConnectAppsPanel() {
         filters: [{ name: 'JSON', extensions: ['json'] }],
       });
       if (typeof path !== 'string') return;
-      const confirmed = window.confirm(
-        'Replace all data with imported file? This cannot be undone.'
-      );
+      const confirmed = await askConfirm(path);
       if (!confirmed) return;
       const json = await readImportFile(path);
       await importData(json);
@@ -410,6 +420,23 @@ export default function ConnectAppsPanel() {
           <GenericCard serverPath={serverPath} />
         </div>
       )}
+      <ConfirmDialog
+        open={confirmImport !== null}
+        title="Replace all data?"
+        message="Replace all data with the imported file? This cannot be undone."
+        confirmLabel="Replace"
+        destructive
+        onConfirm={() => {
+          setConfirmImport(null);
+          importResumeRef.current?.(true);
+          importResumeRef.current = null;
+        }}
+        onCancel={() => {
+          setConfirmImport(null);
+          importResumeRef.current?.(false);
+          importResumeRef.current = null;
+        }}
+      />
     </main>
   );
 }

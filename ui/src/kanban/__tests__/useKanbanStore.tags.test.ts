@@ -108,6 +108,7 @@ function reset() {
     tags: [],
     tagsLoaded: false,
     cardTagMap: {},
+    selectedTagIds: [],
   });
 }
 

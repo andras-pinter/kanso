@@ -74,6 +74,9 @@ interface KanbanState {
   // Includes ALL tags (live + archived) so card chips don't blink when a
   // tag flips archived; picker UIs filter by `tags.archived_at === null`.
   cardTagMap: Record<string, string[]>;
+  // Tag ids currently selected as a board filter (AND semantics). Not
+  // persisted across app restarts.
+  selectedTagIds: string[];
 
   load: () => Promise<void>;
   switchBoard: (id: string) => Promise<boolean>;
@@ -117,6 +120,9 @@ interface KanbanState {
   tagDelete: (id: string) => Promise<void>;
   addCardTag: (cardId: string, tagId: string) => Promise<void>;
   removeCardTag: (cardId: string, tagId: string) => Promise<void>;
+
+  toggleTagFilter: (tagId: string) => void;
+  clearTagFilters: () => void;
 }
 
 function formatError(e: unknown): string {
@@ -214,6 +220,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
   tags: [],
   tagsLoaded: false,
   cardTagMap: {},
+  selectedTagIds: [],
 
   selectCard: (id) => set({ selectedCardId: id }),
 
@@ -742,7 +749,10 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
     try {
       await tagArchive(id);
       const fresh = await tagsList(true);
-      set({ tags: fresh });
+      set((s) => ({
+        tags: fresh,
+        selectedTagIds: s.selectedTagIds.filter((tid) => tid !== id),
+      }));
     } catch (e) {
       set({ error: formatError(e) });
     }
@@ -769,6 +779,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
             ids.filter((tid) => tid !== id),
           ]),
         ),
+        selectedTagIds: s.selectedTagIds.filter((tid) => tid !== id),
       }));
     } catch (e) {
       set({ error: formatError(e) });
@@ -823,6 +834,15 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
       });
     }
   },
+
+  toggleTagFilter: (tagId) =>
+    set((s) => ({
+      selectedTagIds: s.selectedTagIds.includes(tagId)
+        ? s.selectedTagIds.filter((id) => id !== tagId)
+        : [...s.selectedTagIds, tagId],
+    })),
+
+  clearTagFilters: () => set({ selectedTagIds: [] }),
 }));
 
 function findCard(byColumn: Record<string, CardDto[]>, id: string): CardDto | undefined {

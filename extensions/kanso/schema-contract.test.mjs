@@ -51,27 +51,6 @@ describe("CLI tool schemas ↔ Rust DTO contract", () => {
         });
     });
 
-    it("column_create matches CreateColumnBody (no position — server assigns)", () => {
-        // board_id is a path param, not part of CreateColumnBody. Drop it.
-        const advertised = topProps(byName.get("column_create")).filter(
-            (f) => f !== "board_id",
-        );
-        expect(diffFields(advertised, DTO_CONTRACT.column_create)).toEqual({
-            ok: true,
-            extra: [],
-            missing: [],
-        });
-    });
-
-    it("column_update patch matches ColumnPatchDto (color, not position)", () => {
-        const advertised = patchProps(byName.get("column_update"));
-        expect(diffFields(advertised, DTO_CONTRACT.column_update_patch)).toEqual({
-            ok: true,
-            extra: [],
-            missing: [],
-        });
-    });
-
     it("card_create matches CreateCardBody (title only)", () => {
         // column_id is a path param, not part of CreateCardBody. Drop it.
         const advertised = topProps(byName.get("card_create")).filter(
@@ -102,10 +81,29 @@ describe("CLI tool schemas ↔ Rust DTO contract", () => {
         expect(types).not.toContain("string");
     });
 
-    it("column_create no longer advertises `position`", () => {
-        const tool = byName.get("column_create");
-        expect(topProps(tool)).not.toContain("position");
-        expect(tool.description).toMatch(/column_move/);
+    it("columns are read-only — no create/update/move/archive tools", () => {
+        for (const banned of [
+            "column_create",
+            "column_update",
+            "column_move",
+            "column_archive",
+            "column_unarchive",
+        ]) {
+            expect(byName.has(banned), `${banned} must not be registered`).toBe(false);
+        }
+    });
+
+    it("archive verbs are gone", () => {
+        for (const banned of [
+            "board_archive",
+            "board_unarchive",
+            "card_archive",
+            "card_unarchive",
+            "tag_archive",
+            "tag_unarchive",
+        ]) {
+            expect(byName.has(banned), `${banned} must not be registered`).toBe(false);
+        }
     });
 
     it("board_get takes a single required `id` string param", () => {

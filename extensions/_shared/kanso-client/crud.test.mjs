@@ -1,24 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
-    boardArchive,
     boardCreate,
     boardDelete,
     boardGet,
     boardList,
-    cardArchive,
     cardBodySet,
     cardCreate,
+    cardDelete,
     cardGet,
     cardMove,
     cardSearch,
     cardTagAdd,
     cardTagRemove,
     cardUpdate,
-    columnCreate,
     columnList,
-    columnMove,
-    tagArchive,
     tagCreate,
     tagList,
 } from "./crud.mjs";
@@ -47,9 +43,9 @@ const fakeClient = () => {
 describe("boards", () => {
     it("boardList hits /boards with page query", async () => {
         const c = fakeClient();
-        await boardList(c, { include_archived: true, limit: 5, offset: 10 });
+        await boardList(c, { limit: 5, offset: 10 });
         expect(c.calls).toEqual([
-            { method: "GET", path: "/boards?include_archived=true&limit=5&offset=10", body: undefined },
+            { method: "GET", path: "/boards?limit=5&offset=10", body: undefined },
         ]);
     });
 
@@ -62,13 +58,6 @@ describe("boards", () => {
     it("boardCreate rejects empty name", () => {
         const c = fakeClient();
         expect(() => boardCreate(c, { name: "  " })).toThrow(/name is required/);
-    });
-
-    it("boardArchive posts to /boards/:id/archive and returns the response", async () => {
-        const c = fakeClient();
-        const res = await boardArchive(c, { id: "b1" });
-        expect(c.calls).toEqual([{ method: "POST", path: "/boards/b1/archive", body: undefined }]);
-        expect(res).toEqual({ ok: true, path: "/boards/b1/archive" });
     });
 
     it("boardDelete hits DELETE /boards/:id", async () => {
@@ -92,33 +81,9 @@ describe("boards", () => {
 describe("columns", () => {
     it("columnList requires board_id and appends page query", async () => {
         const c = fakeClient();
-        await columnList(c, { board_id: "b1", include_archived: true });
+        await columnList(c, { board_id: "b1", limit: 4 });
         expect(c.calls).toEqual([
-            { method: "GET", path: "/boards/b1/columns?include_archived=true", body: undefined },
-        ]);
-    });
-
-    it("columnCreate trims name and forwards color when set", async () => {
-        const c = fakeClient();
-        await columnCreate(c, { board_id: "b1", name: " Todo ", color: "#ff8800" });
-        expect(c.calls).toEqual([
-            { method: "POST", path: "/boards/b1/columns", body: { name: "Todo", color: "#ff8800" } },
-        ]);
-    });
-
-    it("columnCreate omits color when not supplied (position is server-assigned)", async () => {
-        const c = fakeClient();
-        await columnCreate(c, { board_id: "b1", name: "Todo" });
-        expect(c.calls).toEqual([
-            { method: "POST", path: "/boards/b1/columns", body: { name: "Todo" } },
-        ]);
-    });
-
-    it("columnMove wires before/after nulls when omitted", async () => {
-        const c = fakeClient();
-        await columnMove(c, { id: "c1" });
-        expect(c.calls).toEqual([
-            { method: "POST", path: "/columns/c1/move", body: { before: null, after: null } },
+            { method: "GET", path: "/boards/b1/columns?limit=4", body: undefined },
         ]);
     });
 });
@@ -148,10 +113,10 @@ describe("cards", () => {
         ]);
     });
 
-    it("cardArchive posts to /cards/:id/archive", async () => {
+    it("cardDelete hits DELETE /cards/:id", async () => {
         const c = fakeClient();
-        await cardArchive(c, { id: "k1" });
-        expect(c.calls).toEqual([{ method: "POST", path: "/cards/k1/archive", body: undefined }]);
+        await cardDelete(c, { id: "k1" });
+        expect(c.calls).toEqual([{ method: "DELETE", path: "/cards/k1", body: undefined }]);
     });
 
     it("cardGet hits GET /cards/:id and encodes the id", async () => {
@@ -209,12 +174,6 @@ describe("tags + card↔tag links", () => {
         ]);
     });
 
-    it("tagArchive posts to /tags/:id/archive", async () => {
-        const c = fakeClient();
-        await tagArchive(c, { id: "t1" });
-        expect(c.calls).toEqual([{ method: "POST", path: "/tags/t1/archive", body: undefined }]);
-    });
-
     it("cardTagAdd / cardTagRemove hit /cards/:card_id/tags/:tag_id", async () => {
         const c = fakeClient();
         await cardTagAdd(c, { card_id: "k1", tag_id: "t1" });
@@ -227,13 +186,13 @@ describe("tags + card↔tag links", () => {
 });
 
 describe("search", () => {
-    it("cardSearch builds q + optional include_archived + limit + offset", async () => {
+    it("cardSearch builds q + optional limit + offset", async () => {
         const c = fakeClient();
-        await cardSearch(c, { q: "hello world", include_archived: true, limit: 5, offset: 10 });
+        await cardSearch(c, { q: "hello world", limit: 5, offset: 10 });
         expect(c.calls).toEqual([
             {
                 method: "GET",
-                path: "/cards/search?q=hello%20world&include_archived=true&limit=5&offset=10",
+                path: "/cards/search?q=hello%20world&limit=5&offset=10",
                 body: undefined,
             },
         ]);

@@ -32,18 +32,16 @@ describe("CLI extension tools registration", () => {
         const names = tools.map((t) => t.name).sort();
         expect(names).toEqual(
             [
-                "board_archive",
                 "board_card_tags",
                 "board_create",
                 "board_delete",
                 "board_get",
                 "board_list",
-                "board_unarchive",
                 "board_update",
-                "card_archive",
                 "card_body_get",
                 "card_body_set",
                 "card_create",
+                "card_delete",
                 "card_get",
                 "card_list",
                 "card_move",
@@ -51,21 +49,13 @@ describe("CLI extension tools registration", () => {
                 "card_tag_add",
                 "card_tag_remove",
                 "card_tags",
-                "card_unarchive",
                 "card_update",
-                "column_archive",
-                "column_create",
                 "column_list",
-                "column_move",
-                "column_unarchive",
-                "column_update",
-                "tag_archive",
                 "tag_cards",
                 "tag_create",
                 "tag_delete",
                 "tag_get",
                 "tag_list",
-                "tag_unarchive",
                 "tag_update",
             ].sort(),
         );
@@ -79,26 +69,24 @@ describe("CLI extension tools registration", () => {
         }
     });
 
-    it("board_archive handler hits POST /boards/:id/archive", async () => {
+    it("card_delete handler hits DELETE /cards/:id", async () => {
         const c = fakeClient();
-        const [byName] = [
-            new Map(buildTools(c, kansoTools).map((t) => [t.name, t])),
-        ];
-        const out = await byName.get("board_archive").handler({ id: "b1" });
-        expect(c.calls).toEqual([{ method: "POST", path: "/boards/b1/archive", body: undefined }]);
+        const byName = new Map(buildTools(c, kansoTools).map((t) => [t.name, t]));
+        const out = await byName.get("card_delete").handler({ id: "k1" });
+        expect(c.calls).toEqual([{ method: "DELETE", path: "/cards/k1", body: undefined }]);
         expect(JSON.parse(out)).toEqual({ ok: true });
     });
 
-    it("card_search handler wires include_archived + limit + offset", async () => {
+    it("card_search handler wires q + limit + offset", async () => {
         const c = fakeClient();
         const byName = new Map(buildTools(c, kansoTools).map((t) => [t.name, t]));
         await byName
             .get("card_search")
-            .handler({ q: "hello", include_archived: true, limit: 5, offset: 10 });
+            .handler({ q: "hello", limit: 5, offset: 10 });
         expect(c.calls).toEqual([
             {
                 method: "GET",
-                path: "/cards/search?q=hello&include_archived=true&limit=5&offset=10",
+                path: "/cards/search?q=hello&limit=5&offset=10",
                 body: undefined,
             },
         ]);

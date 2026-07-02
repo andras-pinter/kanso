@@ -75,13 +75,22 @@ describe("tools/list", () => {
             expect(names).toContain(legacy);
         }
         for (const t of [
-            "board_list", "board_create", "board_archive", "board_delete",
-            "column_list", "column_move",
-            "card_get", "card_update", "card_body_set", "card_search",
+            "board_list", "board_create", "board_delete",
+            "column_list",
+            "card_get", "card_update", "card_delete", "card_body_set", "card_search",
             "tag_list", "tag_create", "tag_delete",
             "card_tag_add", "card_tag_remove",
         ]) {
             expect(names).toContain(t);
+        }
+        for (const gone of [
+            "board_archive", "board_unarchive",
+            "column_create", "column_update", "column_move",
+            "column_archive", "column_unarchive",
+            "card_archive", "card_unarchive",
+            "tag_archive", "tag_unarchive",
+        ]) {
+            expect(names).not.toContain(gone);
         }
 
         const add = tools.find((t) => t.name === "kanso_add");
@@ -137,15 +146,17 @@ describe("tool dispatch", () => {
         expect(res.content[0].text).toContain("moved card c1");
     });
 
-    it("kanso_done POSTs to /cards/:id/archive", async () => {
-        const client = fakeClient({ "/cards/c1/archive": null });
+    it("kanso_done DELETEs /cards/:id", async () => {
+        const client = fakeClient({ "/cards/c1": null });
         const { mcpClient } = await harness(client);
         const res = await mcpClient.callTool({
             name: "kanso_done",
             arguments: { card_id: "c1" },
         });
         expect(res.isError).toBeFalsy();
-        expect(res.content[0].text).toContain("archived card c1");
+        expect(res.content[0].text).toContain("deleted card c1");
+        const del = client.calls.find((c) => c.method === "DELETE");
+        expect(del).toMatchObject({ method: "DELETE", path: "/cards/c1" });
     });
 
     it("kanso_search GETs /cards/search with query and limit", async () => {
@@ -185,7 +196,7 @@ describe("tool error handling", () => {
     it("KansoApiError surfaces as isError content", async () => {
         const { KansoApiError } = await import("@kanso/client");
         const client = fakeClient({
-            "/cards/missing/archive": new KansoApiError(404, "kanso: not found (card)", "card"),
+            "/cards/missing": new KansoApiError(404, "kanso: not found (card)", "card"),
         });
         const { mcpClient } = await harness(client);
         const res = await mcpClient.callTool({
@@ -347,7 +358,6 @@ describe("resources/read", () => {
                 title: "Buy milk",
                 body_text: "from the corner shop on the way home",
                 due_at: Date.UTC(2026, 5, 23),
-                archived_at: null,
             },
             "/columns/col1": { id: "col1", board_id: "b1", name: "To Do" },
             "/boards/b1": { id: "b1", name: "Work" },
@@ -413,19 +423,26 @@ describe("resources/read", () => {
 });
 
 describe("expanded CRUD tools", () => {
-    it("board_archive posts and returns the updated board DTO as JSON", async () => {
-        const client = fakeClient({
-            "/boards/b1/archive": { id: "b1", name: "Ideas", archived_at: "2024-01-01T00:00:00Z" },
-        });
+    it("board_delete DELETEs and returns null", async () => {
+        const client = fakeClient({ "/boards/b1": null });
         const { mcpClient } = await harness(client);
         const res = await mcpClient.callTool({
-            name: "board_archive",
+            name: "board_delete",
             arguments: { id: "b1" },
         });
         expect(res.isError).not.toBe(true);
-        const dto = JSON.parse(res.content[0].text);
-        expect(dto).toMatchObject({ id: "b1", archived_at: "2024-01-01T00:00:00Z" });
-        expect(client.calls).toContainEqual({ method: "POST", path: "/boards/b1/archive", body: undefined });
+        expect(client.calls).toContainEqual({ method: "DELETE", path: "/boards/b1" });
+    });
+
+    it("card_delete DELETEs and returns null", async () => {
+        const client = fakeClient({ "/cards/c1": null });
+        const { mcpClient } = await harness(client);
+        const res = await mcpClient.callTool({
+            name: "card_delete",
+            arguments: { id: "c1" },
+        });
+        expect(res.isError).not.toBe(true);
+        expect(client.calls).toContainEqual({ method: "DELETE", path: "/cards/c1" });
     });
 
     it("card_tag_add posts and returns the updated card DTO", async () => {
@@ -451,7 +468,6 @@ describe("expanded CRUD tools", () => {
             due_at: null,
             created_at: 1,
             updated_at: 2,
-            archived_at: null,
             tags: [],
         };
         const client = fakeClient({ "/cards/c1/body": cardDto });

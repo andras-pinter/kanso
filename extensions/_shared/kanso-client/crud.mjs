@@ -16,9 +16,8 @@
 
 const enc = encodeURIComponent;
 
-const pageQuery = ({ include_archived, limit, offset } = {}) => {
+const pageQuery = ({ limit, offset } = {}) => {
     const parts = [];
-    if (include_archived) parts.push("include_archived=true");
     if (typeof limit === "number") parts.push(`limit=${Math.trunc(limit)}`);
     if (typeof offset === "number") parts.push(`offset=${Math.trunc(offset)}`);
     return parts.length ? `?${parts.join("&")}` : "";
@@ -54,18 +53,6 @@ export const boardUpdate = (c, { id, patch }) => {
 };
 
 /** @param {Client} c */
-export const boardArchive = (c, { id }) => {
-    requireId(id);
-    return c.post(`/boards/${enc(id)}/archive`);
-};
-
-/** @param {Client} c */
-export const boardUnarchive = (c, { id }) => {
-    requireId(id);
-    return c.post(`/boards/${enc(id)}/unarchive`);
-};
-
-/** @param {Client} c */
 export const boardDelete = (c, { id }) => {
     requireId(id);
     return c.delete(`/boards/${enc(id)}`);
@@ -78,46 +65,14 @@ export const boardCardTags = (c, { id }) => {
 };
 
 // ---------- columns ----------
+//
+// Columns are fixed (Incoming / Todo / In Progress / Done) and seeded by the
+// server on board create. Only a read helper is exposed.
 
 /** @param {Client} c */
 export const columnList = (c, { board_id, ...opts } = {}) => {
     requireId(board_id, "board_id");
     return c.get(`/boards/${enc(board_id)}/columns${pageQuery(opts)}`);
-};
-
-/** @param {Client} c */
-export const columnCreate = (c, { board_id, name, color }) => {
-    requireId(board_id, "board_id");
-    if (typeof name !== "string" || name.trim() === "") {
-        throw new Error("kanso: name is required");
-    }
-    const body = { name: name.trim() };
-    if (color !== undefined) body.color = color;
-    return c.post(`/boards/${enc(board_id)}/columns`, body);
-};
-
-/** @param {Client} c */
-export const columnUpdate = (c, { id, patch }) => {
-    requireId(id);
-    return c.patch(`/columns/${enc(id)}`, patch ?? {});
-};
-
-/** @param {Client} c */
-export const columnMove = (c, { id, before, after }) => {
-    requireId(id);
-    return c.post(`/columns/${enc(id)}/move`, { before: before ?? null, after: after ?? null });
-};
-
-/** @param {Client} c */
-export const columnArchive = (c, { id }) => {
-    requireId(id);
-    return c.post(`/columns/${enc(id)}/archive`);
-};
-
-/** @param {Client} c */
-export const columnUnarchive = (c, { id }) => {
-    requireId(id);
-    return c.post(`/columns/${enc(id)}/unarchive`);
 };
 
 // ---------- cards ----------
@@ -160,15 +115,9 @@ export const cardMove = (c, { id, target_column_id, before, after }) => {
 };
 
 /** @param {Client} c */
-export const cardArchive = (c, { id }) => {
+export const cardDelete = (c, { id }) => {
     requireId(id);
-    return c.post(`/cards/${enc(id)}/archive`);
-};
-
-/** @param {Client} c */
-export const cardUnarchive = (c, { id }) => {
-    requireId(id);
-    return c.post(`/cards/${enc(id)}/unarchive`);
+    return c.delete(`/cards/${enc(id)}`);
 };
 
 /** @param {Client} c */
@@ -224,18 +173,6 @@ export const tagUpdate = (c, { id, patch }) => {
 };
 
 /** @param {Client} c */
-export const tagArchive = (c, { id }) => {
-    requireId(id);
-    return c.post(`/tags/${enc(id)}/archive`);
-};
-
-/** @param {Client} c */
-export const tagUnarchive = (c, { id }) => {
-    requireId(id);
-    return c.post(`/tags/${enc(id)}/unarchive`);
-};
-
-/** @param {Client} c */
 export const tagDelete = (c, { id }) => {
     requireId(id);
     return c.delete(`/tags/${enc(id)}`);
@@ -270,10 +207,9 @@ export const cardTagRemove = (c, { card_id, tag_id }) => {
 // ---------- search ----------
 
 /** @param {Client} c */
-export const cardSearch = (c, { q, include_archived, limit, offset } = {}) => {
+export const cardSearch = (c, { q, limit, offset } = {}) => {
     if (typeof q !== "string" || q.trim() === "") throw new Error("kanso: q is required");
     const parts = [`q=${enc(q.trim())}`];
-    if (include_archived) parts.push("include_archived=true");
     if (typeof limit === "number") parts.push(`limit=${Math.trunc(limit)}`);
     if (typeof offset === "number") parts.push(`offset=${Math.trunc(offset)}`);
     return c.get(`/cards/search?${parts.join("&")}`);

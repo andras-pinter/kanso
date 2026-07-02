@@ -127,10 +127,10 @@ Edit your Zed settings (`~/.config/zed/settings.json`):
 
 | Tool | Inputs | Returns |
 | --- | --- | --- |
-| `kanso_list` | `board_id?`, `column_id?`, `include_archived?` | Boards / columns / cards as text |
+| `kanso_list` | `board_id?`, `column_id?` | Boards / columns / cards as text |
 | `kanso_add` | `column_id`, `title`, `body?` | `kanso: created card {id} "{title}"` |
 | `kanso_move` | `card_id`, `target_column_id` | `kanso: moved card {id} to column {col}` |
-| `kanso_done` | `card_id` | `kanso: archived card {id}` |
+| `kanso_done` | `card_id` | `kanso: deleted card {id}` |
 | `kanso_search` | `q`, `limit?` (default 20, max 50) | FTS5 hits, one per line, with board/column context |
 
 ## Resources reference
@@ -138,7 +138,7 @@ Edit your Zed settings (`~/.config/zed/settings.json`):
 | URI | Listed? | Source endpoint |
 | --- | --- | --- |
 | `kanso://boards` | yes (single) | `GET /boards` + per-board column/card counts |
-| `kanso://boards/{id}` | yes (enumerated from `/boards`) | `GET /boards/{id}/_full?include_archived=false` |
+| `kanso://boards/{id}` | yes (enumerated from `/boards`) | `GET /boards/{id}/_full` |
 | `kanso://cards/{id}` | template only, not enumerated | `GET /cards/{id}` + `GET /cards/{id}/tags` |
 
 Resources are read-only markdown. The model never invokes them — the user

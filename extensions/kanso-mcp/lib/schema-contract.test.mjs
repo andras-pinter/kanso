@@ -101,24 +101,6 @@ describe("MCP tool schemas ↔ Rust DTO contract", () => {
         });
     });
 
-    it("column_create matches CreateColumnBody (no position — server assigns)", () => {
-        // board_id is a path param, drop before diffing.
-        const advertised = topFields("column_create").filter((f) => f !== "board_id");
-        expect(diffFields(advertised, DTO_CONTRACT.column_create)).toEqual({
-            ok: true,
-            extra: [],
-            missing: [],
-        });
-    });
-
-    it("column_update patch matches ColumnPatchDto (color, not position)", () => {
-        expect(diffFields(patchFields("column_update"), DTO_CONTRACT.column_update_patch)).toEqual({
-            ok: true,
-            extra: [],
-            missing: [],
-        });
-    });
-
     it("card_create matches CreateCardBody (title only)", () => {
         const advertised = topFields("card_create").filter((f) => f !== "column_id");
         expect(diffFields(advertised, DTO_CONTRACT.card_create)).toEqual({
@@ -142,9 +124,20 @@ describe("MCP tool schemas ↔ Rust DTO contract", () => {
         expect(node).not.toBeInstanceOf(z.ZodString);
     });
 
-    it("column_create no longer advertises `position`", () => {
-        expect(topFields("column_create")).not.toContain("position");
-        const desc = tools.column_create.description ?? "";
-        expect(desc).toMatch(/column_move/);
+    it("does not expose column mutation tools (columns are fixed)", () => {
+        for (const gone of ["column_create", "column_update", "column_move"]) {
+            expect(tools[gone]).toBeUndefined();
+        }
+    });
+
+    it("does not expose archive/unarchive tools (archive was removed)", () => {
+        for (const gone of [
+            "board_archive", "board_unarchive",
+            "column_archive", "column_unarchive",
+            "card_archive", "card_unarchive",
+            "tag_archive", "tag_unarchive",
+        ]) {
+            expect(tools[gone]).toBeUndefined();
+        }
     });
 });

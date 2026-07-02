@@ -18,7 +18,6 @@ export const wrap = (client, fn) => async (/** @type {any} */ args) => {
 };
 
 const strId = (desc) => ({ type: "string", description: desc });
-const boolFlag = (desc) => ({ type: "boolean", description: desc });
 const num = (desc) => ({ type: "number", description: desc });
 
 /**
@@ -35,7 +34,6 @@ export const buildTools = (client, kansoTools) => [
         parameters: {
             type: "object",
             properties: {
-                include_archived: boolFlag("Include archived boards."),
                 limit: num("Max rows (default 100, max 500)."),
                 offset: num("Row offset for pagination."),
             },
@@ -54,7 +52,8 @@ export const buildTools = (client, kansoTools) => [
     },
     {
         name: "board_create",
-        description: "Create a board. Returns the new BoardDto.",
+        description:
+            "Create a board. Seeds the four fixed columns (Incoming / Todo / In Progress / Done). Returns the new BoardDto.",
         parameters: {
             type: "object",
             properties: { name: strId("Board name.") },
@@ -86,27 +85,6 @@ export const buildTools = (client, kansoTools) => [
         handler: wrap(client, h.boardUpdate),
     },
     {
-        name: "board_archive",
-        description: "Archive a board. Returns the BoardDto with archived_at set. Idempotent.",
-        parameters: {
-            type: "object",
-            properties: { id: strId("Board id.") },
-            required: ["id"],
-        },
-        handler: wrap(client, h.boardArchive),
-    },
-    {
-        name: "board_unarchive",
-        description:
-            "Unarchive a board. Returns the BoardDto with archived_at cleared. Idempotent.",
-        parameters: {
-            type: "object",
-            properties: { id: strId("Board id.") },
-            required: ["id"],
-        },
-        handler: wrap(client, h.boardUnarchive),
-    },
-    {
         name: "board_delete",
         description: "Hard-delete a board and cascade its columns/cards. Returns null. Destructive.",
         parameters: {
@@ -129,6 +107,9 @@ export const buildTools = (client, kansoTools) => [
     },
 
     // ---------- columns ----------
+    //
+    // Columns are fixed (Incoming / Todo / In Progress / Done) and seeded on
+    // board create. Only a read helper is exposed.
     {
         name: "column_list",
         description: "List columns on a board. Returns JSON array of ColumnDto.",
@@ -136,88 +117,12 @@ export const buildTools = (client, kansoTools) => [
             type: "object",
             properties: {
                 board_id: strId("Board id."),
-                include_archived: boolFlag("Include archived columns."),
                 limit: num("Max rows."),
                 offset: num("Row offset."),
             },
             required: ["board_id"],
         },
         handler: wrap(client, h.columnList),
-    },
-    {
-        name: "column_create",
-        description:
-            "Create a column on a board. Returns the new ColumnDto. Position is assigned server-side (appended); use column_move afterwards to reorder.",
-        parameters: {
-            type: "object",
-            properties: {
-                board_id: strId("Board id."),
-                name: strId("Column name."),
-                color: {
-                    type: ["string", "null"],
-                    description: "Optional colour (hex like #RRGGBB).",
-                },
-            },
-            required: ["board_id", "name"],
-        },
-        handler: wrap(client, h.columnCreate),
-    },
-    {
-        name: "column_update",
-        description: "Patch a column (rename, recolor). Returns the updated ColumnDto.",
-        parameters: {
-            type: "object",
-            properties: {
-                id: strId("Column id."),
-                patch: {
-                    type: "object",
-                    properties: {
-                        name: strId("New name."),
-                        color: {
-                            type: ["string", "null"],
-                            description: "New colour (hex like #RRGGBB), or null to clear.",
-                        },
-                    },
-                },
-            },
-            required: ["id", "patch"],
-        },
-        handler: wrap(client, h.columnUpdate),
-    },
-    {
-        name: "column_move",
-        description:
-            "Reorder a column between its siblings. Provide before and/or after column ids; omit both to append.",
-        parameters: {
-            type: "object",
-            properties: {
-                id: strId("Column id to move."),
-                before: strId("Column id it should sit before."),
-                after: strId("Column id it should sit after."),
-            },
-            required: ["id"],
-        },
-        handler: wrap(client, h.columnMove),
-    },
-    {
-        name: "column_archive",
-        description: "Archive a column. Returns the ColumnDto with archived_at set. Idempotent.",
-        parameters: {
-            type: "object",
-            properties: { id: strId("Column id.") },
-            required: ["id"],
-        },
-        handler: wrap(client, h.columnArchive),
-    },
-    {
-        name: "column_unarchive",
-        description: "Unarchive a column. Returns the ColumnDto. Idempotent.",
-        parameters: {
-            type: "object",
-            properties: { id: strId("Column id.") },
-            required: ["id"],
-        },
-        handler: wrap(client, h.columnUnarchive),
     },
 
     // ---------- cards ----------
@@ -228,7 +133,6 @@ export const buildTools = (client, kansoTools) => [
             type: "object",
             properties: {
                 column_id: strId("Column id."),
-                include_archived: boolFlag("Include archived cards."),
                 limit: num("Max rows."),
                 offset: num("Row offset."),
             },
@@ -303,24 +207,14 @@ export const buildTools = (client, kansoTools) => [
         handler: wrap(client, h.cardMove),
     },
     {
-        name: "card_archive",
-        description: "Archive a card. Returns the CardDto with archived_at set. Idempotent.",
+        name: "card_delete",
+        description: "Hard-delete a card and its tag links. Returns null. Destructive.",
         parameters: {
             type: "object",
             properties: { id: strId("Card id.") },
             required: ["id"],
         },
-        handler: wrap(client, h.cardArchive),
-    },
-    {
-        name: "card_unarchive",
-        description: "Unarchive a card. Returns the CardDto. Idempotent.",
-        parameters: {
-            type: "object",
-            properties: { id: strId("Card id.") },
-            required: ["id"],
-        },
-        handler: wrap(client, h.cardUnarchive),
+        handler: wrap(client, h.cardDelete),
     },
     {
         name: "card_body_get",
@@ -360,7 +254,6 @@ export const buildTools = (client, kansoTools) => [
         parameters: {
             type: "object",
             properties: {
-                include_archived: boolFlag("Include archived tags."),
                 limit: num("Max rows."),
                 offset: num("Row offset."),
             },
@@ -410,26 +303,6 @@ export const buildTools = (client, kansoTools) => [
         handler: wrap(client, h.tagUpdate),
     },
     {
-        name: "tag_archive",
-        description: "Archive a tag. Returns the TagDto with archived_at set. Idempotent.",
-        parameters: {
-            type: "object",
-            properties: { id: strId("Tag id.") },
-            required: ["id"],
-        },
-        handler: wrap(client, h.tagArchive),
-    },
-    {
-        name: "tag_unarchive",
-        description: "Unarchive a tag. Returns the TagDto. Idempotent.",
-        parameters: {
-            type: "object",
-            properties: { id: strId("Tag id.") },
-            required: ["id"],
-        },
-        handler: wrap(client, h.tagUnarchive),
-    },
-    {
         name: "tag_delete",
         description: "Hard-delete a tag and its links. Returns null. Destructive.",
         parameters: {
@@ -446,7 +319,6 @@ export const buildTools = (client, kansoTools) => [
             type: "object",
             properties: {
                 id: strId("Tag id."),
-                include_archived: boolFlag("Include archived links."),
                 limit: num("Max rows."),
                 offset: num("Row offset."),
             },
@@ -461,7 +333,6 @@ export const buildTools = (client, kansoTools) => [
             type: "object",
             properties: {
                 card_id: strId("Card id."),
-                include_archived: boolFlag("Include archived tags."),
                 limit: num("Max rows."),
                 offset: num("Row offset."),
             },
@@ -471,8 +342,7 @@ export const buildTools = (client, kansoTools) => [
     },
     {
         name: "card_tag_add",
-        description:
-            "Link a tag to a card. Returns the updated CardDto. Idempotent. Fails 400 if the tag is archived.",
+        description: "Link a tag to a card. Returns the updated CardDto. Idempotent.",
         parameters: {
             type: "object",
             properties: {
@@ -506,7 +376,6 @@ export const buildTools = (client, kansoTools) => [
             type: "object",
             properties: {
                 q: strId("Search query (FTS5)."),
-                include_archived: boolFlag("Include archived cards."),
                 limit: num("Max hits."),
                 offset: num("Row offset."),
             },

@@ -9,16 +9,15 @@
 /** @typedef {{ get: (p: string) => Promise<any>, post: (p: string, b?: unknown) => Promise<any>, patch: (p: string, b?: unknown) => Promise<any> }} Client */
 
 /**
- * `GET /boards/:id/_full?include_archived=...`. Returns the parsed BoardFullDto.
- * Throws KansoApiError on 404 (board missing) or 409 (board exceeds 1000-card cap).
+ * `GET /boards/:id/_full`. Returns the parsed BoardFullDto. Throws
+ * KansoApiError on 404 (board missing) or 409 (board exceeds 1000-card cap).
  *
  * @param {Client} client
- * @param {{ id: string, includeArchived?: boolean }} args
+ * @param {{ id: string }} args
  */
-export const boardFull = async (client, { id, includeArchived = false }) => {
+export const boardFull = async (client, { id }) => {
     if (!id) throw new Error("kanso: id is required");
-    const q = includeArchived ? "?include_archived=true" : "";
-    return client.get(`/boards/${encodeURIComponent(id)}/_full${q}`);
+    return client.get(`/boards/${encodeURIComponent(id)}/_full`);
 };
 
 /**

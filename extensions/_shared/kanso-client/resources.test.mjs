@@ -26,17 +26,11 @@ const fakeClient = (respond) => {
 };
 
 describe("boardFull", () => {
-    it("hits /boards/:id/_full without include_archived by default", async () => {
+    it("hits /boards/:id/_full", async () => {
         const dto = { board: { id: "b1", name: "Work" }, tags: [], columns: [] };
         const c = fakeClient(() => dto);
         await expect(boardFull(c, { id: "b1" })).resolves.toBe(dto);
         expect(c.calls).toEqual(["/boards/b1/_full"]);
-    });
-
-    it("appends include_archived=true when asked", async () => {
-        const c = fakeClient(() => ({ board: { id: "b1" }, tags: [], columns: [] }));
-        await boardFull(c, { id: "b1", includeArchived: true });
-        expect(c.calls).toEqual(["/boards/b1/_full?include_archived=true"]);
     });
 
     it("url-encodes the id", async () => {

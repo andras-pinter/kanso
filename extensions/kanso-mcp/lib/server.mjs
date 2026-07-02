@@ -135,7 +135,7 @@ const buildBoardsIndex = async (client) => {
  */
 const buildBoardSnapshot = async (client, id) => {
     try {
-        const dto = await boardFull(client, { id, includeArchived: false });
+        const dto = await boardFull(client, { id });
         return renderBoardSnapshot(dto);
     } catch (err) {
         if (err instanceof KansoApiError && err.status === 404) {
@@ -233,10 +233,6 @@ export const createKansoMcpServer = ({ client, name = "kanso-mcp", version = "0.
             inputSchema: {
                 board_id: z.string().optional().describe("List columns on this board."),
                 column_id: z.string().optional().describe("List cards in this column."),
-                include_archived: z
-                    .boolean()
-                    .optional()
-                    .describe("Include archived rows. Default false."),
             },
         },
         toolWrap(kansoList, client),
@@ -276,9 +272,9 @@ export const createKansoMcpServer = ({ client, name = "kanso-mcp", version = "0.
     server.registerTool(
         "kanso_done",
         {
-            description: "Archive a kanso card (soft delete, sets archived_at).",
+            description: "Hard-delete a kanso card. Archive is gone; done means gone.",
             inputSchema: {
-                card_id: z.string().describe("Card id to archive."),
+                card_id: z.string().describe("Card id to delete."),
             },
         },
         toolWrap(kansoDone, client),
@@ -308,7 +304,6 @@ export const createKansoMcpServer = ({ client, name = "kanso-mcp", version = "0.
         card_id: z.string().describe("Card id."),
         tag_id: z.string().describe("Tag id."),
         page: {
-            include_archived: z.boolean().optional().describe("Include archived rows. Default false."),
             limit: z.number().int().optional().describe("Max rows to return."),
             offset: z.number().int().optional().describe("Rows to skip."),
         },
@@ -339,51 +334,11 @@ export const createKansoMcpServer = ({ client, name = "kanso-mcp", version = "0.
         },
         crud.boardUpdate,
     );
-    reg("board_archive", "Archive a board. Returns the updated BoardDto with archived_at set. Idempotent.", { id: S.id }, crud.boardArchive);
-    reg("board_unarchive", "Unarchive a board. Returns the updated BoardDto. Idempotent.", { id: S.id }, crud.boardUnarchive);
     reg("board_delete", "Delete a board permanently. Returns null (204).", { id: S.id }, crud.boardDelete);
     reg("board_card_tags", "Fetch card→tag edges for one board.", { id: S.id }, crud.boardCardTags);
 
-    // Columns
+    // Columns (read-only — fixed set of 4 seeded on board create)
     reg("column_list", "List columns on a board.", { board_id: S.board_id, ...S.page }, crud.columnList);
-    reg(
-        "column_create",
-        "Create a column on a board. Returns the created ColumnDto. Position is assigned server-side (appended); use column_move afterwards to reorder.",
-        {
-            board_id: S.board_id,
-            name: z.string(),
-            color: z
-                .string()
-                .nullable()
-                .optional()
-                .describe("Optional colour (hex like #RRGGBB)."),
-        },
-        crud.columnCreate,
-    );
-    reg(
-        "column_update",
-        "Patch a column (name, color). Returns the updated ColumnDto.",
-        {
-            id: S.id,
-            patch: z.object({
-                name: z.string().optional(),
-                color: z
-                    .string()
-                    .nullable()
-                    .optional()
-                    .describe("Hex colour like #RRGGBB, or null to clear."),
-            }),
-        },
-        crud.columnUpdate,
-    );
-    reg(
-        "column_move",
-        "Reorder a column between two neighbors. Pass before and/or after column ids.",
-        { id: S.id, before: z.string().nullable().optional(), after: z.string().nullable().optional() },
-        crud.columnMove,
-    );
-    reg("column_archive", "Archive a column. Returns the updated ColumnDto. Idempotent.", { id: S.id }, crud.columnArchive);
-    reg("column_unarchive", "Unarchive a column. Returns the updated ColumnDto. Idempotent.", { id: S.id }, crud.columnUnarchive);
 
     // Cards
     reg("card_list", "List cards in a column.", { column_id: S.column_id, ...S.page }, crud.cardList);
@@ -422,8 +377,7 @@ export const createKansoMcpServer = ({ client, name = "kanso-mcp", version = "0.
         },
         crud.cardMove,
     );
-    reg("card_archive", "Archive a card. Returns the updated CardDto with archived_at set. Idempotent.", { id: S.id }, crud.cardArchive);
-    reg("card_unarchive", "Unarchive a card. Returns the updated CardDto. Idempotent.", { id: S.id }, crud.cardUnarchive);
+    reg("card_delete", "Delete a card permanently and cascade its tag links. Returns null (204).", { id: S.id }, crud.cardDelete);
     reg("card_body_get", "Fetch a card's body (BlockSuite Yjs blob + plaintext).", { id: S.id }, crud.cardBodyGet);
     reg(
         "card_body_set",
@@ -447,10 +401,9 @@ export const createKansoMcpServer = ({ client, name = "kanso-mcp", version = "0.
     );
     reg(
         "card_search",
-        "Full-text search across cards. Supports include_archived, limit, offset.",
+        "Full-text search across cards. Supports limit + offset.",
         {
             q: z.string(),
-            include_archived: z.boolean().optional(),
             limit: z.number().int().optional(),
             offset: z.number().int().optional(),
         },
@@ -472,8 +425,6 @@ export const createKansoMcpServer = ({ client, name = "kanso-mcp", version = "0.
         { id: S.id, patch: z.object({ name: z.string().optional(), color: z.string().optional() }) },
         crud.tagUpdate,
     );
-    reg("tag_archive", "Archive a tag. Returns the updated TagDto. Idempotent.", { id: S.id }, crud.tagArchive);
-    reg("tag_unarchive", "Unarchive a tag. Returns the updated TagDto. Idempotent.", { id: S.id }, crud.tagUnarchive);
     reg("tag_delete", "Delete a tag permanently. Returns null (204).", { id: S.id }, crud.tagDelete);
     reg("tag_cards", "List cards linked to a tag.", { id: S.id, ...S.page }, crud.tagCards);
     reg("card_tags", "List tags on a card.", { card_id: S.card_id, ...S.page }, crud.cardTags);

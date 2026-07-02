@@ -152,7 +152,6 @@ describe("renderCard", () => {
                 title: "Buy milk",
                 body_text: "from the corner shop on the way home",
                 due_at: Date.UTC(2026, 5, 23),
-                archived_at: null,
             },
             column: { id: "col1", name: "To Do" },
             board: { id: "b1", name: "Work" },
@@ -172,13 +171,6 @@ describe("renderCard", () => {
         });
         expect(out).toContain("Column id: `col-x`");
         expect(out).toContain("_(empty)_");
-    });
-
-    it("marks archived cards", () => {
-        const out = renderCard({
-            card: { title: "T", column_id: "c", body_text: null, archived_at: 1 },
-        });
-        expect(out).toContain("**[archived]**");
     });
 });
 

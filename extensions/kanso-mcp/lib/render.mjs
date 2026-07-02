@@ -53,10 +53,8 @@ export const renderBoardsIndex = ({ boards, truncated = false }) => {
 
 /**
  * Single board snapshot. Input is the `BoardFullDto` straight off the wire.
- *
- * Archived columns/cards are already filtered server-side when
- * `include_archived=false`. Tags listed at the top dedupe to those actually
- * referenced by at least one visible card.
+ * Tags listed at the top dedupe to those actually referenced by at least
+ * one card.
  *
  * @param {any} dto BoardFullDto
  * @returns {string}
@@ -133,9 +131,6 @@ export const renderCard = ({ card, column, board, tags = [] }) => {
     else if (card.column_id) meta.push(`Column id: \`${card.column_id}\``);
     if (card.due_at !== null && card.due_at !== undefined) {
         meta.push(`Due: ${formatIsoFromMs(card.due_at)}`);
-    }
-    if (card.archived_at) {
-        meta.push("**[archived]**");
     }
     if (meta.length > 0) {
         lines.push("", meta.join("  ·  "));

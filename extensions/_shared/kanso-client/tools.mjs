@@ -3,58 +3,48 @@
  * tests can inject a fake client. The string returned is what the model sees.
  */
 
-/** @typedef {{ get: (p: string) => Promise<any>, post: (p: string, b?: unknown) => Promise<any>, patch: (p: string, b?: unknown) => Promise<any> }} Client */
+/** @typedef {{ get: (p: string) => Promise<any>, post: (p: string, b?: unknown) => Promise<any>, patch: (p: string, b?: unknown) => Promise<any>, delete: (p: string) => Promise<any> }} Client */
 
 const SEARCH_DEFAULT = 20;
 const SEARCH_MAX = 50;
 
 /**
  * @param {Client} client
- * @param {{ board_id?: string, column_id?: string, include_archived?: boolean }} args
+ * @param {{ board_id?: string, column_id?: string }} args
  */
 export const kansoList = async (client, args) => {
-    const includeArchived = args.include_archived === true;
-    const q = includeArchived ? "?include_archived=true" : "";
-
     if (args.column_id !== undefined && args.column_id !== "") {
-        const cards = await client.get(`/columns/${encodeURIComponent(args.column_id)}/cards${q}`);
+        const cards = await client.get(`/columns/${encodeURIComponent(args.column_id)}/cards`);
         if (!Array.isArray(cards) || cards.length === 0) return "kanso: no cards in column";
         const lines = cards.map((c) => {
             const preview = bodyPreview(c.body_text);
-            const flag = c.archived_at ? " [archived]" : "";
-            return `- ${c.id}  ${c.title}${flag}${preview}`;
+            return `- ${c.id}  ${c.title}${preview}`;
         });
         return lines.join("\n");
     }
 
     if (args.board_id !== undefined && args.board_id !== "") {
-        const cols = await client.get(`/boards/${encodeURIComponent(args.board_id)}/columns${q}`);
+        const cols = await client.get(`/boards/${encodeURIComponent(args.board_id)}/columns`);
         if (!Array.isArray(cols) || cols.length === 0) return "kanso: no columns on board";
-        // For each column include the (non-archived unless asked) card count.
-        // limit=500 matches the API cap; render `500+` when saturated so the
-        // user knows there are more. One round-trip per column is fine — there
-        // are rarely more than ~10.
+        // For each column include the card count. limit=500 matches the API
+        // cap; render `500+` when saturated so the user knows there are more.
+        // One round-trip per column is fine — there are exactly 4.
         const lines = await Promise.all(
             cols.map(async (c) => {
                 const cards = await client.get(
-                    `/columns/${encodeURIComponent(c.id)}/cards?limit=500${
-                        includeArchived ? "&include_archived=true" : ""
-                    }`,
+                    `/columns/${encodeURIComponent(c.id)}/cards?limit=500`,
                 );
                 const n = Array.isArray(cards) ? cards.length : 0;
                 const display = n >= 500 ? "500+" : `${n}`;
-                const flag = c.archived_at ? " [archived]" : "";
-                return `- ${c.id}  ${c.name}  (${display} card${n === 1 ? "" : "s"})${flag}`;
+                return `- ${c.id}  ${c.name}  (${display} card${n === 1 ? "" : "s"})`;
             }),
         );
         return lines.join("\n");
     }
 
-    const boards = await client.get(`/boards${q}`);
+    const boards = await client.get(`/boards`);
     if (!Array.isArray(boards) || boards.length === 0) return "kanso: no boards";
-    return boards
-        .map((b) => `- ${b.id}  ${b.name}${b.archived_at ? " [archived]" : ""}`)
-        .join("\n");
+    return boards.map((b) => `- ${b.id}  ${b.name}`).join("\n");
 };
 
 /**
@@ -110,13 +100,15 @@ export const kansoMove = async (client, args) => {
 };
 
 /**
+ * Hard-delete a card. Archive/soft-delete is gone; done means gone.
+ *
  * @param {Client} client
  * @param {{ card_id: string }} args
  */
 export const kansoDone = async (client, args) => {
     if (!args?.card_id) throw new Error("kanso: card_id is required");
-    await client.post(`/cards/${encodeURIComponent(args.card_id)}/archive`);
-    return `kanso: archived card ${args.card_id}`;
+    await client.delete(`/cards/${encodeURIComponent(args.card_id)}`);
+    return `kanso: deleted card ${args.card_id}`;
 };
 
 /**

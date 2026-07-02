@@ -9,12 +9,13 @@ import {
 } from "./tools.mjs";
 
 /**
- * @param {Partial<{get: any, post: any, patch: any}>} overrides
+ * @param {Partial<{get: any, post: any, patch: any, delete: any}>} overrides
  */
 const fakeClient = (overrides = {}) => ({
     get: overrides.get ?? vi.fn(),
     post: overrides.post ?? vi.fn(),
     patch: overrides.patch ?? vi.fn(),
+    delete: overrides.delete ?? vi.fn(),
 });
 
 describe("kansoList", () => {
@@ -41,17 +42,6 @@ describe("kansoList", () => {
         expect(get).toHaveBeenCalledWith("/columns/c1/cards?limit=500");
     });
 
-    it("column counts pass include_archived through", async () => {
-        const get = vi.fn(async (/** @type {string} */ p) => {
-            if (p.startsWith("/boards/")) return [{ id: "c1", name: "Done" }];
-            return [];
-        });
-        await kansoList(fakeClient({ get }), { board_id: "b1", include_archived: true });
-        // Outer board listing forwards include_archived as ?q=...; per-column
-        // count fetch must too, or archived cards get dropped from the tally.
-        expect(get).toHaveBeenCalledWith("/columns/c1/cards?limit=500&include_archived=true");
-    });
-
     it("column counts render 500+ at the page cap", async () => {
         const big = Array.from({ length: 500 }, (_, i) => ({ id: `k${i}` }));
         const get = vi.fn(async (/** @type {string} */ p) => {
@@ -65,7 +55,7 @@ describe("kansoList", () => {
 
     it("lists cards when column_id given", async () => {
         const get = vi.fn(async () => [
-            { id: "k1", title: "Hello", body_text: "world", archived_at: null },
+            { id: "k1", title: "Hello", body_text: "world" },
         ]);
         const out = await kansoList(fakeClient({ get }), { column_id: "c1" });
         expect(get).toHaveBeenCalledWith("/columns/c1/cards");
@@ -148,11 +138,11 @@ describe("kansoMove", () => {
 });
 
 describe("kansoDone", () => {
-    it("archives a card", async () => {
-        const post = vi.fn(async () => null);
-        const out = await kansoDone(fakeClient({ post }), { card_id: "k1" });
-        expect(post).toHaveBeenCalledWith("/cards/k1/archive");
-        expect(out).toContain("archived");
+    it("hard-deletes a card", async () => {
+        const del = vi.fn(async () => null);
+        const out = await kansoDone(fakeClient({ delete: del }), { card_id: "k1" });
+        expect(del).toHaveBeenCalledWith("/cards/k1");
+        expect(out).toContain("deleted");
     });
 });
 

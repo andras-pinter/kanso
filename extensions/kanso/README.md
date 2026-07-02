@@ -39,10 +39,10 @@ npm install --prefix extensions
 
 | Tool | Description |
 | --- | --- |
-| `kanso_list` | List boards (no args), columns (`board_id`), or cards (`column_id`). Optional `include_archived`. |
+| `kanso_list` | List boards (no args), columns (`board_id`), or cards (`column_id`). |
 | `kanso_add` | Create a card in a column. Required `column_id`, `title`. Optional `body` (sets `body_text`). |
 | `kanso_move` | Move a card to another column. Appends to the end. Required `card_id`, `target_column_id`. |
-| `kanso_done` | Archive a card (soft delete). Required `card_id`. |
+| `kanso_done` | Delete a card (hard delete). Required `card_id`. |
 | `kanso_search` | FTS5 search across cards. Required `q`. Optional `limit` (default 20, max 50). |
 
 ## Port file
@@ -73,7 +73,7 @@ and re-reads once on any `401` or `ECONNREFUSED` before giving up.
    - "add a card titled 'try it out' to column `<col-id>`"
    - "search kanso for 'meeting'"
    - "move card `<id>` to column `<id>`"
-   - "archive card `<id>`"
+   - "delete card `<id>`"
 
 ## Test
 

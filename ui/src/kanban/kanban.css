@@ -530,7 +530,7 @@ body {
 }
 
 /* Phase 1: card face carries only title + tags + this "has notes" dot.
-   Body preview and DueBadge moved into the modal. */
+   Body preview is dropped; the body itself lives in the card modal. */
 .kanso-card-has-body {
   display: inline-block;
   width: 4px;

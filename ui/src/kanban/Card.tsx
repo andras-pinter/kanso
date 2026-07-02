@@ -10,8 +10,8 @@ interface Props {
 }
 
 // Phase 1: the card face carries content only — title, tag chips, and a
-// subtle "has notes" dot. DueBadge / body-text preview live in the modal,
-// not on the face.
+// subtle "has notes" dot. The body text and any due-date affordance live
+// inside the card modal, not on the face.
 const hasBodyText = (card: CardDto): boolean =>
   (card.body_text?.trim().length ?? 0) > 0;
 

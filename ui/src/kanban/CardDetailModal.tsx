@@ -1,13 +1,10 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { useKanbanStore } from './hooks/useKanbanStore';
 import type { CardDto } from './types';
-import type { CardBodyEditorHandle } from './CardBodyEditor';
+import CardBodyEditor, { type CardBodyEditorHandle } from './CardBodyEditor';
 import TagPickerPopover from './TagPickerPopover';
 import CardHeaderMenu from './CardHeaderMenu';
-
-// Lazy boundary: keep ALL @blocksuite/* imports out of the entry chunk.
-const CardBodyEditor = lazy(() => import('./CardBodyEditor'));
 
 interface Props {
   card: CardDto;
@@ -276,13 +273,11 @@ export default function CardDetailModal({ card }: Props) {
             <div className="kanso-doc-props">
               <TagPickerPopover cardId={card.id} />
             </div>
-            <Suspense fallback={<div className="kanso-editor-loading">Loading editor…</div>}>
-              <CardBodyEditor
-                cardId={card.id}
-                ref={editorRef}
-                onSaved={flashSaved}
-              />
-            </Suspense>
+            <CardBodyEditor
+              cardId={card.id}
+              ref={editorRef}
+              onSaved={flashSaved}
+            />
           </div>
         </div>
         <header className="kanso-modal-header">

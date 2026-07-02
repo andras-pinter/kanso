@@ -394,7 +394,7 @@ body {
   flex: 1;
   display: flex;
   gap: 16px;
-  padding: 32px 24px 24px;
+  padding: 16px 24px 24px;
   overflow-x: auto;
   overflow-y: hidden;
   align-items: flex-start;
@@ -1060,6 +1060,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  flex: 1;
+  min-height: 0;
 }
 
 .kanso-editor-status {
@@ -1086,11 +1088,11 @@ body {
 }
 
 .kanso-editor-host {
-  min-height: 240px;
-  border: 1px solid var(--kanso-border);
-  border-radius: var(--kanso-radius-sm);
-  background: var(--kanso-bg-elevated);
-  padding: 8px 10px;
+  flex: 1;
+  min-height: 320px;
+  border: none;
+  background: transparent;
+  padding: 0;
 }
 
 .kanso-save-error {
@@ -1133,9 +1135,11 @@ body {
      the rounded corners at the top. */
 }
 
-/* Card-as-doc modifier: the CardDetailModal renders body-then-header in
-   DOM (so Tab flows content → chrome) and flips it visually here. Reverse
-   order preserves the natural focus trap first/last semantics. */
+.kanso-modal.kanso-modal--doc {
+  width: min(960px, 100%);
+  height: 85vh;
+  max-height: 85vh;
+}
 .kanso-modal--doc {
   flex-direction: column-reverse;
 }
@@ -1199,15 +1203,13 @@ body {
   gap: 28px;
 }
 
-/* Reading-width wrapper: modal chrome stays 880px, editor content wraps
-   at 680px. Applies to the doc-title, properties strip, and editor. */
 .kanso-doc-content {
-  max-width: 680px;
   width: 100%;
-  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 20px;
+  flex: 1;
+  min-height: 0;
 }
 
 .kanso-doc-title {
@@ -1577,12 +1579,9 @@ body {
 .kanso-board-toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 24px 0;
-  position: absolute;
-  top: 0;
-  right: 0;
-  z-index: var(--kanso-z-overlay);
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 24px 0;
 }
 
 .kanso-toggle {

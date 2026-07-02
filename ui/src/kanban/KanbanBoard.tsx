@@ -48,8 +48,6 @@ export default function KanbanBoard() {
   const selectedCardId = useKanbanStore((s) => s.selectedCardId);
   const currentBoardId = useKanbanStore((s) => s.currentBoardId);
   const boardCreate = useKanbanStore((s) => s.boardCreate);
-  const showArchived = useKanbanStore((s) => s.showArchived);
-  const setShowArchived = useKanbanStore((s) => s.setShowArchived);
 
   const [draggingCardId, setDraggingCardId] = useState<string | null>(null);
   const [manageTagsOpen, setManageTagsOpen] = useState(false);
@@ -166,14 +164,6 @@ export default function KanbanBoard() {
   return (
     <div className="kanso-board">
       <div className="kanso-board-toolbar">
-        <label className="kanso-toggle">
-          <input
-            type="checkbox"
-            checked={showArchived}
-            onChange={(e) => void setShowArchived(e.target.checked)}
-          />
-          <span>Show archived</span>
-        </label>
         <button
           type="button"
           className="kanso-btn kanso-btn--icon"

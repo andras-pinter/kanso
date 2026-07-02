@@ -41,7 +41,9 @@ export default function CardDetailModal({ card }: Props) {
 
   // Single source of truth for title persistence. Blur triggers it via a
   // fire-and-forget wrapper; close()/archive() await it so a dirty title
-  // can't vanish silently when the modal unmounts.
+  // can't vanish silently when the modal unmounts. The store's updateCard
+  // swallows API failures (optimistic rollback + store.error), so we
+  // verify persistence by reading state back and throwing on mismatch.
   const commitTitle = async (): Promise<void> => {
     const trimmed = title.trim();
     if (trimmed.length === 0) {
@@ -50,6 +52,12 @@ export default function CardDetailModal({ card }: Props) {
     }
     if (trimmed === card.title) return;
     await updateCard(card.id, { title: trimmed });
+    const fresh = useKanbanStore
+      .getState()
+      .cardsByColumn[card.column_id]?.find((c) => c.id === card.id);
+    if (!fresh || fresh.title !== trimmed) {
+      throw new Error('title save failed');
+    }
     flashSaved();
   };
 

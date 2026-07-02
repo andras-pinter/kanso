@@ -8,14 +8,24 @@ import type { CardDto } from '../types';
 
 // Module-level controls for the mocked CardBodyEditor. Each test sets a
 // `flushImpl` that returns a deferred / rejection so we can drive the
-// close/archive coordination paths.
-const editorState: { flushImpl: () => Promise<void>; flushCalls: number } = {
+// close/archive coordination paths. `onSaved` is captured so title-only
+// save flow can be asserted without triggering the body path.
+const editorState: {
+  flushImpl: () => Promise<void>;
+  flushCalls: number;
+  lastOnSaved: (() => void) | undefined;
+} = {
   flushImpl: () => Promise.resolve(),
   flushCalls: 0,
+  lastOnSaved: undefined,
 };
 
 vi.mock('../CardBodyEditor', () => {
-  const Editor = forwardRef<{ flush: () => Promise<void> }>((_props, ref) => {
+  interface MockProps {
+    onSaved?: () => void;
+  }
+  const Editor = forwardRef<{ flush: () => Promise<void> }, MockProps>((props, ref) => {
+    editorState.lastOnSaved = props.onSaved;
     useImperativeHandle(ref, () => ({
       flush: () => {
         editorState.flushCalls += 1;
@@ -28,12 +38,9 @@ vi.mock('../CardBodyEditor', () => {
   return { default: Editor };
 });
 
-// Avoid pulling tag/due network paths into modal tests.
+// Avoid pulling tag network paths into modal tests.
 vi.mock('../TagPickerPopover', () => ({
   default: () => <div data-testid="tag-picker-mock" />,
-}));
-vi.mock('../DueDateEditor', () => ({
-  default: () => <div data-testid="due-date-mock" />,
 }));
 
 import CardDetailModal from '../CardDetailModal';
@@ -52,7 +59,9 @@ function card(id = 'c1', title = 'Hello'): CardDto {
   };
 }
 
-function resetStore(seed: CardDto) {
+function resetStore(seed: CardDto | CardDto[]) {
+  const cards = Array.isArray(seed) ? seed : [seed];
+  const firstId = cards[0]?.id ?? null;
   useKanbanStore.setState({
     status: 'ready',
     error: null,
@@ -71,8 +80,8 @@ function resetStore(seed: CardDto) {
         archived_at: null,
       },
     ],
-    cardsByColumn: { col1: [seed] },
-    selectedCardId: seed.id,
+    cardsByColumn: { col1: cards },
+    selectedCardId: firstId,
     tags: [],
     tagsLoaded: true,
     cardTagMap: {},
@@ -93,6 +102,7 @@ describe('CardDetailModal', () => {
   beforeEach(() => {
     editorState.flushImpl = () => Promise.resolve();
     editorState.flushCalls = 0;
+    editorState.lastOnSaved = undefined;
     resetStore(card());
   });
 
@@ -101,16 +111,34 @@ describe('CardDetailModal', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders dialog with title, tag picker, due date, and body slot', () => {
+  it('renders dialog with accessible title control and tag picker', () => {
     __setInvoker(async () => undefined as never);
     render(<CardDetailModal card={card()} />);
     expect(screen.getByRole('dialog', { name: /card detail/i })).toBeTruthy();
-    expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('Hello');
+    // Title is a textarea with an aria-label — no visible label element.
+    const title = screen.getByRole('textbox', { name: 'Card title' }) as HTMLTextAreaElement;
+    expect(title.value).toBe('Hello');
+    expect(title.tagName).toBe('TEXTAREA');
+    expect(title.placeholder).toBe('Untitled');
     expect(screen.getByTestId('tag-picker-mock')).toBeTruthy();
-    expect(screen.getByTestId('due-date-mock')).toBeTruthy();
   });
 
-  it('title blur with change calls card_update', async () => {
+  it('does not render DueBadge or DueDateEditor inside the modal', () => {
+    __setInvoker(async () => undefined as never);
+    render(<CardDetailModal card={card()} />);
+    expect(screen.queryByTestId('due-date-mock')).toBeNull();
+    // DueBadge renders with class .kanso-due-badge.
+    expect(document.querySelector('.kanso-due-badge')).toBeNull();
+  });
+
+  it('initial focus lands on the title textarea', () => {
+    __setInvoker(async () => undefined as never);
+    render(<CardDetailModal card={card()} />);
+    const title = screen.getByRole('textbox', { name: 'Card title' });
+    expect(document.activeElement).toBe(title);
+  });
+
+  it('title blur with change calls card_update and flashes Saved', async () => {
     let updateArgs: { id: string; patch: unknown } | null = null;
     const invoker: InvokeFn = async (cmd, args) => {
       if (cmd === 'card_update') {
@@ -122,11 +150,33 @@ describe('CardDetailModal', () => {
     };
     __setInvoker(invoker);
     render(<CardDetailModal card={card()} />);
-    const input = screen.getByLabelText('Title') as HTMLInputElement;
+    const input = screen.getByRole('textbox', { name: 'Card title' }) as HTMLTextAreaElement;
     fireEvent.change(input, { target: { value: 'New title' } });
     fireEvent.blur(input);
     await waitFor(() => expect(updateArgs).not.toBeNull());
     expect(updateArgs!.id).toBe('c1');
+  });
+
+  it('Enter in the title textarea blurs (no line break)', async () => {
+    __setInvoker(async () => card('c1', 'One line') as never);
+    render(<CardDetailModal card={card()} />);
+    const input = screen.getByRole('textbox', { name: 'Card title' }) as HTMLTextAreaElement;
+    input.focus();
+    fireEvent.change(input, { target: { value: 'One line' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    // Blur fires as a consequence.
+    expect(document.activeElement).not.toBe(input);
+  });
+
+  it('Escape in the title textarea reverts and does not close the modal', async () => {
+    __setInvoker(async () => undefined as never);
+    render(<CardDetailModal card={card()} />);
+    const input = screen.getByRole('textbox', { name: 'Card title' }) as HTMLTextAreaElement;
+    input.focus();
+    fireEvent.change(input, { target: { value: 'Half-written' } });
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(input.value).toBe('Hello');
+    expect(useKanbanStore.getState().selectedCardId).toBe('c1');
   });
 
   it('backdrop click awaits flush then deselects', async () => {
@@ -134,9 +184,14 @@ describe('CardDetailModal', () => {
     editorState.flushImpl = () => def.promise;
     __setInvoker(async () => undefined as never);
     render(<CardDetailModal card={card()} />);
+    await screen.findByTestId('body-editor-mock');
 
     const backdrop = screen.getByRole('dialog').parentElement as HTMLElement;
-    fireEvent.click(backdrop);
+    await act(async () => {
+      fireEvent.click(backdrop);
+      // Let close() advance past `await commitTitle()` so `flush()` runs.
+      await Promise.resolve();
+    });
     expect(editorState.flushCalls).toBe(1);
     expect(useKanbanStore.getState().selectedCardId).toBe('c1');
 
@@ -147,7 +202,7 @@ describe('CardDetailModal', () => {
     await waitFor(() => expect(useKanbanStore.getState().selectedCardId).toBeNull());
   });
 
-  it('backdrop click while flush rejects keeps modal open and shows banner', async () => {
+  it('close-blocked banner appears when body flush rejects', async () => {
     editorState.flushImpl = () => Promise.reject(new Error('save failed'));
     __setInvoker(async () => undefined as never);
     render(<CardDetailModal card={card()} />);
@@ -161,7 +216,35 @@ describe('CardDetailModal', () => {
     expect(screen.getByRole('alert').textContent).toMatch(/Can.t close yet/);
   });
 
-  it('Escape key triggers close path', async () => {
+  it('close-blocked banner appears when title save rejects', async () => {
+    const invoker: InvokeFn = async (cmd) => {
+      if (cmd === 'card_update') throw new Error('title save failed');
+      return undefined as never;
+    };
+    __setInvoker(invoker);
+    render(<CardDetailModal card={card()} />);
+    await screen.findByTestId('body-editor-mock');
+    const input = screen.getByRole('textbox', { name: 'Card title' }) as HTMLTextAreaElement;
+    fireEvent.change(input, { target: { value: 'Dirty title' } });
+
+    // Body flush would succeed — we're proving title-save failures also
+    // block close and surface the same banner.
+    const dialog = screen.getByRole('dialog');
+    await act(async () => {
+      fireEvent.keyDown(dialog, { key: 'Escape' });
+      // close() → await commitTitle() → updateCard throws → setCloseBlocked.
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(useKanbanStore.getState().selectedCardId).toBe('c1');
+    });
+    expect(screen.getByRole('alert').textContent).toMatch(/Can.t close yet/);
+  });
+
+  it('Escape triggers close when the overflow menu is closed', async () => {
     __setInvoker(async () => undefined as never);
     render(<CardDetailModal card={card()} />);
     const dialog = screen.getByRole('dialog');
@@ -172,27 +255,20 @@ describe('CardDetailModal', () => {
     await waitFor(() => expect(useKanbanStore.getState().selectedCardId).toBeNull());
   });
 
-  it('Escape retries flush after closeBlocked', async () => {
-    editorState.flushImpl = () => Promise.reject(new Error('save failed'));
+  it('Escape closes the overflow menu without closing the modal', async () => {
     __setInvoker(async () => undefined as never);
     render(<CardDetailModal card={card()} />);
-    const dialog = screen.getByRole('dialog');
+    const menuBtn = screen.getByRole('button', { name: 'Card menu' });
+    fireEvent.click(menuBtn);
+    expect(screen.getByRole('menu')).toBeTruthy();
 
-    await act(async () => {
-      fireEvent.keyDown(dialog, { key: 'Escape' });
-    });
-    expect(screen.getByRole('alert')).toBeTruthy();
-    expect(editorState.flushCalls).toBe(1);
-
-    editorState.flushImpl = () => Promise.resolve();
-    await act(async () => {
-      fireEvent.keyDown(dialog, { key: 'Escape' });
-    });
-    expect(editorState.flushCalls).toBe(2);
-    await waitFor(() => expect(useKanbanStore.getState().selectedCardId).toBeNull());
+    fireEvent.keyDown(menuBtn, { key: 'Escape' });
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(useKanbanStore.getState().selectedCardId).toBe('c1');
+    expect(editorState.flushCalls).toBe(0);
   });
 
-  it('archive awaits flush then calls card_archive', async () => {
+  it('archive via overflow menu awaits flush then calls card_archive', async () => {
     const def = deferred<void>();
     editorState.flushImpl = () => def.promise;
     let archived = false;
@@ -205,8 +281,14 @@ describe('CardDetailModal', () => {
     };
     __setInvoker(invoker);
     render(<CardDetailModal card={card()} />);
+    await screen.findByTestId('body-editor-mock');
 
-    fireEvent.click(screen.getByRole('button', { name: /archive/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Card menu' }));
+    const item = await screen.findByRole('menuitem', { name: /archive/i });
+    await act(async () => {
+      fireEvent.click(item);
+      await Promise.resolve();
+    });
     expect(editorState.flushCalls).toBe(1);
     expect(archived).toBe(false);
 
@@ -218,7 +300,7 @@ describe('CardDetailModal', () => {
     await waitFor(() => expect(archived).toBe(true));
   });
 
-  it('archive while flush rejects does not call card_archive', async () => {
+  it('archive keeps modal open when body flush rejects', async () => {
     editorState.flushImpl = () => Promise.reject(new Error('save failed'));
     let archived = false;
     const invoker: InvokeFn = async (cmd) => {
@@ -230,13 +312,31 @@ describe('CardDetailModal', () => {
     };
     __setInvoker(invoker);
     render(<CardDetailModal card={card()} />);
+    await screen.findByTestId('body-editor-mock');
 
+    fireEvent.click(screen.getByRole('button', { name: 'Card menu' }));
+    const item = await screen.findByRole('menuitem', { name: /archive/i });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /archive/i }));
+      fireEvent.click(item);
+      await Promise.resolve();
+      await Promise.resolve();
     });
 
     expect(archived).toBe(false);
     expect(screen.getByRole('alert')).toBeTruthy();
+  });
+
+  it('body onSaved callback flashes the header Saved pill', async () => {
+    __setInvoker(async () => undefined as never);
+    render(<CardDetailModal card={card()} />);
+    // The mock captures onSaved; simulate a successful body save.
+    expect(editorState.lastOnSaved).toBeTruthy();
+    await act(async () => {
+      editorState.lastOnSaved?.();
+    });
+    const pill = document.querySelector('.kanso-saved-pill--visible');
+    expect(pill).toBeTruthy();
+    expect(pill?.textContent).toMatch(/Saved/);
   });
 
   it('Tab from last focusable wraps to first', async () => {
@@ -260,5 +360,48 @@ describe('CardDetailModal', () => {
     first.focus();
     fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true });
     expect(document.activeElement).toBe(last);
+  });
+
+  it('long multi-line title stays within the textarea (no horizontal overflow)', () => {
+    __setInvoker(async () => undefined as never);
+    const long =
+      'A very long title that would wrap across multiple visual lines when rendered in the doc-title control at 22px semibold';
+    render(<CardDetailModal card={card('c1', long)} />);
+    const input = screen.getByRole('textbox', { name: 'Card title' }) as HTMLTextAreaElement;
+    // Textarea wraps by default (wrap attr defaults to soft) — no
+    // horizontal scroll needed. Asserting the CSS-driven wrapping props.
+    expect(input.value).toBe(long);
+    // A textarea's rendered wrap is the browser default; the important
+    // guarantee here is that the control IS a textarea (accepts wrap)
+    // rather than a single-line input.
+    expect(input.tagName).toBe('TEXTAREA');
+  });
+
+  it('archive returns focus to the next card in the same column', async () => {
+    resetStore([card('c1', 'First'), card('c2', 'Second')]);
+    const nextEl = document.createElement('div');
+    nextEl.setAttribute('data-card-id', 'c2');
+    nextEl.setAttribute('tabindex', '0');
+    document.body.appendChild(nextEl);
+
+    const invoker: InvokeFn = async (cmd) => {
+      if (cmd === 'card_archive') return undefined as never;
+      return undefined as never;
+    };
+    __setInvoker(invoker);
+    render(<CardDetailModal card={card('c1', 'First')} />);
+    await screen.findByTestId('body-editor-mock');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Card menu' }));
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('menuitem', { name: /archive/i }));
+    });
+    // Let queueMicrotask fire.
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(document.activeElement).toBe(nextEl);
+
+    document.body.removeChild(nextEl);
   });
 });

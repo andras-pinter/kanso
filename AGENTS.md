@@ -14,15 +14,20 @@ kanso is a personal, local-first Kanban app for a single user. It runs as a tray
 - **sqlx** + SQLite — persistence; `.sqlx/` is committed for offline mode
 - **React + Vite** — UI
 - **Zustand** — client state
-- **dnd-kit** — column / card drag
-- **BlockSuite** — rich-text editor for card bodies; **lazy-loaded**, pinned to **Vite ^6.0.3**
+- **dnd-kit** — card drag (columns are fixed, no column drag)
+- **BlockSuite** — rich-text editor for card bodies; eager-loaded, pinned to **Vite ^6.0.3**
+
+## Product rules
+
+- **Columns are fixed:** every board seeds four columns on create — **Incoming** (gray), **Todo** (blue), **In Progress** (amber), **Done** (green). Users cannot add, rename, reorder, or delete columns.
+- **No archive.** Delete is a hard delete for boards, cards, and tags. There is no soft-delete / archived_at anywhere in the domain.
 
 ## Hard constraints
 
 - **No `unwrap()` / `expect()`** outside `#[cfg(test)]`. Errors as values.
 - **No panics in library code.** Return `Result<T, E>` with crate-typed errors via `thiserror`.
 - **No `serde_json::Value` in Tauri command signatures.** Inputs and outputs must be explicit, typed structs.
-- **BlockSuite stays lazy-loaded** and Vite stays pinned at `^6.0.3` (BlockSuite's compat range).
+- **Vite stays pinned at `^6.0.3`** (BlockSuite's compat range).
 - **No circular crate deps.** `kanso-core` knows nothing of axum, Tauri, or React.
 - **`.sqlx/` is committed.** `node_modules/`, `target/`, `dist/`, `gen/` are not.
 

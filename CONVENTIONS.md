@@ -10,7 +10,7 @@ fix(auth): reject expired tokens in refresh path
 refactor(core): extract fractional-index helper
 chore: bump sqlx to 0.8
 docs: add architecture overview
-test(api): cover archive idempotency
+test(api): cover fixed-column seeding
 ```
 
 Allowed types: `feat`, `fix`, `refactor`, `chore`, `docs`, `test`.
@@ -20,7 +20,7 @@ Allowed types: `feat`, `fix`, `refactor`, `chore`, `docs`, `test`.
 `<type>/<short-kebab-description>`
 
 ```
-feat/card-archive
+feat/quick-add-modal
 fix/dnd-drop-target
 chore/ci-cache
 refactor/error-types
@@ -33,8 +33,8 @@ Never commit to `master`. PRs only.
 ## Do
 
 - Errors as `Result<T, E>` with crate-typed errors via `thiserror`.
-- Fractional indexing for column / card positions (no full reorders on move).
-- Soft delete via `archived_at: Option<DateTime<Utc>>`, never hard delete from UI flows.
+- Fractional indexing for card positions (no full reorders on move).
+- Hard delete only — there is no `archived_at` in the domain.
 - Explicit, typed input/output structs on every Tauri command.
 - Small modules, flat hierarchies, composition over inheritance.
 - Colocate Rust tests in `#[cfg(test)] mod tests`. Colocate UI tests next to the component.

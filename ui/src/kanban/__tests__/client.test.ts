@@ -181,7 +181,7 @@ describe('kanban api client', () => {
       { cmd: 'card_tag_add', args: { cardId: 'k1', tagId: 't1' } },
       { cmd: 'card_tag_remove', args: { cardId: 'k1', tagId: 't1' } },
       { cmd: 'board_card_tags_list', args: { boardId: 'b1' } },
-      { cmd: 'card_search', args: { query: 'foo', includeArchived: false } },
+      { cmd: 'card_search', args: { q: 'foo', includeArchived: false, limit: undefined, offset: undefined } },
     ]);
   });
 });

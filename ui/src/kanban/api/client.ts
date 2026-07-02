@@ -180,5 +180,10 @@ export const cardBodySet = (id: string, body: CardBodySet): Promise<void> =>
 
 // ---------- search ----------
 
-export const cardSearch = (query: string, includeArchived = false): Promise<CardSearchHitDto[]> =>
-  invoker('card_search', { query, includeArchived });
+export const cardSearch = (
+  q: string,
+  includeArchived = false,
+  limit?: number,
+  offset?: number,
+): Promise<CardSearchHitDto[]> =>
+  invoker('card_search', { q, includeArchived, limit, offset });

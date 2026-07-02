@@ -1,9 +1,11 @@
-// Right-side drawer for managing tags: rename, recolor, archive, delete.
-// Mirrors `ManageBoardsDrawer` structure for visual consistency.
+// Right-side drawer for managing tags: rename, archive, delete.
+// Mirrors `ManageBoardsDrawer` structure for visual consistency. Tag
+// colors are derived from tag.id (see tagChipStyle), so this drawer no
+// longer exposes a color picker.
 
 import { useEffect, useRef, useState } from 'react';
-import ColorPicker from './ColorPicker';
 import { useKanbanStore } from './hooks/useKanbanStore';
+import { tagChipStyle } from './tagChipStyle';
 import type { TagDto } from './types';
 import { ConfirmDialog, PromptDialog } from '../Dialog';
 
@@ -66,7 +68,6 @@ export default function ManageTagsDrawer({ onClose }: Props) {
                 key={t.id}
                 tag={t}
                 onRename={(name) => void tagUpdate(t.id, { name })}
-                onColor={(c) => void tagUpdate(t.id, { color: c })}
                 onArchive={() => void tagArchive(t.id)}
                 onDelete={() => setPendingDelete({ tag: t, archived: false })}
               />
@@ -88,7 +89,6 @@ export default function ManageTagsDrawer({ onClose }: Props) {
                   tag={t}
                   archived
                   onRename={(name) => void tagUpdate(t.id, { name })}
-                  onColor={(c) => void tagUpdate(t.id, { color: c })}
                   onUnarchive={() => void tagUnarchive(t.id)}
                   onDelete={() => setPendingDelete({ tag: t, archived: true })}
                 />
@@ -133,7 +133,6 @@ interface RowProps {
   tag: TagDto;
   archived?: boolean;
   onRename: (name: string) => void;
-  onColor: (c: string | null) => void;
   onArchive?: () => void;
   onUnarchive?: () => void;
   onDelete: () => void;
@@ -143,14 +142,12 @@ function TagRow({
   tag,
   archived = false,
   onRename,
-  onColor,
   onArchive,
   onUnarchive,
   onDelete,
 }: RowProps) {
   const [name, setName] = useState(tag.name);
   const [lastTagName, setLastTagName] = useState(tag.name);
-  const [showColors, setShowColors] = useState(false);
   const nameRef = useRef<HTMLInputElement | null>(null);
 
   if (tag.name !== lastTagName) {
@@ -169,13 +166,14 @@ function TagRow({
 
   return (
     <div className={`kanso-board-row${archived ? ' kanso-board-row--archived' : ''}`}>
-      <button
-        type="button"
-        className="kanso-swatch kanso-swatch--small"
-        style={{ backgroundColor: tag.color ?? 'transparent' }}
-        aria-label="Change color"
-        onClick={() => setShowColors((v) => !v)}
-      />
+      <span
+        className="kanso-tag-chip"
+        style={tagChipStyle(tag.id)}
+        aria-hidden="true"
+        title={tag.name}
+      >
+        <span className="kanso-tag-chip-name">{tag.name}</span>
+      </span>
       <input
         ref={nameRef}
         className="kanso-board-row-name"
@@ -207,17 +205,6 @@ function TagRow({
           Delete
         </button>
       </div>
-      {showColors && (
-        <div className="kanso-board-row-colors">
-          <ColorPicker
-            value={tag.color}
-            onChange={(c) => {
-              onColor(c);
-              setShowColors(false);
-            }}
-          />
-        </div>
-      )}
     </div>
   );
 }

@@ -85,17 +85,27 @@ async fn update(
 async fn archive(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Result<StatusCode, ApiError> {
+) -> Result<Json<BoardDto>, ApiError> {
     BoardRepo::archive(&state.pool, &id).await?;
-    Ok(StatusCode::OK)
+    load_board(&state, id).await
 }
 
 async fn unarchive(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Result<StatusCode, ApiError> {
+) -> Result<Json<BoardDto>, ApiError> {
     BoardRepo::unarchive(&state.pool, &id).await?;
-    Ok(StatusCode::OK)
+    load_board(&state, id).await
+}
+
+async fn load_board(state: &AppState, id: String) -> Result<Json<BoardDto>, ApiError> {
+    match BoardRepo::get(&state.pool, &id).await? {
+        Some(board) => Ok(Json(BoardDto::from(board))),
+        None => Err(ApiError(KansoError::NotFound {
+            entity: "board",
+            id,
+        })),
+    }
 }
 
 async fn hard_delete(

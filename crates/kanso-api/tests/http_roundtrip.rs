@@ -209,6 +209,9 @@ async fn board_crud_via_http() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
+    let archived: BoardDto = serde_json::from_value(body_json(res).await).unwrap();
+    assert_eq!(archived.id, created.id);
+    assert!(archived.archived_at.is_some());
 
     let res = app.clone().oneshot(req("GET", "/boards")).await.unwrap();
     let active: Vec<BoardDto> = serde_json::from_value(body_json(res).await).unwrap();
@@ -228,6 +231,9 @@ async fn board_crud_via_http() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
+    let unarchived: BoardDto = serde_json::from_value(body_json(res).await).unwrap();
+    assert_eq!(unarchived.id, created.id);
+    assert!(unarchived.archived_at.is_none());
 
     let res = app
         .oneshot(req("DELETE", &format!("/boards/{}", created.id)))

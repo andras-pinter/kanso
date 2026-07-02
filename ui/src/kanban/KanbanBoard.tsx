@@ -19,6 +19,7 @@ import {
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { isTauri } from './api/client';
 import ColumnList from './ColumnList';
+import BoardFilterBar from './BoardFilterBar';
 import CardDetailModal from './CardDetailModal';
 import ErrorBoundary from '../ErrorBoundary';
 import { CardOverlay } from './Card';
@@ -224,7 +225,12 @@ export default function KanbanBoard() {
             </button>
           </div>
         )}
-        {status === 'ready' && currentBoardId !== null && <ColumnList />}
+        {status === 'ready' && currentBoardId !== null && (
+          <>
+            <BoardFilterBar />
+            <ColumnList />
+          </>
+        )}
         <DragOverlay>{draggingCard ? <CardOverlay card={draggingCard} /> : null}</DragOverlay>
       </DndContext>
       {selectedCard && (

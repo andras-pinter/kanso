@@ -378,6 +378,7 @@ body {
 .kanso-board {
   flex: 1;
   display: flex;
+  flex-direction: column;
   min-height: 0;
   position: relative;
   background: var(--kanso-bg);
@@ -646,6 +647,18 @@ body {
 }
 
 .kanso-btn--icon:hover svg {
+  color: var(--kanso-fg);
+}
+
+.kanso-btn--ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--kanso-fg-muted);
+}
+
+.kanso-btn--ghost:hover {
+  background: var(--kanso-bg-hover);
+  border-color: transparent;
   color: var(--kanso-fg);
 }
 
@@ -1714,6 +1727,63 @@ body {
 .kanso-tag-chip-remove:hover {
   color: var(--kanso-danger);
   opacity: 1;
+}
+
+/* ---------- Board tag filter bar ---------- */
+
+.kanso-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px 0;
+  flex-wrap: wrap;
+}
+
+.kanso-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.kanso-tag-chip--filter {
+  border: 1px solid transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  transition:
+    box-shadow 120ms ease,
+    filter 120ms ease;
+}
+
+.kanso-tag-chip--filter:hover {
+  filter: brightness(0.97);
+}
+
+.kanso-tag-chip--filter:focus-visible {
+  outline: 2px solid var(--kanso-accent);
+  outline-offset: 2px;
+}
+
+.kanso-tag-chip--selected {
+  box-shadow: inset 0 0 0 1.5px currentColor;
+  filter: brightness(0.96);
+}
+
+.kanso-filter-clear {
+  margin-left: auto;
+}
+
+/* ---------- Per-column empty-filter message ---------- */
+
+.kanso-column-empty-filter {
+  margin: 4px 6px;
+  padding: 10px 12px;
+  color: var(--kanso-fg-subtle);
+  font-size: 12px;
+  font-style: italic;
+  text-align: center;
 }
 
 .kanso-tag-picker {

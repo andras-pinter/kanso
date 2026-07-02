@@ -23,6 +23,8 @@ export default function Column({ column, cards }: Props) {
   const unarchiveColumn = useKanbanStore((s) => s.unarchiveColumn);
   const unarchiveCard = useKanbanStore((s) => s.unarchiveCard);
   const showArchived = useKanbanStore((s) => s.showArchived);
+  const selectedTagIds = useKanbanStore((s) => s.selectedTagIds);
+  const cardTagMap = useKanbanStore((s) => s.cardTagMap);
 
   const isArchived = column.archived_at !== null;
 
@@ -81,6 +83,15 @@ export default function Column({ column, cards }: Props) {
   const liveCards = cards.filter((c) => c.archived_at === null);
   const archivedCards = cards.filter((c) => c.archived_at !== null);
 
+  const filterActive = selectedTagIds.length > 0;
+  const visibleLiveCards = filterActive
+    ? liveCards.filter((c) => {
+        const tagIds = cardTagMap[c.id] ?? [];
+        return selectedTagIds.every((tid) => tagIds.includes(tid));
+      })
+    : liveCards;
+  const hiddenByFilter = filterActive && liveCards.length > 0 && visibleLiveCards.length === 0;
+
   const stripeStyle = column.color
     ? { borderTopColor: column.color, borderTopWidth: 3 }
     : undefined;
@@ -133,7 +144,7 @@ export default function Column({ column, cards }: Props) {
             {column.name}
           </h2>
         )}
-        <span className="kanso-column-count">{liveCards.length}</span>
+        <span className="kanso-column-count">{visibleLiveCards.length}</span>
         {isArchived ? (
           <button
             type="button"
@@ -153,16 +164,19 @@ export default function Column({ column, cards }: Props) {
         )}
       </header>
       <SortableContext
-        items={isArchived ? [] : liveCards.map((c) => c.id)}
+        items={isArchived ? [] : visibleLiveCards.map((c) => c.id)}
         strategy={verticalListSortingStrategy}
       >
         <div
           ref={setBodyRef}
-          className={`kanso-cards${liveCards.length === 0 ? ' kanso-cards--empty' : ''}`}
+          className={`kanso-cards${visibleLiveCards.length === 0 ? ' kanso-cards--empty' : ''}`}
         >
-          {liveCards.map((c) => (
+          {visibleLiveCards.map((c) => (
             <Card key={c.id} card={c} />
           ))}
+          {hiddenByFilter && (
+            <p className="kanso-column-empty-filter">No cards match this filter</p>
+          )}
         </div>
       </SortableContext>
       {showArchived && archivedCards.length > 0 && (

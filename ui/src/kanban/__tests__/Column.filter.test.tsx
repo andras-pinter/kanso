@@ -105,7 +105,7 @@ describe('Column tag filter', () => {
     expect(screen.queryByText('second')).toBeNull();
   });
 
-  it('does not render the zero-state message for an empty column', () => {
+  it('does not render the filter zero-state message for an empty column', () => {
     resetStore({
       tags: [tag('t1', 'a')],
       cardsByColumn: { col1: [] },
@@ -113,6 +113,27 @@ describe('Column tag filter', () => {
     });
     renderColumn([]);
     expect(screen.queryByText(/no cards match this filter/i)).toBeNull();
+    expect(screen.getByText(/no cards yet/i)).toBeTruthy();
+  });
+
+  it('renders "No cards yet" for an unfiltered empty column', () => {
+    resetStore({ cardsByColumn: { col1: [] } });
+    renderColumn([]);
+    expect(screen.getByText(/no cards yet/i)).toBeTruthy();
+    expect(screen.queryByText(/no cards match this filter/i)).toBeNull();
+  });
+
+  it('does not render "No cards yet" when the column has cards hidden by a filter', () => {
+    const cards = [card('c1', 'first')];
+    resetStore({
+      tags: [tag('t1', 'a')],
+      cardsByColumn: { col1: cards },
+      cardTagMap: { c1: [] },
+      selectedTagIds: ['t1'],
+    });
+    renderColumn(cards);
+    expect(screen.queryByText(/no cards yet/i)).toBeNull();
+    expect(screen.getByText(/no cards match this filter/i)).toBeTruthy();
   });
 
   it('column count reflects the filtered list', () => {

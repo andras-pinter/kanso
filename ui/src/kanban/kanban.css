@@ -424,6 +424,20 @@ body {
   padding: 4px 4px 0;
 }
 
+.kanso-column-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.kanso-column-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
 .kanso-column-name {
   margin: 0;
   font-size: 13px;
@@ -441,6 +455,11 @@ body {
   padding: 2px 8px;
   min-width: 18px;
   text-align: center;
+}
+
+.kanso-column-count--empty {
+  color: var(--kanso-fg-subtle);
+  opacity: 0.55;
 }
 
 .kanso-cards {
@@ -1776,6 +1795,14 @@ body {
 }
 
 /* ---------- Per-column empty-filter message ---------- */
+
+.kanso-column-empty {
+  margin: 4px 6px;
+  padding: 24px 0;
+  color: var(--kanso-fg-muted);
+  font-size: 12px;
+  text-align: center;
+}
 
 .kanso-column-empty-filter {
   margin: 4px 6px;

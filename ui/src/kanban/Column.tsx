@@ -91,6 +91,7 @@ export default function Column({ column, cards }: Props) {
       })
     : liveCards;
   const hiddenByFilter = filterActive && liveCards.length > 0 && visibleLiveCards.length === 0;
+  const trulyEmpty = !isArchived && liveCards.length === 0;
 
   const stripeStyle = column.color
     ? { borderTopColor: column.color, borderTopWidth: 3 }
@@ -111,40 +112,55 @@ export default function Column({ column, cards }: Props) {
         {...(isArchived ? {} : listeners)}
       >
         {isArchived && <span className="kanso-column-archived-tag">Archived</span>}
-        {renaming ? (
-          <input
-            ref={inputRef}
-            className="kanso-column-rename"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={commitRename}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                commitRename();
-              } else if (e.key === 'Escape') {
-                e.preventDefault();
-                setDraft(column.name);
-                setRenaming(false);
-              }
-            }}
-            // Stop pointerdown so the drag listeners don't grab the input
-            onPointerDown={(e) => e.stopPropagation()}
-          />
-        ) : (
-          <h2
-            className="kanso-column-name"
-            onDoubleClick={() => {
-              if (!isArchived) {
-                setDraft(column.name);
-                setRenaming(true);
-              }
-            }}
-          >
-            {column.name}
-          </h2>
-        )}
-        <span className="kanso-column-count">{visibleLiveCards.length}</span>
+        <div className="kanso-column-title">
+          {column.color && (
+            <span
+              className="kanso-column-dot"
+              style={{ backgroundColor: column.color }}
+              aria-hidden="true"
+            />
+          )}
+          {renaming ? (
+            <input
+              ref={inputRef}
+              className="kanso-column-rename"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  commitRename();
+                } else if (e.key === 'Escape') {
+                  e.preventDefault();
+                  setDraft(column.name);
+                  setRenaming(false);
+                }
+              }}
+              // Stop pointerdown so the drag listeners don't grab the input
+              onPointerDown={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <h2
+              className="kanso-column-name"
+              onDoubleClick={() => {
+                if (!isArchived) {
+                  setDraft(column.name);
+                  setRenaming(true);
+                }
+              }}
+            >
+              {column.name}
+            </h2>
+          )}
+        </div>
+        <span
+          className={`kanso-column-count${
+            visibleLiveCards.length === 0 ? ' kanso-column-count--empty' : ''
+          }`}
+        >
+          {visibleLiveCards.length}
+        </span>
         {isArchived ? (
           <button
             type="button"
@@ -174,6 +190,9 @@ export default function Column({ column, cards }: Props) {
           {visibleLiveCards.map((c) => (
             <Card key={c.id} card={c} />
           ))}
+          {trulyEmpty && (
+            <p className="kanso-column-empty">No cards yet</p>
+          )}
           {hiddenByFilter && (
             <p className="kanso-column-empty-filter">No cards match this filter</p>
           )}

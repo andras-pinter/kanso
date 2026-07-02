@@ -49,7 +49,6 @@ struct SearchRow {
     due_at: Option<i64>,
     created_at: i64,
     updated_at: i64,
-    archived_at: Option<i64>,
     col_id: String,
     col_name: String,
     board_id: String,
@@ -69,7 +68,6 @@ impl SearchRow {
                 due_at: self.due_at,
                 created_at: self.created_at,
                 updated_at: self.updated_at,
-                archived_at: self.archived_at,
             },
             column_id: self.col_id,
             column_name: self.col_name,
@@ -116,7 +114,6 @@ impl CardRepo {
             due_at: None,
             created_at: now,
             updated_at: now,
-            archived_at: None,
         })
     }
 
@@ -128,20 +125,13 @@ impl CardRepo {
         Ok(row)
     }
 
-    pub async fn list_by_column(
-        pool: &SqlitePool,
-        column_id: &str,
-        include_archived: bool,
-    ) -> Result<Vec<Card>> {
-        let sql = if include_archived {
-            "SELECT * FROM cards WHERE column_id = ?1 ORDER BY position ASC"
-        } else {
-            "SELECT * FROM cards WHERE column_id = ?1 AND archived_at IS NULL ORDER BY position ASC"
-        };
-        let rows = sqlx::query_as::<_, Card>(sql)
-            .bind(column_id)
-            .fetch_all(pool)
-            .await?;
+    pub async fn list_by_column(pool: &SqlitePool, column_id: &str) -> Result<Vec<Card>> {
+        let rows = sqlx::query_as::<_, Card>(
+            "SELECT * FROM cards WHERE column_id = ?1 ORDER BY position ASC",
+        )
+        .bind(column_id)
+        .fetch_all(pool)
+        .await?;
         Ok(rows)
     }
 
@@ -157,23 +147,18 @@ impl CardRepo {
     pub async fn list_by_column_paged(
         pool: &SqlitePool,
         column_id: &str,
-        include_archived: bool,
         limit: u32,
         offset: u32,
     ) -> Result<Vec<Card>> {
-        let sql = if include_archived {
+        let rows = sqlx::query_as::<_, Card>(
             "SELECT * FROM cards WHERE column_id = ?1 \
-             ORDER BY position ASC, id ASC LIMIT ?2 OFFSET ?3"
-        } else {
-            "SELECT * FROM cards WHERE column_id = ?1 AND archived_at IS NULL \
-             ORDER BY position ASC, id ASC LIMIT ?2 OFFSET ?3"
-        };
-        let rows = sqlx::query_as::<_, Card>(sql)
-            .bind(column_id)
-            .bind(limit)
-            .bind(offset)
-            .fetch_all(pool)
-            .await?;
+             ORDER BY position ASC, id ASC LIMIT ?2 OFFSET ?3",
+        )
+        .bind(column_id)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(pool)
+        .await?;
         Ok(rows)
     }
 
@@ -204,6 +189,22 @@ impl CardRepo {
                 entity: "card",
                 id: id.to_string(),
             })
+    }
+
+    /// Hard delete. FTS content is cleaned up by the `cards_fts_ad`
+    /// trigger; `card_tags` rows cascade via ON DELETE CASCADE.
+    pub async fn delete(pool: &SqlitePool, id: &str) -> Result<()> {
+        let res = sqlx::query("DELETE FROM cards WHERE id = ?1")
+            .bind(id)
+            .execute(pool)
+            .await?;
+        if res.rows_affected() == 0 {
+            return Err(KansoError::NotFound {
+                entity: "card",
+                id: id.to_string(),
+            });
+        }
+        Ok(())
     }
 
     /// Move `card_id` into `target_column_id` at the slot between `before`
@@ -252,7 +253,7 @@ impl CardRepo {
                 }
                 let between_b_and_a: Option<(String,)> = sqlx::query_as(
                     "SELECT position FROM cards \
-                     WHERE column_id = ?1 AND archived_at IS NULL \
+                     WHERE column_id = ?1 \
                        AND position > ?2 AND position < ?3 AND id != ?4 \
                      LIMIT 1",
                 )
@@ -273,7 +274,7 @@ impl CardRepo {
             (Some(b), None) => {
                 let next: Option<(String,)> = sqlx::query_as(
                     "SELECT position FROM cards \
-                     WHERE column_id = ?1 AND archived_at IS NULL \
+                     WHERE column_id = ?1 \
                        AND position > ?2 AND id != ?3 \
                      ORDER BY position ASC LIMIT 1",
                 )
@@ -288,7 +289,7 @@ impl CardRepo {
             (None, Some(a)) => {
                 let prev: Option<(String,)> = sqlx::query_as(
                     "SELECT position FROM cards \
-                     WHERE column_id = ?1 AND archived_at IS NULL \
+                     WHERE column_id = ?1 \
                        AND position < ?2 AND id != ?3 \
                      ORDER BY position DESC LIMIT 1",
                 )
@@ -305,7 +306,7 @@ impl CardRepo {
                 // excluding the moved card itself.
                 let last: Option<(String,)> = sqlx::query_as(
                     "SELECT position FROM cards \
-                     WHERE column_id = ?1 AND archived_at IS NULL AND id != ?2 \
+                     WHERE column_id = ?1 AND id != ?2 \
                      ORDER BY position DESC LIMIT 1",
                 )
                 .bind(target_column_id)
@@ -410,36 +411,21 @@ impl CardRepo {
         }
     }
 
-    pub async fn search(
-        pool: &SqlitePool,
-        query: &str,
-        include_archived: bool,
-    ) -> Result<Vec<Card>> {
+    pub async fn search(pool: &SqlitePool, query: &str) -> Result<Vec<Card>> {
         let trimmed = query.trim();
         if trimmed.is_empty() {
             return Ok(Vec::new());
         }
         let match_expr = fts5_quote(trimmed);
-        let sql = if include_archived {
+        let cards = sqlx::query_as::<_, Card>(
             "SELECT c.* FROM cards c \
              JOIN cards_fts f ON f.rowid = c.rowid \
              WHERE cards_fts MATCH ?1 \
-             ORDER BY rank, c.updated_at DESC, c.id ASC"
-        } else {
-            "SELECT c.* FROM cards c \
-             JOIN cards_fts f ON f.rowid = c.rowid \
-             JOIN columns col ON col.id = c.column_id \
-             JOIN boards b ON b.id = col.board_id \
-             WHERE cards_fts MATCH ?1 \
-               AND c.archived_at IS NULL \
-               AND col.archived_at IS NULL \
-               AND b.archived_at IS NULL \
-             ORDER BY rank, c.updated_at DESC, c.id ASC"
-        };
-        let cards = sqlx::query_as::<_, Card>(sql)
-            .bind(match_expr)
-            .fetch_all(pool)
-            .await?;
+             ORDER BY rank, c.updated_at DESC, c.id ASC",
+        )
+        .bind(match_expr)
+        .fetch_all(pool)
+        .await?;
         Ok(cards)
     }
 
@@ -449,14 +435,13 @@ impl CardRepo {
     pub async fn search_with_context(
         pool: &SqlitePool,
         query: &str,
-        include_archived: bool,
     ) -> Result<Vec<CardSearchHit>> {
         let trimmed = query.trim();
         if trimmed.is_empty() {
             return Ok(Vec::new());
         }
         let match_expr = fts5_quote(trimmed);
-        let sql = if include_archived {
+        let rows = sqlx::query_as::<_, SearchRow>(
             "SELECT c.id          AS card_id, \
                     c.column_id   AS card_column_id, \
                     c.title       AS title, \
@@ -465,7 +450,6 @@ impl CardRepo {
                     c.due_at      AS due_at, \
                     c.created_at  AS created_at, \
                     c.updated_at  AS updated_at, \
-                    c.archived_at AS archived_at, \
                     col.id        AS col_id, \
                     col.name      AS col_name, \
                     b.id          AS board_id, \
@@ -475,35 +459,11 @@ impl CardRepo {
              JOIN columns col ON col.id = c.column_id \
              JOIN boards b ON b.id = col.board_id \
              WHERE cards_fts MATCH ?1 \
-             ORDER BY rank, c.updated_at DESC, c.id ASC"
-        } else {
-            "SELECT c.id          AS card_id, \
-                    c.column_id   AS card_column_id, \
-                    c.title       AS title, \
-                    c.body_text   AS body_text, \
-                    c.position    AS position, \
-                    c.due_at      AS due_at, \
-                    c.created_at  AS created_at, \
-                    c.updated_at  AS updated_at, \
-                    c.archived_at AS archived_at, \
-                    col.id        AS col_id, \
-                    col.name      AS col_name, \
-                    b.id          AS board_id, \
-                    b.name        AS board_name \
-             FROM cards c \
-             JOIN cards_fts f ON f.rowid = c.rowid \
-             JOIN columns col ON col.id = c.column_id \
-             JOIN boards b ON b.id = col.board_id \
-             WHERE cards_fts MATCH ?1 \
-               AND c.archived_at IS NULL \
-               AND col.archived_at IS NULL \
-               AND b.archived_at IS NULL \
-             ORDER BY rank, c.updated_at DESC, c.id ASC"
-        };
-        let rows = sqlx::query_as::<_, SearchRow>(sql)
-            .bind(match_expr)
-            .fetch_all(pool)
-            .await?;
+             ORDER BY rank, c.updated_at DESC, c.id ASC",
+        )
+        .bind(match_expr)
+        .fetch_all(pool)
+        .await?;
         Ok(rows.into_iter().map(SearchRow::into_hit).collect())
     }
 
@@ -511,7 +471,6 @@ impl CardRepo {
     pub async fn search_with_context_paged(
         pool: &SqlitePool,
         query: &str,
-        include_archived: bool,
         limit: u32,
         offset: u32,
     ) -> Result<Vec<CardSearchHit>> {
@@ -520,7 +479,7 @@ impl CardRepo {
             return Ok(Vec::new());
         }
         let match_expr = fts5_quote(trimmed);
-        let sql = if include_archived {
+        let rows = sqlx::query_as::<_, SearchRow>(
             "SELECT c.id          AS card_id, \
                     c.column_id   AS card_column_id, \
                     c.title       AS title, \
@@ -529,7 +488,6 @@ impl CardRepo {
                     c.due_at      AS due_at, \
                     c.created_at  AS created_at, \
                     c.updated_at  AS updated_at, \
-                    c.archived_at AS archived_at, \
                     col.id        AS col_id, \
                     col.name      AS col_name, \
                     b.id          AS board_id, \
@@ -539,37 +497,13 @@ impl CardRepo {
              JOIN columns col ON col.id = c.column_id \
              JOIN boards b ON b.id = col.board_id \
              WHERE cards_fts MATCH ?1 \
-             ORDER BY rank, c.updated_at DESC, c.id ASC LIMIT ?2 OFFSET ?3"
-        } else {
-            "SELECT c.id          AS card_id, \
-                    c.column_id   AS card_column_id, \
-                    c.title       AS title, \
-                    c.body_text   AS body_text, \
-                    c.position    AS position, \
-                    c.due_at      AS due_at, \
-                    c.created_at  AS created_at, \
-                    c.updated_at  AS updated_at, \
-                    c.archived_at AS archived_at, \
-                    col.id        AS col_id, \
-                    col.name      AS col_name, \
-                    b.id          AS board_id, \
-                    b.name        AS board_name \
-             FROM cards c \
-             JOIN cards_fts f ON f.rowid = c.rowid \
-             JOIN columns col ON col.id = c.column_id \
-             JOIN boards b ON b.id = col.board_id \
-             WHERE cards_fts MATCH ?1 \
-               AND c.archived_at IS NULL \
-               AND col.archived_at IS NULL \
-               AND b.archived_at IS NULL \
-             ORDER BY rank, c.updated_at DESC, c.id ASC LIMIT ?2 OFFSET ?3"
-        };
-        let rows = sqlx::query_as::<_, SearchRow>(sql)
-            .bind(match_expr)
-            .bind(limit)
-            .bind(offset)
-            .fetch_all(pool)
-            .await?;
+             ORDER BY rank, c.updated_at DESC, c.id ASC LIMIT ?2 OFFSET ?3",
+        )
+        .bind(match_expr)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(pool)
+        .await?;
         Ok(rows.into_iter().map(SearchRow::into_hit).collect())
     }
 
@@ -579,16 +513,6 @@ impl CardRepo {
         let mut tx = pool.begin().await?;
         ensure_exists(&mut tx, "cards", "card", card_id).await?;
         ensure_exists(&mut tx, "tags", "tag", tag_id).await?;
-        let archived: Option<(Option<i64>,)> =
-            sqlx::query_as("SELECT archived_at FROM tags WHERE id = ?1")
-                .bind(tag_id)
-                .fetch_optional(&mut *tx)
-                .await?;
-        if let Some((Some(_),)) = archived {
-            return Err(KansoError::InvalidInput(
-                "cannot link an archived tag; unarchive it first".into(),
-            ));
-        }
         sqlx::query("INSERT OR IGNORE INTO card_tags (card_id, tag_id) VALUES (?1, ?2)")
             .bind(card_id)
             .bind(tag_id)
@@ -613,31 +537,20 @@ impl CardRepo {
         Ok(())
     }
 
-    /// Tags currently linked to `card_id`, alphabetised. Archived tags are
-    /// hidden unless `include_archived` is true. `NotFound` if the card
-    /// does not exist.
-    pub async fn tags_for_card(
-        pool: &SqlitePool,
-        card_id: &str,
-        include_archived: bool,
-    ) -> Result<Vec<Tag>> {
+    /// Tags currently linked to `card_id`, alphabetised. `NotFound` if the
+    /// card does not exist.
+    pub async fn tags_for_card(pool: &SqlitePool, card_id: &str) -> Result<Vec<Tag>> {
         let mut tx = pool.begin().await?;
         ensure_exists(&mut tx, "cards", "card", card_id).await?;
-        let sql = if include_archived {
+        let rows = sqlx::query_as::<_, Tag>(
             "SELECT t.* FROM tags t \
              JOIN card_tags ct ON ct.tag_id = t.id \
              WHERE ct.card_id = ?1 \
-             ORDER BY t.name COLLATE NOCASE ASC"
-        } else {
-            "SELECT t.* FROM tags t \
-             JOIN card_tags ct ON ct.tag_id = t.id \
-             WHERE ct.card_id = ?1 AND t.archived_at IS NULL \
-             ORDER BY t.name COLLATE NOCASE ASC"
-        };
-        let rows = sqlx::query_as::<_, Tag>(sql)
-            .bind(card_id)
-            .fetch_all(&mut *tx)
-            .await?;
+             ORDER BY t.name COLLATE NOCASE ASC",
+        )
+        .bind(card_id)
+        .fetch_all(&mut *tx)
+        .await?;
         tx.commit().await?;
         Ok(rows)
     }
@@ -646,29 +559,22 @@ impl CardRepo {
     pub async fn tags_for_card_paged(
         pool: &SqlitePool,
         card_id: &str,
-        include_archived: bool,
         limit: u32,
         offset: u32,
     ) -> Result<Vec<Tag>> {
         let mut tx = pool.begin().await?;
         ensure_exists(&mut tx, "cards", "card", card_id).await?;
-        let sql = if include_archived {
+        let rows = sqlx::query_as::<_, Tag>(
             "SELECT t.* FROM tags t \
              JOIN card_tags ct ON ct.tag_id = t.id \
              WHERE ct.card_id = ?1 \
-             ORDER BY t.name COLLATE NOCASE ASC, t.id ASC LIMIT ?2 OFFSET ?3"
-        } else {
-            "SELECT t.* FROM tags t \
-             JOIN card_tags ct ON ct.tag_id = t.id \
-             WHERE ct.card_id = ?1 AND t.archived_at IS NULL \
-             ORDER BY t.name COLLATE NOCASE ASC, t.id ASC LIMIT ?2 OFFSET ?3"
-        };
-        let rows = sqlx::query_as::<_, Tag>(sql)
-            .bind(card_id)
-            .bind(limit)
-            .bind(offset)
-            .fetch_all(&mut *tx)
-            .await?;
+             ORDER BY t.name COLLATE NOCASE ASC, t.id ASC LIMIT ?2 OFFSET ?3",
+        )
+        .bind(card_id)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&mut *tx)
+        .await?;
         tx.commit().await?;
         Ok(rows)
     }
@@ -676,30 +582,19 @@ impl CardRepo {
     /// Cards linked to `tag_id`, ordered by board layout (column position
     /// then card position) so callers receive them in the same order they
     /// appear visually on the board. `NotFound` if the tag does not exist.
-    pub async fn cards_with_tag(
-        pool: &SqlitePool,
-        tag_id: &str,
-        include_archived: bool,
-    ) -> Result<Vec<Card>> {
+    pub async fn cards_with_tag(pool: &SqlitePool, tag_id: &str) -> Result<Vec<Card>> {
         let mut tx = pool.begin().await?;
         ensure_exists(&mut tx, "tags", "tag", tag_id).await?;
-        let sql = if include_archived {
+        let rows = sqlx::query_as::<_, Card>(
             "SELECT c.* FROM cards c \
              JOIN card_tags ct ON ct.card_id = c.id \
              JOIN columns col ON col.id = c.column_id \
              WHERE ct.tag_id = ?1 \
-             ORDER BY col.position ASC, c.position ASC"
-        } else {
-            "SELECT c.* FROM cards c \
-             JOIN card_tags ct ON ct.card_id = c.id \
-             JOIN columns col ON col.id = c.column_id \
-             WHERE ct.tag_id = ?1 AND c.archived_at IS NULL \
-             ORDER BY col.position ASC, c.position ASC"
-        };
-        let rows = sqlx::query_as::<_, Card>(sql)
-            .bind(tag_id)
-            .fetch_all(&mut *tx)
-            .await?;
+             ORDER BY col.position ASC, c.position ASC",
+        )
+        .bind(tag_id)
+        .fetch_all(&mut *tx)
+        .await?;
         tx.commit().await?;
         Ok(rows)
     }
@@ -708,41 +603,31 @@ impl CardRepo {
     pub async fn cards_with_tag_paged(
         pool: &SqlitePool,
         tag_id: &str,
-        include_archived: bool,
         limit: u32,
         offset: u32,
     ) -> Result<Vec<Card>> {
         let mut tx = pool.begin().await?;
         ensure_exists(&mut tx, "tags", "tag", tag_id).await?;
-        let sql = if include_archived {
+        let rows = sqlx::query_as::<_, Card>(
             "SELECT c.* FROM cards c \
              JOIN card_tags ct ON ct.card_id = c.id \
              JOIN columns col ON col.id = c.column_id \
              WHERE ct.tag_id = ?1 \
              ORDER BY col.position ASC, col.id ASC, c.position ASC, c.id ASC \
-             LIMIT ?2 OFFSET ?3"
-        } else {
-            "SELECT c.* FROM cards c \
-             JOIN card_tags ct ON ct.card_id = c.id \
-             JOIN columns col ON col.id = c.column_id \
-             WHERE ct.tag_id = ?1 AND c.archived_at IS NULL \
-             ORDER BY col.position ASC, col.id ASC, c.position ASC, c.id ASC \
-             LIMIT ?2 OFFSET ?3"
-        };
-        let rows = sqlx::query_as::<_, Card>(sql)
-            .bind(tag_id)
-            .bind(limit)
-            .bind(offset)
-            .fetch_all(&mut *tx)
-            .await?;
+             LIMIT ?2 OFFSET ?3",
+        )
+        .bind(tag_id)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&mut *tx)
+        .await?;
         tx.commit().await?;
         Ok(rows)
     }
 
     /// Every `(card_id, tag_id)` link for a board. Walks `card_tags` joined
-    /// through `cards`/`columns` and filters by `columns.board_id`. Includes
-    /// archived cards/columns/tags — the UI decides what to render. Returned
-    /// pairs are ordered by `(card_id, tag_id)` for determinism.
+    /// through `cards`/`columns` and filters by `columns.board_id`. Returned
+    /// pairs are ordered by `(card_id, tag_name, tag_id)` for determinism.
     ///
     /// Bounded by a generous 10_000-row hard cap as defense-in-depth — the
     /// link table is naturally tag-density-bounded, but if it ever grows past
@@ -776,51 +661,6 @@ impl CardRepo {
         Ok(rows)
     }
 
-    /// Visible-subset variant of [`card_tags_for_board`]: filters archived
-    /// cards/columns in SQL when `include_archived` is false, so a board with
-    /// a huge archive can't 409 the full-board snapshot before we even reach
-    /// the filter step. Same 10_000-row hard cap for symmetry.
-    pub async fn card_tags_for_board_visible<'e, E>(
-        executor: E,
-        board_id: &str,
-        include_archived: bool,
-    ) -> Result<Vec<(String, String)>>
-    where
-        E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
-    {
-        const HARD_CAP: usize = 10_000;
-        let sql = if include_archived {
-            "SELECT ct.card_id, ct.tag_id FROM card_tags ct \
-             JOIN cards c ON c.id = ct.card_id \
-             JOIN columns col ON col.id = c.column_id \
-             JOIN tags t ON t.id = ct.tag_id \
-             WHERE col.board_id = ?1 \
-             ORDER BY ct.card_id, t.name COLLATE NOCASE ASC, ct.tag_id \
-             LIMIT ?2"
-        } else {
-            "SELECT ct.card_id, ct.tag_id FROM card_tags ct \
-             JOIN cards c ON c.id = ct.card_id \
-             JOIN columns col ON col.id = c.column_id \
-             JOIN tags t ON t.id = ct.tag_id \
-             WHERE col.board_id = ?1 \
-               AND c.archived_at IS NULL \
-               AND col.archived_at IS NULL \
-             ORDER BY ct.card_id, t.name COLLATE NOCASE ASC, ct.tag_id \
-             LIMIT ?2"
-        };
-        let rows: Vec<(String, String)> = sqlx::query_as(sql)
-            .bind(board_id)
-            .bind((HARD_CAP + 1) as i64)
-            .fetch_all(executor)
-            .await?;
-        if rows.len() > HARD_CAP {
-            return Err(KansoError::Conflict(format!(
-                "board has more than {HARD_CAP} visible card-tag links; refusing to load"
-            )));
-        }
-        Ok(rows)
-    }
-
     pub async fn card_tags_all(pool: &SqlitePool) -> Result<Vec<(String, String)>> {
         let rows = sqlx::query_as(
             "SELECT card_id, tag_id FROM card_tags ORDER BY card_id ASC, tag_id ASC",
@@ -828,38 +668,6 @@ impl CardRepo {
         .fetch_all(pool)
         .await?;
         Ok(rows)
-    }
-
-    pub async fn archive(pool: &SqlitePool, id: &str) -> Result<()> {
-        let now = now_ms();
-        let res = sqlx::query("UPDATE cards SET archived_at = ?1, updated_at = ?1 WHERE id = ?2")
-            .bind(now)
-            .bind(id)
-            .execute(pool)
-            .await?;
-        if res.rows_affected() == 0 {
-            return Err(KansoError::NotFound {
-                entity: "card",
-                id: id.to_string(),
-            });
-        }
-        Ok(())
-    }
-
-    pub async fn unarchive(pool: &SqlitePool, id: &str) -> Result<()> {
-        let now = now_ms();
-        let res = sqlx::query("UPDATE cards SET archived_at = NULL, updated_at = ?1 WHERE id = ?2")
-            .bind(now)
-            .bind(id)
-            .execute(pool)
-            .await?;
-        if res.rows_affected() == 0 {
-            return Err(KansoError::NotFound {
-                entity: "card",
-                id: id.to_string(),
-            });
-        }
-        Ok(())
     }
 }
 

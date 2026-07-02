@@ -6,11 +6,8 @@ use crate::error::AppError;
 use crate::RuntimeState;
 
 #[tauri::command]
-pub async fn boards_list(
-    state: State<'_, RuntimeState>,
-    include_archived: bool,
-) -> Result<Vec<BoardDto>, AppError> {
-    let rows = BoardRepo::list_all(&state.pool, include_archived).await?;
+pub async fn boards_list(state: State<'_, RuntimeState>) -> Result<Vec<BoardDto>, AppError> {
+    let rows = BoardRepo::list_all(&state.pool).await?;
     Ok(rows.into_iter().map(BoardDto::from).collect())
 }
 
@@ -38,38 +35,9 @@ pub async fn board_update(
 }
 
 #[tauri::command]
-pub async fn board_archive(
-    state: State<'_, RuntimeState>,
-    id: String,
-) -> Result<BoardDto, AppError> {
-    BoardRepo::archive(&state.pool, &id).await?;
-    load_board(&state, &id).await
-}
-
-#[tauri::command]
-pub async fn board_unarchive(
-    state: State<'_, RuntimeState>,
-    id: String,
-) -> Result<BoardDto, AppError> {
-    BoardRepo::unarchive(&state.pool, &id).await?;
-    load_board(&state, &id).await
-}
-
-#[tauri::command]
 pub async fn board_delete(state: State<'_, RuntimeState>, id: String) -> Result<(), AppError> {
     BoardRepo::hard_delete(&state.pool, &id).await?;
     Ok(())
-}
-
-async fn load_board(state: &State<'_, RuntimeState>, id: &str) -> Result<BoardDto, AppError> {
-    match BoardRepo::get(&state.pool, id).await? {
-        Some(b) => Ok(b.into()),
-        None => Err(kanso_core::KansoError::NotFound {
-            entity: "board",
-            id: id.to_string(),
-        }
-        .into()),
-    }
 }
 
 #[tauri::command]

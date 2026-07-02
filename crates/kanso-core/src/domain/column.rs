@@ -10,5 +10,4 @@ pub struct Column {
     pub color: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
-    pub archived_at: Option<i64>,
 }

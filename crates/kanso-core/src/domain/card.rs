@@ -12,5 +12,4 @@ pub struct Card {
     pub due_at: Option<i64>,
     pub created_at: i64,
     pub updated_at: i64,
-    pub archived_at: Option<i64>,
 }

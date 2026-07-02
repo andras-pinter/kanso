@@ -42,7 +42,6 @@ impl TagRepo {
                 color: color.map(|s| s.to_string()),
                 created_at: now,
                 updated_at: now,
-                archived_at: None,
             }),
             Err(e) if is_tag_name_unique_violation(&e) => Err(KansoError::Conflict(format!(
                 "tag name '{trimmed}' already exists"
@@ -51,33 +50,24 @@ impl TagRepo {
         }
     }
 
-    pub async fn list(pool: &SqlitePool, include_archived: bool) -> Result<Vec<Tag>> {
-        let sql = if include_archived {
-            "SELECT * FROM tags ORDER BY name COLLATE NOCASE ASC"
-        } else {
-            "SELECT * FROM tags WHERE archived_at IS NULL ORDER BY name COLLATE NOCASE ASC"
-        };
-        let rows = sqlx::query_as::<_, Tag>(sql).fetch_all(pool).await?;
+    pub async fn list(pool: &SqlitePool) -> Result<Vec<Tag>> {
+        let rows = sqlx::query_as::<_, Tag>(
+            "SELECT * FROM tags ORDER BY name COLLATE NOCASE ASC",
+        )
+        .fetch_all(pool)
+        .await?;
         Ok(rows)
     }
 
-    pub async fn list_paged(
-        pool: &SqlitePool,
-        include_archived: bool,
-        limit: u32,
-        offset: u32,
-    ) -> Result<Vec<Tag>> {
-        let sql = if include_archived {
-            "SELECT * FROM tags ORDER BY name COLLATE NOCASE ASC, id ASC LIMIT ?1 OFFSET ?2"
-        } else {
-            "SELECT * FROM tags WHERE archived_at IS NULL \
-             ORDER BY name COLLATE NOCASE ASC, id ASC LIMIT ?1 OFFSET ?2"
-        };
-        let rows = sqlx::query_as::<_, Tag>(sql)
-            .bind(limit)
-            .bind(offset)
-            .fetch_all(pool)
-            .await?;
+    pub async fn list_paged(pool: &SqlitePool, limit: u32, offset: u32) -> Result<Vec<Tag>> {
+        let rows = sqlx::query_as::<_, Tag>(
+            "SELECT * FROM tags \
+             ORDER BY name COLLATE NOCASE ASC, id ASC LIMIT ?1 OFFSET ?2",
+        )
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(pool)
+        .await?;
         Ok(rows)
     }
 
@@ -128,40 +118,8 @@ impl TagRepo {
         }
     }
 
-    pub async fn archive(pool: &SqlitePool, id: &str) -> Result<()> {
-        let now = now_ms();
-        let res = sqlx::query("UPDATE tags SET archived_at = ?1, updated_at = ?1 WHERE id = ?2")
-            .bind(now)
-            .bind(id)
-            .execute(pool)
-            .await?;
-        if res.rows_affected() == 0 {
-            return Err(KansoError::NotFound {
-                entity: "tag",
-                id: id.to_string(),
-            });
-        }
-        Ok(())
-    }
-
-    pub async fn unarchive(pool: &SqlitePool, id: &str) -> Result<()> {
-        let now = now_ms();
-        let res = sqlx::query("UPDATE tags SET archived_at = NULL, updated_at = ?1 WHERE id = ?2")
-            .bind(now)
-            .bind(id)
-            .execute(pool)
-            .await?;
-        if res.rows_affected() == 0 {
-            return Err(KansoError::NotFound {
-                entity: "tag",
-                id: id.to_string(),
-            });
-        }
-        Ok(())
-    }
-
     /// Hard delete. `card_tags` rows pointing at this tag are removed by
-    /// `ON DELETE CASCADE`. Prefer [`archive`] for user-visible removals.
+    /// `ON DELETE CASCADE`.
     pub async fn delete(pool: &SqlitePool, id: &str) -> Result<()> {
         let res = sqlx::query("DELETE FROM tags WHERE id = ?1")
             .bind(id)

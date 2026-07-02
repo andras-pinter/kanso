@@ -14,17 +14,9 @@ use crate::AppState;
 #[derive(Debug, Deserialize)]
 struct ListBoardsQuery {
     #[serde(default)]
-    include_archived: bool,
-    #[serde(default)]
     limit: Option<u32>,
     #[serde(default)]
     offset: Option<u32>,
-}
-
-#[derive(Debug, Deserialize)]
-struct FullBoardQuery {
-    #[serde(default)]
-    include_archived: bool,
 }
 
 pub fn routes() -> Router<AppState> {
@@ -36,8 +28,6 @@ pub fn routes() -> Router<AppState> {
                 .patch(update)
                 .delete(hard_delete),
         )
-        .route("/boards/:id/archive", axum::routing::post(archive))
-        .route("/boards/:id/unarchive", axum::routing::post(unarchive))
         .route("/boards/:id/card_tags", axum::routing::get(card_tags))
         .route("/boards/:id/_full", axum::routing::get(full))
 }
@@ -47,7 +37,7 @@ async fn list(
     Query(q): Query<ListBoardsQuery>,
 ) -> Result<Json<Vec<BoardDto>>, ApiError> {
     let (limit, offset) = resolve_page(q.limit, q.offset);
-    let rows = BoardRepo::list_all_paged(&state.pool, q.include_archived, limit, offset).await?;
+    let rows = BoardRepo::list_all_paged(&state.pool, limit, offset).await?;
     Ok(Json(rows.into_iter().map(BoardDto::from).collect()))
 }
 
@@ -82,32 +72,6 @@ async fn update(
     Ok(Json(BoardDto::from(board)))
 }
 
-async fn archive(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> Result<Json<BoardDto>, ApiError> {
-    BoardRepo::archive(&state.pool, &id).await?;
-    load_board(&state, id).await
-}
-
-async fn unarchive(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> Result<Json<BoardDto>, ApiError> {
-    BoardRepo::unarchive(&state.pool, &id).await?;
-    load_board(&state, id).await
-}
-
-async fn load_board(state: &AppState, id: String) -> Result<Json<BoardDto>, ApiError> {
-    match BoardRepo::get(&state.pool, &id).await? {
-        Some(board) => Ok(Json(BoardDto::from(board))),
-        None => Err(ApiError(KansoError::NotFound {
-            entity: "board",
-            id,
-        })),
-    }
-}
-
 async fn hard_delete(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -137,8 +101,7 @@ async fn card_tags(
 async fn full(
     State(state): State<AppState>,
     Path(id): Path<String>,
-    Query(q): Query<FullBoardQuery>,
 ) -> Result<Json<BoardFullDto>, ApiError> {
-    let snap = BoardRepo::full_with_context(&state.pool, &id, q.include_archived).await?;
+    let snap = BoardRepo::full_with_context(&state.pool, &id).await?;
     Ok(Json(BoardFullDto::from(snap)))
 }

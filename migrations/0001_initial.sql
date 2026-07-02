@@ -8,8 +8,7 @@ CREATE TABLE boards (
     position    TEXT NOT NULL,
     color       TEXT,
     created_at  INTEGER NOT NULL,
-    updated_at  INTEGER NOT NULL,
-    archived_at INTEGER
+    updated_at  INTEGER NOT NULL
 );
 
 CREATE TABLE columns (
@@ -19,8 +18,7 @@ CREATE TABLE columns (
     position    TEXT NOT NULL,
     color       TEXT,
     created_at  INTEGER NOT NULL,
-    updated_at  INTEGER NOT NULL,
-    archived_at INTEGER
+    updated_at  INTEGER NOT NULL
 );
 
 CREATE TABLE cards (
@@ -32,8 +30,7 @@ CREATE TABLE cards (
     position        TEXT NOT NULL,
     due_at          INTEGER,
     created_at      INTEGER NOT NULL,
-    updated_at      INTEGER NOT NULL,
-    archived_at     INTEGER
+    updated_at      INTEGER NOT NULL
 );
 
 CREATE TABLE tags (
@@ -41,8 +38,7 @@ CREATE TABLE tags (
     name        TEXT NOT NULL UNIQUE,
     color       TEXT,
     created_at  INTEGER NOT NULL,
-    updated_at  INTEGER NOT NULL,
-    archived_at INTEGER
+    updated_at  INTEGER NOT NULL
 );
 
 CREATE TABLE card_tags (
@@ -54,10 +50,6 @@ CREATE TABLE card_tags (
 CREATE INDEX idx_columns_board_id    ON columns(board_id);
 CREATE INDEX idx_cards_column_id     ON cards(column_id);
 CREATE INDEX idx_card_tags_tag_id    ON card_tags(tag_id);
-CREATE INDEX idx_boards_archived_at  ON boards(archived_at);
-CREATE INDEX idx_columns_archived_at ON columns(archived_at);
-CREATE INDEX idx_cards_archived_at   ON cards(archived_at);
-CREATE INDEX idx_tags_archived_at    ON tags(archived_at);
 
 -- FTS5 over cards (title + body_text), external content table.
 CREATE VIRTUAL TABLE cards_fts USING fts5(

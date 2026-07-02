@@ -41,7 +41,6 @@ pub struct CardSnapshot {
     pub due_at: Option<i64>,
     pub created_at: i64,
     pub updated_at: i64,
-    pub archived_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -81,7 +80,6 @@ struct DecodedCard {
     due_at: Option<i64>,
     created_at: i64,
     updated_at: i64,
-    archived_at: Option<i64>,
 }
 
 #[tauri::command]
@@ -132,10 +130,10 @@ pub async fn export_snapshot(
         schema_version: SCHEMA_VERSION,
         exported_at,
         data: SnapshotData {
-            boards: BoardRepo::list_all(pool, true).await?,
+            boards: BoardRepo::list_all(pool).await?,
             columns: ColumnRepo::list_all(pool).await?,
             cards,
-            tags: TagRepo::list(pool, true).await?,
+            tags: TagRepo::list(pool).await?,
             card_tags,
         },
     })
@@ -163,8 +161,8 @@ pub async fn import_snapshot_json(pool: &SqlitePool, json: &str) -> Result<(), S
 
     for board in snapshot.data.boards {
         sqlx::query(
-            "INSERT INTO boards (id, name, position, color, created_at, updated_at, archived_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO boards (id, name, position, color, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         )
         .bind(board.id)
         .bind(board.name)
@@ -172,7 +170,6 @@ pub async fn import_snapshot_json(pool: &SqlitePool, json: &str) -> Result<(), S
         .bind(board.color)
         .bind(board.created_at)
         .bind(board.updated_at)
-        .bind(board.archived_at)
         .execute(&mut *tx)
         .await?;
     }
@@ -180,8 +177,8 @@ pub async fn import_snapshot_json(pool: &SqlitePool, json: &str) -> Result<(), S
     for column in snapshot.data.columns {
         sqlx::query(
             "INSERT INTO columns \
-             (id, board_id, name, position, color, created_at, updated_at, archived_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+             (id, board_id, name, position, color, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         )
         .bind(column.id)
         .bind(column.board_id)
@@ -190,22 +187,20 @@ pub async fn import_snapshot_json(pool: &SqlitePool, json: &str) -> Result<(), S
         .bind(column.color)
         .bind(column.created_at)
         .bind(column.updated_at)
-        .bind(column.archived_at)
         .execute(&mut *tx)
         .await?;
     }
 
     for tag in snapshot.data.tags {
         sqlx::query(
-            "INSERT INTO tags (id, name, color, created_at, updated_at, archived_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO tags (id, name, color, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5)",
         )
         .bind(tag.id)
         .bind(tag.name)
         .bind(tag.color)
         .bind(tag.created_at)
         .bind(tag.updated_at)
-        .bind(tag.archived_at)
         .execute(&mut *tx)
         .await?;
     }
@@ -214,8 +209,8 @@ pub async fn import_snapshot_json(pool: &SqlitePool, json: &str) -> Result<(), S
         sqlx::query(
             "INSERT INTO cards \
              (id, column_id, title, body_blocksuite, body_text, position, due_at, created_at, \
-              updated_at, archived_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+              updated_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         )
         .bind(card.id)
         .bind(card.column_id)
@@ -226,7 +221,6 @@ pub async fn import_snapshot_json(pool: &SqlitePool, json: &str) -> Result<(), S
         .bind(card.due_at)
         .bind(card.created_at)
         .bind(card.updated_at)
-        .bind(card.archived_at)
         .execute(&mut *tx)
         .await?;
     }
@@ -267,7 +261,6 @@ fn decode_cards(cards: Vec<CardSnapshot>) -> Result<Vec<DecodedCard>, SnapshotEr
                 due_at: card.due_at,
                 created_at: card.created_at,
                 updated_at: card.updated_at,
-                archived_at: card.archived_at,
             })
         })
         .collect()
@@ -285,7 +278,6 @@ impl From<Card> for CardSnapshot {
             due_at: card.due_at,
             created_at: card.created_at,
             updated_at: card.updated_at,
-            archived_at: card.archived_at,
         }
     }
 }
@@ -305,9 +297,12 @@ mod tests {
     async fn export_import_round_trips_data() {
         let pool = setup().await;
         let board = BoardRepo::create(&pool, "Infra").await.expect("board");
-        let column = ColumnRepo::create(&pool, &board.id, "Ready", Some("#7aa2f7"))
+        let column = ColumnRepo::list_by_board(&pool, &board.id)
             .await
-            .expect("column");
+            .expect("columns")
+            .into_iter()
+            .next()
+            .expect("seeded column");
         let card = CardRepo::create(&pool, &column.id, "Backup launch DB")
             .await
             .expect("card");

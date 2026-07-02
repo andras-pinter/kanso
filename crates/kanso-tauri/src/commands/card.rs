@@ -11,9 +11,8 @@ use crate::RuntimeState;
 pub async fn cards_list(
     state: State<'_, RuntimeState>,
     column_id: String,
-    include_archived: bool,
 ) -> Result<Vec<CardDto>, AppError> {
-    let rows = CardRepo::list_by_column(&state.pool, &column_id, include_archived).await?;
+    let rows = CardRepo::list_by_column(&state.pool, &column_id).await?;
     Ok(rows.into_iter().map(CardDto::from).collect())
 }
 
@@ -62,22 +61,12 @@ pub async fn card_move(
     .into())
 }
 
+/// Hard delete a card. FTS rows are cleaned up by the SQL trigger; card→tag
+/// links cascade via ON DELETE CASCADE.
 #[tauri::command]
-pub async fn card_archive(
-    state: State<'_, RuntimeState>,
-    id: String,
-) -> Result<CardDto, AppError> {
-    CardRepo::archive(&state.pool, &id).await?;
-    load_card(&state, &id).await
-}
-
-#[tauri::command]
-pub async fn card_unarchive(
-    state: State<'_, RuntimeState>,
-    id: String,
-) -> Result<CardDto, AppError> {
-    CardRepo::unarchive(&state.pool, &id).await?;
-    load_card(&state, &id).await
+pub async fn card_delete(state: State<'_, RuntimeState>, id: String) -> Result<(), AppError> {
+    CardRepo::delete(&state.pool, &id).await?;
+    Ok(())
 }
 
 async fn load_card(state: &State<'_, RuntimeState>, id: &str) -> Result<CardDto, AppError> {
@@ -147,26 +136,18 @@ pub async fn list_cards(
     column_id: Option<String>,
 ) -> Result<Vec<CardDto>, AppError> {
     let column_id = column_id.unwrap_or_else(|| state.seed.column_id.clone());
-    cards_list(state, column_id, false).await
+    cards_list(state, column_id).await
 }
 
 #[tauri::command]
 pub async fn card_search(
     state: State<'_, RuntimeState>,
     q: String,
-    include_archived: Option<bool>,
     limit: Option<u32>,
     offset: Option<u32>,
 ) -> Result<Vec<CardSearchHitDto>, AppError> {
     let limit = limit.unwrap_or(100).min(500);
     let offset = offset.unwrap_or(0);
-    let rows = CardRepo::search_with_context_paged(
-        &state.pool,
-        &q,
-        include_archived.unwrap_or(false),
-        limit,
-        offset,
-    )
-    .await?;
+    let rows = CardRepo::search_with_context_paged(&state.pool, &q, limit, offset).await?;
     Ok(rows.into_iter().map(CardSearchHitDto::from).collect())
 }

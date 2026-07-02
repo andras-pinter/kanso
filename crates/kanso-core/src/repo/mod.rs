@@ -5,7 +5,7 @@ pub mod tag;
 
 pub use board::{BoardFull, BoardPatch, BoardRepo, CardWithTagIds, ColumnWithCards};
 pub use card::{CardBody, CardPatch, CardRepo, CardSearchHit};
-pub use column::{ColumnPatch, ColumnRepo};
+pub use column::{ColumnRepo, FIXED_COLUMNS};
 pub use tag::{TagPatch, TagRepo};
 
 pub(crate) fn now_ms() -> i64 {

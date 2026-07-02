@@ -16,7 +16,7 @@ where
 }
 
 use kanso_core::domain::{Board, Card, Column, Tag};
-use kanso_core::repo::{BoardFull, BoardPatch, CardPatch, ColumnPatch, TagPatch};
+use kanso_core::repo::{BoardFull, BoardPatch, CardPatch, TagPatch};
 
 // ---------- Board ----------
 
@@ -28,7 +28,6 @@ pub struct BoardDto {
     pub color: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
-    pub archived_at: Option<i64>,
 }
 
 impl From<Board> for BoardDto {
@@ -40,7 +39,6 @@ impl From<Board> for BoardDto {
             color: b.color,
             created_at: b.created_at,
             updated_at: b.updated_at,
-            archived_at: b.archived_at,
         }
     }
 }
@@ -82,7 +80,6 @@ pub struct ColumnDto {
     pub color: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
-    pub archived_at: Option<i64>,
 }
 
 impl From<Column> for ColumnDto {
@@ -95,35 +92,6 @@ impl From<Column> for ColumnDto {
             color: c.color,
             created_at: c.created_at,
             updated_at: c.updated_at,
-            archived_at: c.archived_at,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct CreateColumnBody {
-    pub name: String,
-    #[serde(default)]
-    pub color: Option<String>,
-}
-
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
-pub struct ColumnPatchDto {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        deserialize_with = "double_option"
-    )]
-    pub color: Option<Option<String>>,
-}
-
-impl From<ColumnPatchDto> for ColumnPatch {
-    fn from(d: ColumnPatchDto) -> Self {
-        Self {
-            name: d.name,
-            color: d.color,
         }
     }
 }
@@ -142,7 +110,6 @@ pub struct CardDto {
     pub due_at: Option<i64>,
     pub created_at: i64,
     pub updated_at: i64,
-    pub archived_at: Option<i64>,
 }
 
 impl From<Card> for CardDto {
@@ -156,7 +123,6 @@ impl From<Card> for CardDto {
             due_at: c.due_at,
             created_at: c.created_at,
             updated_at: c.updated_at,
-            archived_at: c.archived_at,
         }
     }
 }
@@ -264,7 +230,6 @@ pub struct TagDto {
     pub color: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
-    pub archived_at: Option<i64>,
 }
 
 impl From<Tag> for TagDto {
@@ -275,7 +240,6 @@ impl From<Tag> for TagDto {
             color: t.color,
             created_at: t.created_at,
             updated_at: t.updated_at,
-            archived_at: t.archived_at,
         }
     }
 }
@@ -309,20 +273,12 @@ impl From<TagPatchDto> for TagPatch {
     }
 }
 
-// ---------- Column reorder ----------
+// ---------- Card→Tag links ----------
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CardTagLinkDto {
     pub card_id: String,
     pub tag_id: String,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct MoveColumnBody {
-    #[serde(default)]
-    pub before: Option<String>,
-    #[serde(default)]
-    pub after: Option<String>,
 }
 
 // ---------- Board (full snapshot) ----------

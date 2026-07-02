@@ -14,8 +14,6 @@ use crate::AppState;
 #[derive(Debug, Deserialize)]
 struct ListTagsQuery {
     #[serde(default)]
-    include_archived: bool,
-    #[serde(default)]
     limit: Option<u32>,
     #[serde(default)]
     offset: Option<u32>,
@@ -24,8 +22,6 @@ struct ListTagsQuery {
 #[derive(Debug, Deserialize)]
 struct TagsForCardQuery {
     #[serde(default)]
-    include_archived: bool,
-    #[serde(default)]
     limit: Option<u32>,
     #[serde(default)]
     offset: Option<u32>,
@@ -33,8 +29,6 @@ struct TagsForCardQuery {
 
 #[derive(Debug, Deserialize)]
 struct CardsByTagQuery {
-    #[serde(default)]
-    include_archived: bool,
     #[serde(default)]
     limit: Option<u32>,
     #[serde(default)]
@@ -48,8 +42,6 @@ pub fn routes() -> Router<AppState> {
             "/tags/:id",
             axum::routing::get(get).patch(update).delete(hard_delete),
         )
-        .route("/tags/:id/archive", axum::routing::post(archive))
-        .route("/tags/:id/unarchive", axum::routing::post(unarchive))
         .route("/tags/:id/cards", axum::routing::get(cards_with_tag))
         .route("/cards/:id/tags", axum::routing::get(tags_for_card))
         .route(
@@ -63,7 +55,7 @@ async fn list(
     Query(q): Query<ListTagsQuery>,
 ) -> Result<Json<Vec<TagDto>>, ApiError> {
     let (limit, offset) = resolve_page(q.limit, q.offset);
-    let rows = TagRepo::list_paged(&state.pool, q.include_archived, limit, offset).await?;
+    let rows = TagRepo::list_paged(&state.pool, limit, offset).await?;
     Ok(Json(rows.into_iter().map(TagDto::from).collect()))
 }
 
@@ -93,24 +85,6 @@ async fn update(
     Ok(Json(TagDto::from(tag)))
 }
 
-async fn archive(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> Result<Json<TagDto>, ApiError> {
-    TagRepo::archive(&state.pool, &id).await?;
-    let tag = TagRepo::get(&state.pool, &id).await?;
-    Ok(Json(TagDto::from(tag)))
-}
-
-async fn unarchive(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> Result<Json<TagDto>, ApiError> {
-    TagRepo::unarchive(&state.pool, &id).await?;
-    let tag = TagRepo::get(&state.pool, &id).await?;
-    Ok(Json(TagDto::from(tag)))
-}
-
 async fn hard_delete(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -125,8 +99,7 @@ async fn tags_for_card(
     Query(q): Query<TagsForCardQuery>,
 ) -> Result<Json<Vec<TagDto>>, ApiError> {
     let (limit, offset) = resolve_page(q.limit, q.offset);
-    let rows =
-        CardRepo::tags_for_card_paged(&state.pool, &id, q.include_archived, limit, offset).await?;
+    let rows = CardRepo::tags_for_card_paged(&state.pool, &id, limit, offset).await?;
     Ok(Json(rows.into_iter().map(TagDto::from).collect()))
 }
 
@@ -162,7 +135,6 @@ async fn cards_with_tag(
     Query(q): Query<CardsByTagQuery>,
 ) -> Result<Json<Vec<CardDto>>, ApiError> {
     let (limit, offset) = resolve_page(q.limit, q.offset);
-    let rows =
-        CardRepo::cards_with_tag_paged(&state.pool, &id, q.include_archived, limit, offset).await?;
+    let rows = CardRepo::cards_with_tag_paged(&state.pool, &id, limit, offset).await?;
     Ok(Json(rows.into_iter().map(CardDto::from).collect()))
 }

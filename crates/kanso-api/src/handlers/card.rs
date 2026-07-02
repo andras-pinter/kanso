@@ -19,8 +19,6 @@ use kanso_core::KansoError;
 #[derive(Debug, Deserialize)]
 struct ListCardsQuery {
     #[serde(default)]
-    include_archived: bool,
-    #[serde(default)]
     limit: Option<u32>,
     #[serde(default)]
     offset: Option<u32>,
@@ -30,8 +28,6 @@ struct ListCardsQuery {
 struct SearchCardsQuery {
     #[serde(default)]
     q: String,
-    #[serde(default)]
-    include_archived: bool,
     #[serde(default)]
     limit: Option<u32>,
     #[serde(default)]
@@ -52,11 +48,11 @@ pub fn routes() -> Router<AppState> {
         )
         .route(
             "/cards/:id",
-            axum::routing::get(get_one).patch(update),
+            axum::routing::get(get_one)
+                .patch(update)
+                .delete(hard_delete),
         )
         .route("/cards/:id/move", axum::routing::post(move_card))
-        .route("/cards/:id/archive", axum::routing::post(archive))
-        .route("/cards/:id/unarchive", axum::routing::post(unarchive))
         .route(
             "/cards/:id/body",
             axum::routing::get(get_body)
@@ -71,9 +67,7 @@ async fn list(
     Query(q): Query<ListCardsQuery>,
 ) -> Result<Json<Vec<CardDto>>, ApiError> {
     let (limit, offset) = resolve_page(q.limit, q.offset);
-    let rows =
-        CardRepo::list_by_column_paged(&state.pool, &column_id, q.include_archived, limit, offset)
-            .await?;
+    let rows = CardRepo::list_by_column_paged(&state.pool, &column_id, limit, offset).await?;
     Ok(Json(rows.into_iter().map(CardDto::from).collect()))
 }
 
@@ -125,20 +119,18 @@ async fn move_card(
     Ok(Json(CardDto::from(card)))
 }
 
-async fn archive(
+async fn hard_delete(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Result<Json<CardDto>, ApiError> {
-    CardRepo::archive(&state.pool, &id).await?;
-    load_card(&state, id).await
-}
-
-async fn unarchive(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> Result<Json<CardDto>, ApiError> {
-    CardRepo::unarchive(&state.pool, &id).await?;
-    load_card(&state, id).await
+) -> Result<StatusCode, ApiError> {
+    match CardRepo::delete(&state.pool, &id).await {
+        Ok(()) => Ok(StatusCode::NO_CONTENT),
+        Err(KansoError::NotFound { .. }) => Err(ApiError(KansoError::NotFound {
+            entity: "card",
+            id,
+        })),
+        Err(e) => Err(ApiError(e)),
+    }
 }
 
 async fn load_card(state: &AppState, id: String) -> Result<Json<CardDto>, ApiError> {
@@ -190,8 +182,6 @@ async fn search(
     Query(q): Query<SearchCardsQuery>,
 ) -> Result<Json<Vec<CardSearchHitDto>>, ApiError> {
     let (limit, offset) = resolve_page(q.limit, q.offset);
-    let rows =
-        CardRepo::search_with_context_paged(&state.pool, &q.q, q.include_archived, limit, offset)
-            .await?;
+    let rows = CardRepo::search_with_context_paged(&state.pool, &q.q, limit, offset).await?;
     Ok(Json(rows.into_iter().map(CardSearchHitDto::from).collect()))
 }

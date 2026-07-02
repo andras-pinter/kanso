@@ -128,7 +128,7 @@ Inventory (`ui/src/kanban/`):
 - **AddCardInline / AddColumnTile** — inline create affordances
 - **BoardSwitcher** — dropdown header trigger with board dot
 - **ManageBoardsDrawer / ManageTagsDrawer** — right-edge side panels
-- **ColorPicker** — flat swatch grid (~20px circles)
+- **ColorPicker** — flat swatch grid (~20px circles). Used by columns/boards only; tags are auto-colored (see [Tag chips](#tag-chips)).
 - **TagChips / TagPickerPopover** — pill-shaped tag chips + popover picker
 - **DueBadge / DueDateEditor** — inline date affordance with overdue
   variant (not currently rendered on the card face or in the card modal;
@@ -138,6 +138,19 @@ Inventory (`ui/src/kanban/`):
 - **ThemeToggle** — segmented light/dark control in header
 - **ErrorBoundary** — full-bleed fallback with retry actions
 - **CliExtConsentModal** — first-launch consent modal (420px)
+
+## Tag chips
+
+Tag color is a **derived identity signal, not a stored user choice.** The palette is a curated set of ten tinted-neutral pairs (soft light background + deep desaturated foreground) authored in `ui/src/kanban/tagChipStyle.ts`. `tagChipStyle(tagId)` hashes the tag id with FNV-1a 32-bit and picks a pair by `hash % 10`.
+
+- **Rename-safe:** hashing on id (not name) keeps a tag's color stable across renames — spatial memory holds.
+- **No picker:** the create/edit UIs offer no color affordance. Confident defaults over personalization sinkholes.
+- **WCAG AA:** every palette pair clears 4.5:1 contrast, enforced by test (`tagChipStyle.test.ts`). Regressions fail the build.
+- **Single palette, both themes:** low-chroma tinted backgrounds read acceptably against both light and dark app surfaces. No per-theme swap.
+- **Chroma budget:** each palette entry sits within the DESIGN.md tinted-neutral register (max chroma ≈0.06). Tag chips must not compete with the accent for attention.
+- **No decorations:** no border, no shadow, no leading dot. The tinted body carries the identity.
+
+**Schema note:** the `tags.color` column is retained in the database but ignored by the UI. New tags are created without a color (server-side default = `NULL`); existing values on old rows have no visible effect. Dropping the column is a future migration decision, not part of this design.
 
 ## Motion
 

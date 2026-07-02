@@ -297,13 +297,17 @@ export const buildTools = (client, kansoTools) => [
     {
         name: "card_body_set",
         description:
-            "Replace a card's body. Provide body_text and/or body_blocksuite_b64 (both null clears). Returns { id, updated_at }.",
+            "Replace a card's body. Provide body_text and/or body_blocksuite_b64 — at least one is required. Text-only writes clear the BlockSuite blob so the UI seeds fresh content from the plaintext on next open. Returns the full CardDto.",
         parameters: {
             type: "object",
             properties: {
                 id: strId("Card id."),
-                body_text: strId("Plaintext body (indexed by FTS). Nullable."),
-                body_blocksuite_b64: strId("Base64-encoded BlockSuite Yjs blob. Nullable."),
+                body_text: strId(
+                    "Plaintext body (indexed by FTS). At least one of body_text or body_blocksuite_b64 is required.",
+                ),
+                body_blocksuite_b64: strId(
+                    "Base64-encoded BlockSuite Yjs blob. Agents typically pass body_text instead. At least one of body_text or body_blocksuite_b64 is required.",
+                ),
             },
             required: ["id"],
         },

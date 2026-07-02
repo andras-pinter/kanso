@@ -406,25 +406,12 @@ fn ensure_bundle_file(path: &Path) -> Result<(), ExtInstallError> {
 }
 
 fn is_semverish(version: &str) -> bool {
-    let (core, pre) = version
-        .split_once('-')
-        .map_or((version, None), |(core, pre)| (core, Some(pre)));
-    let mut parts = core.split('.');
-    let valid_core = (0..3).all(|_| {
-        parts
-            .next()
-            .is_some_and(|part| !part.is_empty() && part.chars().all(|c| c.is_ascii_digit()))
-    }) && parts.next().is_none();
-    let valid_pre = match pre {
-        Some(pre) => {
-            !pre.is_empty()
-                && pre
-                    .chars()
-                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.')
-        }
-        None => true,
-    };
-    valid_core && valid_pre
+    if version.is_empty() {
+        return false;
+    }
+    version.chars().all(|c| {
+        c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | '+' | '=')
+    })
 }
 
 fn recover_installs(ctx: &InstallContext) -> Result<(), ExtInstallError> {
@@ -1051,7 +1038,7 @@ mod tests {
     #[test]
     fn malformed_bundle_stamp_refuses_install() -> Result<(), ExtInstallError> {
         let _guard = test_guard();
-        let (_dir, ctx) = context("bad")?;
+        let (_dir, ctx) = context("bad stamp with spaces")?;
 
         let err = install_all(&ctx, NodeCheck::Present(20)).err();
 

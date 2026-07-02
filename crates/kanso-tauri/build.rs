@@ -21,10 +21,8 @@ fn stage_extensions() -> io::Result<()> {
     emit_rerun_if_changed(&source)?;
     remove_path(&staged)?;
     fs::create_dir_all(&staged)?;
-    fs::write(
-        staged.join(VERSION_FILE),
-        format!("{}\n", env!("CARGO_PKG_VERSION")),
-    )?;
+    let stamp = bundle_stamp(&source)?;
+    fs::write(staged.join(VERSION_FILE), format!("{stamp}\n"))?;
 
     copy_file_if_exists(&source.join("package.json"), &staged.join("package.json"))?;
     copy_file_if_exists(
@@ -168,5 +166,38 @@ fn remove_path(path: &Path) -> io::Result<()> {
         Ok(_) => fs::remove_file(path),
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
         Err(e) => Err(e),
+    }
+}
+
+fn bundle_stamp(source: &Path) -> io::Result<String> {
+    let cli = read_pkg_version(&source.join("kanso/package.json"))?;
+    let mcp = read_pkg_version(&source.join("kanso-mcp/package.json"))?;
+    let client = read_pkg_version(&source.join("_shared/kanso-client/package.json"))?;
+    Ok(format!("cli={cli}+mcp={mcp}+client={client}"))
+}
+
+fn read_pkg_version(path: &Path) -> io::Result<String> {
+    let text = fs::read_to_string(path)?;
+    parse_pkg_version(&text).ok_or_else(|| {
+        io::Error::other(format!(
+            "no `version` field found in {}",
+            path.display()
+        ))
+    })
+}
+
+fn parse_pkg_version(text: &str) -> Option<String> {
+    let key = text.find("\"version\"")?;
+    let after = &text[key + "\"version\"".len()..];
+    let colon = after.find(':')?;
+    let rest = &after[colon + 1..];
+    let start = rest.find('"')? + 1;
+    let tail = &rest[start..];
+    let end = tail.find('"')?;
+    let value = tail[..end].trim();
+    if value.is_empty() {
+        None
+    } else {
+        Some(value.to_string())
     }
 }

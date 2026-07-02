@@ -45,15 +45,21 @@ pub async fn tag_update(
 }
 
 #[tauri::command]
-pub async fn tag_archive(state: State<'_, RuntimeState>, id: String) -> Result<(), AppError> {
+pub async fn tag_archive(
+    state: State<'_, RuntimeState>,
+    id: String,
+) -> Result<TagDto, AppError> {
     TagRepo::archive(&state.pool, &id).await?;
-    Ok(())
+    Ok(TagRepo::get(&state.pool, &id).await?.into())
 }
 
 #[tauri::command]
-pub async fn tag_unarchive(state: State<'_, RuntimeState>, id: String) -> Result<(), AppError> {
+pub async fn tag_unarchive(
+    state: State<'_, RuntimeState>,
+    id: String,
+) -> Result<TagDto, AppError> {
     TagRepo::unarchive(&state.pool, &id).await?;
-    Ok(())
+    Ok(TagRepo::get(&state.pool, &id).await?.into())
 }
 
 #[tauri::command]

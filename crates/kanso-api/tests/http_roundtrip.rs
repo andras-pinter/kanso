@@ -800,6 +800,9 @@ async fn tag_crud_via_http() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
+    let archived: TagDto = serde_json::from_value(body_json(res).await).unwrap();
+    assert_eq!(archived.id, tag.id);
+    assert!(archived.archived_at.is_some());
 
     let res = app
         .clone()
@@ -1069,6 +1072,7 @@ async fn link_archived_tag_returns_400_and_archive_filter_works() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
+    let _archived: TagDto = serde_json::from_value(body_json(res).await).unwrap();
 
     // Default list hides archived links.
     let res = app

@@ -95,17 +95,19 @@ async fn update(
 async fn archive(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Result<StatusCode, ApiError> {
+) -> Result<Json<TagDto>, ApiError> {
     TagRepo::archive(&state.pool, &id).await?;
-    Ok(StatusCode::OK)
+    let tag = TagRepo::get(&state.pool, &id).await?;
+    Ok(Json(TagDto::from(tag)))
 }
 
 async fn unarchive(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Result<StatusCode, ApiError> {
+) -> Result<Json<TagDto>, ApiError> {
     TagRepo::unarchive(&state.pool, &id).await?;
-    Ok(StatusCode::OK)
+    let tag = TagRepo::get(&state.pool, &id).await?;
+    Ok(Json(TagDto::from(tag)))
 }
 
 async fn hard_delete(

@@ -62,12 +62,16 @@ lifted to `#5b8cff` for AA contrast on dark surfaces.
 - **Stack:** system (`-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`)
 - **Body:** 14px / 1.45, antialiased
 - **Card title:** 13px / 500
-- **Card body:** 12px / muted, 2-line clamp
 - **Column name:** 13px / 600, tracking `-0.005em`
 - **Section h1 (Connect Apps hero):** 24px, tracking `-0.03em`
 - **Modal h2:** 18px, tracking `-0.02em`
-- **Drawer / modal title (legacy uppercase eyebrow):** 11px / 600 / uppercase /
-  tracking `0.06em` — **flagged for review; see notes in audit.**
+- **Doc title (`--kanso-fs-doc-title`, 22px / 600, tracking `-0.02em`):**
+  used by the card-as-doc modal (`.kanso-doc-title`). Renders as an
+  autosizing textarea with no border and no accent-ring focus glow — the
+  document is the header. Placeholder `Untitled` at `--kanso-fg-muted`.
+- **Legacy form title (`.kanso-title-input`):** 15px / 500 boxed input,
+  still used by side drawers (Add card, edit forms). No longer used in
+  the card modal.
 - **Mono:** `'SFMono-Regular', Consolas, 'Liberation Mono', monospace` (code snippets only)
 
 ## Shape & Elevation
@@ -116,15 +120,19 @@ Inventory (`ui/src/kanban/`):
 
 - **KanbanBoard** — top-level board with horizontal column list
 - **Column / ColumnList** — sortable columns with drag handle on header
-- **Card** — draggable card with title, body clamp, tags, due badge
-- **CardDetailModal** — full card editor with BlockSuite body
+- **Card** — draggable card face: title + tag chips + subtle has-body dot
+- **CardDetailModal** — card-as-doc surface: autosizing title, tags row,
+  BlockSuite editor at 680px reading width, overflow menu + X close
 - **CardBodyEditor** — lazy-loaded BlockSuite host
+- **CardHeaderMenu** — overflow menu (`.kanso-menu`) inside the card modal
 - **AddCardInline / AddColumnTile** — inline create affordances
 - **BoardSwitcher** — dropdown header trigger with board dot
 - **ManageBoardsDrawer / ManageTagsDrawer** — right-edge side panels
 - **ColorPicker** — flat swatch grid (~20px circles)
 - **TagChips / TagPickerPopover** — pill-shaped tag chips + popover picker
-- **DueBadge / DueDateEditor** — inline date affordance with overdue variant
+- **DueBadge / DueDateEditor** — inline date affordance with overdue
+  variant (not currently rendered on the card face or in the card modal;
+  kept for potential future surfaces)
 - **SearchPalette** — Cmd+K modal palette, 600px wide
 - **ColumnHeaderMenu** — three-dot menu, generic `.kanso-menu` dropdown
 - **ThemeToggle** — segmented light/dark control in header
@@ -137,6 +145,8 @@ Inventory (`ui/src/kanban/`):
   `box-shadow`. No layout property animations.
 - The saved-pill in drawers fades via opacity (200ms ease).
 - No keyframed entrance animations; cards/columns appear instantly.
+- **The card-as-doc modal opens/closes instantly on purpose:** motion is
+  deferred to a later phase so an editor surface can't feel gimmicky.
 - **`prefers-reduced-motion` is not yet explicitly handled** (flag for audit).
 
 ## Imagery & Iconography

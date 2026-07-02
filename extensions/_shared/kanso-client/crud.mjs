@@ -165,13 +165,23 @@ export const cardBodyGet = (c, { id }) => {
     return c.get(`/cards/${enc(id)}/body`);
 };
 
-/** @param {Client} c */
+/**
+ * Set a card body. At least one of `body_blocksuite_b64` or `body_text` must
+ * be provided; the other clears to NULL. Text-only calls let agents write
+ * plaintext without synthesizing a BlockSuite Yjs blob — the UI seeds a
+ * fresh editor from the plaintext on next open. Returns the full CardDto.
+ *
+ * @param {Client} c
+ */
 export const cardBodySet = (c, { id, body_blocksuite_b64, body_text }) => {
     requireId(id);
-    return c.put(`/cards/${enc(id)}/body`, {
-        body_blocksuite_b64: body_blocksuite_b64 ?? null,
-        body_text: body_text ?? null,
-    });
+    if (body_blocksuite_b64 === undefined && body_text === undefined) {
+        throw new Error("kanso: at least one of body_blocksuite_b64 or body_text is required");
+    }
+    const body = {};
+    if (body_blocksuite_b64 !== undefined) body.body_blocksuite_b64 = body_blocksuite_b64;
+    if (body_text !== undefined) body.body_text = body_text;
+    return c.put(`/cards/${enc(id)}/body`, body);
 };
 
 // ---------- tags ----------

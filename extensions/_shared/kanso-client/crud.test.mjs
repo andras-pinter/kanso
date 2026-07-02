@@ -133,16 +133,36 @@ describe("cards", () => {
         expect(c.calls).toEqual([{ method: "POST", path: "/cards/k1/archive", body: undefined }]);
     });
 
-    it("cardBodySet PUTs both fields, defaulting missing ones to null", async () => {
+    it("cardBodySet PUTs only the fields that were provided", async () => {
         const c = fakeClient();
+        // text-only — flagship agent call, must not send body_blocksuite_b64
         await cardBodySet(c, { id: "k1", body_text: "hi" });
+        // blob-only
+        await cardBodySet(c, { id: "k2", body_blocksuite_b64: "AAA=" });
+        // both
+        await cardBodySet(c, { id: "k3", body_blocksuite_b64: "BBB=", body_text: "yo" });
         expect(c.calls).toEqual([
             {
                 method: "PUT",
                 path: "/cards/k1/body",
-                body: { body_blocksuite_b64: null, body_text: "hi" },
+                body: { body_text: "hi" },
+            },
+            {
+                method: "PUT",
+                path: "/cards/k2/body",
+                body: { body_blocksuite_b64: "AAA=" },
+            },
+            {
+                method: "PUT",
+                path: "/cards/k3/body",
+                body: { body_blocksuite_b64: "BBB=", body_text: "yo" },
             },
         ]);
+    });
+
+    it("cardBodySet rejects calls with neither field", () => {
+        const c = fakeClient();
+        expect(() => cardBodySet(c, { id: "k1" })).toThrow(/at least one/i);
     });
 });
 

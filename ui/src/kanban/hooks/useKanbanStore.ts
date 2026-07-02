@@ -59,6 +59,22 @@ const STORAGE_KEY = 'kanso.currentBoardId';
 // can never overwrite the user's newer board/toggle selection.
 let loadVersion = 0;
 
+// Per-card monotonic sequence for single-card mutations (updateCard,
+// archiveCard). Each mutation bumps the counter and captures its own
+// sequence; only the latest in-flight mutation for a card is allowed to
+// write its result (or rollback) back to the store. Otherwise a slow
+// "title=A" response can clobber a newer "title=B" that already landed.
+const cardMutationSeq = new Map<string, number>();
+
+const nextCardMutation = (id: string): number => {
+  const next = (cardMutationSeq.get(id) ?? 0) + 1;
+  cardMutationSeq.set(id, next);
+  return next;
+};
+
+const isLatestCardMutation = (id: string, seq: number): boolean =>
+  cardMutationSeq.get(id) === seq;
+
 interface KanbanState {
   status: Status;
   error: string | null;
@@ -568,11 +584,14 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
       body_text: patch.body_text === undefined ? prev.body_text : patch.body_text,
       due_at: patch.due_at === undefined ? prev.due_at : patch.due_at,
     };
+    const mySeq = nextCardMutation(id);
     set((s) => replaceCard(s, optimistic));
     try {
       const fresh = await cardUpdate(id, patch);
+      if (!isLatestCardMutation(id, mySeq)) return;
       set((s) => replaceCard(s, fresh));
     } catch (e) {
+      if (!isLatestCardMutation(id, mySeq)) return;
       set((s) => replaceCard(s, prev));
       set({ error: formatError(e) });
     }
@@ -581,18 +600,22 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
   archiveCard: async (id) => {
     const prev = findCard(get().cardsByColumn, id);
     if (!prev) return;
+    const mySeq = nextCardMutation(id);
     set((s) => removeCard(s, id));
     if (get().selectedCardId === id) set({ selectedCardId: null });
     try {
       await cardArchive(id);
+      if (!isLatestCardMutation(id, mySeq)) return;
       // Refresh active column so archived rows reappear if showArchived is on.
       if (get().showArchived) {
         const fresh = await cardsList(prev.column_id, true);
+        if (!isLatestCardMutation(id, mySeq)) return;
         set((s) => ({
           cardsByColumn: { ...s.cardsByColumn, [prev.column_id]: fresh },
         }));
       }
     } catch (e) {
+      if (!isLatestCardMutation(id, mySeq)) return;
       set({ error: formatError(e) });
       await get().load();
     }

@@ -32,6 +32,12 @@ export default function CardDetailModal({ card }: Props) {
   const modalRef = useRef<HTMLDivElement | null>(null);
   const titleRef = useRef<HTMLTextAreaElement | null>(null);
   const closingRef = useRef(false);
+  // Per-modal monotonic sequence for title commits. When multiple
+  // commitTitle calls are in flight (blur then close) and their API
+  // responses arrive out of order, only the latest one is allowed to
+  // verify persistence / raise a stale-save error. The store already
+  // gates its writes; this gate keeps the modal's post-check honest.
+  const titleCommitSeqRef = useRef(0);
 
   const flashSaved = () => {
     setSaved(true);
@@ -51,7 +57,11 @@ export default function CardDetailModal({ card }: Props) {
       return;
     }
     if (trimmed === card.title) return;
+    const mySeq = ++titleCommitSeqRef.current;
     await updateCard(card.id, { title: trimmed });
+    // A newer commitTitle has already fired for this modal — its outcome
+    // is authoritative, so silently drop this one's post-check.
+    if (mySeq !== titleCommitSeqRef.current) return;
     const fresh = useKanbanStore
       .getState()
       .cardsByColumn[card.column_id]?.find((c) => c.id === card.id);

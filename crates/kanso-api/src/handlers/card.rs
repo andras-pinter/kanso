@@ -8,8 +8,8 @@ use serde::Deserialize;
 use kanso_core::repo::CardRepo;
 
 use crate::dto::{
-    CardBodyDto, CardBodySetDto, CardBodyStampDto, CardDto, CardPatchDto, CardSearchHitDto,
-    CreateCardBody, MoveCardBody,
+    CardBodyDto, CardBodySetDto, CardDto, CardPatchDto, CardSearchHitDto, CreateCardBody,
+    MoveCardBody,
 };
 use crate::error::{require_non_empty, ApiError};
 use crate::handlers::resolve_page;
@@ -167,20 +167,22 @@ async fn put_body(
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(body): Json<CardBodySetDto>,
-) -> Result<Json<CardBodyStampDto>, ApiError> {
-    let blob = B64
-        .decode(body.body_blocksuite_b64.as_bytes())
-        .map_err(|e| {
+) -> Result<Json<CardDto>, ApiError> {
+    if body.body_blocksuite_b64.is_none() && body.body_text.is_none() {
+        return Err(ApiError(kanso_core::KansoError::InvalidInput(
+            "at least one of body_blocksuite_b64 or body_text is required".into(),
+        )));
+    }
+    let blob = match body.body_blocksuite_b64.as_deref() {
+        Some(b64) => Some(B64.decode(b64.as_bytes()).map_err(|e| {
             ApiError(kanso_core::KansoError::InvalidInput(format!(
                 "body_blocksuite_b64 is not valid base64: {e}"
             )))
-        })?;
-    CardRepo::set_body(&state.pool, &id, &blob, &body.body_text).await?;
-    let updated = CardRepo::get_body(&state.pool, &id).await?;
-    Ok(Json(CardBodyStampDto {
-        id,
-        updated_at: updated.updated_at,
-    }))
+        })?),
+        None => None,
+    };
+    CardRepo::set_body(&state.pool, &id, blob.as_deref(), body.body_text.as_deref()).await?;
+    load_card(&state, id).await
 }
 
 async fn search(

@@ -1,6 +1,6 @@
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine as _;
-use kanso_api::{CardBodyDto, CardBodySetDto, CardBodyStampDto, CardDto, CardPatchDto, CardSearchHitDto};
+use kanso_api::{CardBodyDto, CardBodySetDto, CardDto, CardPatchDto, CardSearchHitDto};
 use kanso_core::repo::CardRepo;
 use tauri::State;
 
@@ -109,16 +109,20 @@ pub async fn card_body_set(
     state: State<'_, RuntimeState>,
     id: String,
     body: CardBodySetDto,
-) -> Result<CardBodyStampDto, AppError> {
-    let blob = B64
-        .decode(body.body_blocksuite_b64.as_bytes())
-        .map_err(|e| AppError::invalid(format!("body_blocksuite_b64 is not valid base64: {e}")))?;
-    CardRepo::set_body(&state.pool, &id, &blob, &body.body_text).await?;
-    let updated = CardRepo::get_body(&state.pool, &id).await?;
-    Ok(CardBodyStampDto {
-        id,
-        updated_at: updated.updated_at,
-    })
+) -> Result<CardDto, AppError> {
+    if body.body_blocksuite_b64.is_none() && body.body_text.is_none() {
+        return Err(AppError::invalid(
+            "at least one of body_blocksuite_b64 or body_text is required",
+        ));
+    }
+    let blob = match body.body_blocksuite_b64.as_deref() {
+        Some(b64) => Some(B64.decode(b64.as_bytes()).map_err(|e| {
+            AppError::invalid(format!("body_blocksuite_b64 is not valid base64: {e}"))
+        })?),
+        None => None,
+    };
+    CardRepo::set_body(&state.pool, &id, blob.as_deref(), body.body_text.as_deref()).await?;
+    load_card(&state, &id).await
 }
 
 // ---------- Legacy aliases (Wave 5 will retire) ----------

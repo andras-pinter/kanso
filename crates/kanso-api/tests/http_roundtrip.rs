@@ -657,9 +657,9 @@ async fn card_body_put_get_roundtrip_via_http() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let stamp: kanso_api::CardBodyStampDto = serde_json::from_value(body_json(res).await).unwrap();
-    assert_eq!(stamp.id, card.id);
-    assert!(stamp.updated_at >= card.updated_at);
+    let returned: kanso_api::CardDto = serde_json::from_value(body_json(res).await).unwrap();
+    assert_eq!(returned.id, card.id);
+    assert!(returned.updated_at >= card.updated_at);
 
     let res = app
         .clone()
@@ -728,7 +728,7 @@ async fn card_body_put_under_limit_succeeds() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let _stamp: kanso_api::CardBodyStampDto = serde_json::from_value(body_json(res).await).unwrap();
+    let _returned: kanso_api::CardDto = serde_json::from_value(body_json(res).await).unwrap();
 }
 
 #[tokio::test]
@@ -920,7 +920,7 @@ async fn card_search_via_http() {
     let card = CardRepo::create(&pool, &col.id, "Plain Title")
         .await
         .unwrap();
-    CardRepo::set_body(&pool, &card.id, b"y", "ribbon ribbon ribbon")
+    CardRepo::set_body(&pool, &card.id, Some(b"y"), Some("ribbon ribbon ribbon"))
         .await
         .unwrap();
 
@@ -1224,7 +1224,77 @@ async fn card_body_put_above_1mib_still_accepted() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let _stamp: kanso_api::CardBodyStampDto = serde_json::from_value(body_json(res).await).unwrap();
+    let _returned: kanso_api::CardDto = serde_json::from_value(body_json(res).await).unwrap();
+}
+
+#[tokio::test]
+async fn card_body_put_text_only_succeeds_and_clears_blob() {
+    use base64::engine::general_purpose::STANDARD as B64;
+    use base64::Engine as _;
+
+    let (app, pool, _tmp) = setup().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
+    let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
+
+    // Seed a real blob first.
+    let blob_b64 = B64.encode(vec![9u8; 32]);
+    let seed = app
+        .clone()
+        .oneshot(req_json(
+            "PUT",
+            &format!("/cards/{}/body", card.id),
+            json!({"body_blocksuite_b64": blob_b64, "body_text": "seed"}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(seed.status(), StatusCode::OK);
+
+    // Text-only write — the flagship agent call.
+    let res = app
+        .clone()
+        .oneshot(req_json(
+            "PUT",
+            &format!("/cards/{}/body", card.id),
+            json!({"body_text": "hello"}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let returned: kanso_api::CardDto = serde_json::from_value(body_json(res).await).unwrap();
+    assert_eq!(returned.id, card.id);
+
+    // Verify the blob is cleared and text landed.
+    let got = app
+        .clone()
+        .oneshot(req("GET", &format!("/cards/{}/body", card.id)))
+        .await
+        .unwrap();
+    let body: kanso_api::CardBodyDto = serde_json::from_value(body_json(got).await).unwrap();
+    assert!(body.body_blocksuite_b64.is_none(), "blob should be cleared");
+    assert_eq!(body.body_text.as_deref(), Some("hello"));
+}
+
+#[tokio::test]
+async fn card_body_put_empty_body_returns_400() {
+    let (app, pool, _tmp) = setup().await;
+    let board = BoardRepo::create(&pool, "B").await.unwrap();
+    let col = ColumnRepo::create(&pool, &board.id, "C", None)
+        .await
+        .unwrap();
+    let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
+
+    let res = app
+        .oneshot(req_json(
+            "PUT",
+            &format!("/cards/{}/body", card.id),
+            json!({}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]
@@ -1432,7 +1502,7 @@ async fn cards_search_respects_limit_and_offset() {
         let c = CardRepo::create(&pool, &col.id, &format!("hit {i}"))
             .await
             .unwrap();
-        CardRepo::set_body(&pool, &c.id, b"y", "needle needle needle")
+        CardRepo::set_body(&pool, &c.id, Some(b"y"), Some("needle needle needle"))
             .await
             .unwrap();
     }

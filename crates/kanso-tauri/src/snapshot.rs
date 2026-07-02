@@ -311,7 +311,7 @@ mod tests {
         let card = CardRepo::create(&pool, &column.id, "Backup launch DB")
             .await
             .expect("card");
-        CardRepo::set_body(&pool, &card.id, b"yjs bytes", "body text")
+        CardRepo::set_body(&pool, &card.id, Some(b"yjs bytes"), Some("body text"))
             .await
             .expect("body");
         let tag = TagRepo::create(&pool, "safe", Some("#9ece6a"))

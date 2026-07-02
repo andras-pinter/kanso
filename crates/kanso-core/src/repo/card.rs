@@ -356,12 +356,13 @@ impl CardRepo {
     }
 
     /// Atomically write both columns of a card body and bump `updated_at`.
-    /// Returns `NotFound` if `id` does not exist.
+    /// `None` for either column clears it to NULL — this is PUT semantics, not
+    /// PATCH. Returns `NotFound` if `id` does not exist.
     pub async fn set_body(
         pool: &SqlitePool,
         id: &str,
-        body_blocksuite: &[u8],
-        body_text: &str,
+        body_blocksuite: Option<&[u8]>,
+        body_text: Option<&str>,
     ) -> Result<()> {
         let now = now_ms();
         let mut tx = pool.begin().await?;

@@ -243,21 +243,16 @@ pub struct CardBodyDto {
     pub updated_at: i64,
 }
 
-/// Request shape for `PUT /cards/:id/body`. Always sets both columns
-/// atomically — there is no patch semantics here.
+/// Request shape for `PUT /cards/:id/body`. At least one field must be
+/// present; a missing field clears that column to NULL. This lets agents
+/// write plaintext-only bodies without synthesizing a BlockSuite Yjs blob;
+/// the UI seeds a fresh editor from `body_text` on the next open.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CardBodySetDto {
-    pub body_blocksuite_b64: String,
-    pub body_text: String,
-}
-
-/// Response shape for `PUT /cards/:id/body`. Small on purpose — the caller
-/// already has the body they just sent, but they don't have the fresh
-/// `updated_at` without a follow-up GET. This closes that gap in one call.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CardBodyStampDto {
-    pub id: String,
-    pub updated_at: i64,
+    #[serde(default)]
+    pub body_blocksuite_b64: Option<String>,
+    #[serde(default)]
+    pub body_text: Option<String>,
 }
 
 // ---------- Tag ----------

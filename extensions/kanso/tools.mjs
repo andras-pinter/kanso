@@ -1,0 +1,474 @@
+/**
+ * Tool definitions for the Copilot CLI extension. Kept separate from
+ * extension.mjs (which calls joinSession) so tests can import the list
+ * without spawning the CLI.
+ */
+
+import * as h from "./handlers.mjs";
+
+/** Wrap a handler so unhandled errors surface as a single user-facing line. */
+export const wrap = (client, fn) => async (/** @type {any} */ args) => {
+    try {
+        return await fn(client, args);
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        process.stderr.write(`[kanso ext] ${err instanceof Error && err.stack ? err.stack : msg}\n`);
+        return msg.startsWith("kanso:") ? msg : `kanso: ${msg}`;
+    }
+};
+
+const strId = (desc) => ({ type: "string", description: desc });
+const boolFlag = (desc) => ({ type: "boolean", description: desc });
+const num = (desc) => ({ type: "number", description: desc });
+
+/**
+ * Build the full tool list bound to a client. Kept as a factory so tests
+ * can inject a fake client.
+ */
+export const buildTools = (client, kansoTools) => [
+    ...kansoTools,
+
+    // ---------- boards ----------
+    {
+        name: "board_list",
+        description: "List boards. Returns JSON array of BoardDto. Idempotent.",
+        parameters: {
+            type: "object",
+            properties: {
+                include_archived: boolFlag("Include archived boards."),
+                limit: num("Max rows (default 100, max 500)."),
+                offset: num("Row offset for pagination."),
+            },
+        },
+        handler: wrap(client, h.boardList),
+    },
+    {
+        name: "board_create",
+        description: "Create a board. Returns the new BoardDto.",
+        parameters: {
+            type: "object",
+            properties: { name: strId("Board name.") },
+            required: ["name"],
+        },
+        handler: wrap(client, h.boardCreate),
+    },
+    {
+        name: "board_update",
+        description:
+            "Patch a board (rename). Returns the updated BoardDto. Idempotent per field.",
+        parameters: {
+            type: "object",
+            properties: {
+                id: strId("Board id."),
+                patch: {
+                    type: "object",
+                    properties: { name: strId("New name.") },
+                },
+            },
+            required: ["id", "patch"],
+        },
+        handler: wrap(client, h.boardUpdate),
+    },
+    {
+        name: "board_archive",
+        description: "Archive a board. Returns the BoardDto with archived_at set. Idempotent.",
+        parameters: {
+            type: "object",
+            properties: { id: strId("Board id.") },
+            required: ["id"],
+        },
+        handler: wrap(client, h.boardArchive),
+    },
+    {
+        name: "board_unarchive",
+        description:
+            "Unarchive a board. Returns the BoardDto with archived_at cleared. Idempotent.",
+        parameters: {
+            type: "object",
+            properties: { id: strId("Board id.") },
+            required: ["id"],
+        },
+        handler: wrap(client, h.boardUnarchive),
+    },
+    {
+        name: "board_delete",
+        description: "Hard-delete a board and cascade its columns/cards. Returns null. Destructive.",
+        parameters: {
+            type: "object",
+            properties: { id: strId("Board id.") },
+            required: ["id"],
+        },
+        handler: wrap(client, h.boardDelete),
+    },
+    {
+        name: "board_card_tags",
+        description:
+            "List (card_id, tag_id) links across every card on a board. Returns JSON array.",
+        parameters: {
+            type: "object",
+            properties: { id: strId("Board id.") },
+            required: ["id"],
+        },
+        handler: wrap(client, h.boardCardTags),
+    },
+
+    // ---------- columns ----------
+    {
+        name: "column_list",
+        description: "List columns on a board. Returns JSON array of ColumnDto.",
+        parameters: {
+            type: "object",
+            properties: {
+                board_id: strId("Board id."),
+                include_archived: boolFlag("Include archived columns."),
+                limit: num("Max rows."),
+                offset: num("Row offset."),
+            },
+            required: ["board_id"],
+        },
+        handler: wrap(client, h.columnList),
+    },
+    {
+        name: "column_create",
+        description: "Create a column on a board. Returns the new ColumnDto.",
+        parameters: {
+            type: "object",
+            properties: {
+                board_id: strId("Board id."),
+                name: strId("Column name."),
+                position: num("Optional fractional position; omit to append."),
+            },
+            required: ["board_id", "name"],
+        },
+        handler: wrap(client, h.columnCreate),
+    },
+    {
+        name: "column_update",
+        description: "Patch a column (rename, recolor). Returns the updated ColumnDto.",
+        parameters: {
+            type: "object",
+            properties: {
+                id: strId("Column id."),
+                patch: {
+                    type: "object",
+                    properties: {
+                        name: strId("New name."),
+                        color: strId("Optional hex colour."),
+                    },
+                },
+            },
+            required: ["id", "patch"],
+        },
+        handler: wrap(client, h.columnUpdate),
+    },
+    {
+        name: "column_move",
+        description:
+            "Reorder a column between its siblings. Provide before and/or after column ids; omit both to append.",
+        parameters: {
+            type: "object",
+            properties: {
+                id: strId("Column id to move."),
+                before: strId("Column id it should sit before."),
+                after: strId("Column id it should sit after."),
+            },
+            required: ["id"],
+        },
+        handler: wrap(client, h.columnMove),
+    },
+    {
+        name: "column_archive",
+        description: "Archive a column. Returns the ColumnDto with archived_at set. Idempotent.",
+        parameters: {
+            type: "object",
+            properties: { id: strId("Column id.") },
+            required: ["id"],
+        },
+        handler: wrap(client, h.columnArchive),
+    },
+    {
+        name: "column_unarchive",
+        description: "Unarchive a column. Returns the ColumnDto. Idempotent.",
+        parameters: {
+            type: "object",
+            properties: { id: strId("Column id.") },
+            required: ["id"],
+        },
+        handler: wrap(client, h.columnUnarchive),
+    },
+
+    // ---------- cards ----------
+    {
+        name: "card_list",
+        description: "List cards in a column. Returns JSON array of CardDto.",
+        parameters: {
+            type: "object",
+            properties: {
+                column_id: strId("Column id."),
+                include_archived: boolFlag("Include archived cards."),
+                limit: num("Max rows."),
+                offset: num("Row offset."),
+            },
+            required: ["column_id"],
+        },
+        handler: wrap(client, h.cardList),
+    },
+    {
+        name: "card_create",
+        description: "Create a card in a column. Returns the new CardDto.",
+        parameters: {
+            type: "object",
+            properties: {
+                column_id: strId("Column id."),
+                title: strId("Card title."),
+            },
+            required: ["column_id", "title"],
+        },
+        handler: wrap(client, h.cardCreate),
+    },
+    {
+        name: "card_update",
+        description:
+            "Patch a card (title, due_at, body_text). Returns the updated CardDto. Idempotent per field.",
+        parameters: {
+            type: "object",
+            properties: {
+                id: strId("Card id."),
+                patch: {
+                    type: "object",
+                    properties: {
+                        title: strId("New title."),
+                        body_text: strId("New plaintext body."),
+                        due_at: strId("ISO-8601 due date, or null to clear."),
+                    },
+                },
+            },
+            required: ["id", "patch"],
+        },
+        handler: wrap(client, h.cardUpdate),
+    },
+    {
+        name: "card_move",
+        description:
+            "Move a card to another column, optionally between two sibling cards. Returns the updated CardDto.",
+        parameters: {
+            type: "object",
+            properties: {
+                id: strId("Card id."),
+                target_column_id: strId("Destination column id."),
+                before: strId("Card id it should sit before in the target column."),
+                after: strId("Card id it should sit after in the target column."),
+            },
+            required: ["id", "target_column_id"],
+        },
+        handler: wrap(client, h.cardMove),
+    },
+    {
+        name: "card_archive",
+        description: "Archive a card. Returns the CardDto with archived_at set. Idempotent.",
+        parameters: {
+            type: "object",
+            properties: { id: strId("Card id.") },
+            required: ["id"],
+        },
+        handler: wrap(client, h.cardArchive),
+    },
+    {
+        name: "card_unarchive",
+        description: "Unarchive a card. Returns the CardDto. Idempotent.",
+        parameters: {
+            type: "object",
+            properties: { id: strId("Card id.") },
+            required: ["id"],
+        },
+        handler: wrap(client, h.cardUnarchive),
+    },
+    {
+        name: "card_body_get",
+        description:
+            "Fetch a card's body as { body_blocksuite_b64, body_text, updated_at }. Both fields may be null on a fresh card.",
+        parameters: {
+            type: "object",
+            properties: { id: strId("Card id.") },
+            required: ["id"],
+        },
+        handler: wrap(client, h.cardBodyGet),
+    },
+    {
+        name: "card_body_set",
+        description:
+            "Replace a card's body. Provide body_text and/or body_blocksuite_b64 (both null clears). Returns { id, updated_at }.",
+        parameters: {
+            type: "object",
+            properties: {
+                id: strId("Card id."),
+                body_text: strId("Plaintext body (indexed by FTS). Nullable."),
+                body_blocksuite_b64: strId("Base64-encoded BlockSuite Yjs blob. Nullable."),
+            },
+            required: ["id"],
+        },
+        handler: wrap(client, h.cardBodySet),
+    },
+
+    // ---------- tags ----------
+    {
+        name: "tag_list",
+        description: "List tags. Returns JSON array of TagDto.",
+        parameters: {
+            type: "object",
+            properties: {
+                include_archived: boolFlag("Include archived tags."),
+                limit: num("Max rows."),
+                offset: num("Row offset."),
+            },
+        },
+        handler: wrap(client, h.tagList),
+    },
+    {
+        name: "tag_get",
+        description: "Fetch a tag by id. Returns TagDto.",
+        parameters: {
+            type: "object",
+            properties: { id: strId("Tag id.") },
+            required: ["id"],
+        },
+        handler: wrap(client, h.tagGet),
+    },
+    {
+        name: "tag_create",
+        description: "Create a tag. Returns the new TagDto.",
+        parameters: {
+            type: "object",
+            properties: {
+                name: strId("Tag name."),
+                color: strId("Optional hex colour."),
+            },
+            required: ["name"],
+        },
+        handler: wrap(client, h.tagCreate),
+    },
+    {
+        name: "tag_update",
+        description: "Patch a tag (rename, recolor). Returns the updated TagDto.",
+        parameters: {
+            type: "object",
+            properties: {
+                id: strId("Tag id."),
+                patch: {
+                    type: "object",
+                    properties: {
+                        name: strId("New name."),
+                        color: strId("New colour, or null to clear."),
+                    },
+                },
+            },
+            required: ["id", "patch"],
+        },
+        handler: wrap(client, h.tagUpdate),
+    },
+    {
+        name: "tag_archive",
+        description: "Archive a tag. Returns the TagDto with archived_at set. Idempotent.",
+        parameters: {
+            type: "object",
+            properties: { id: strId("Tag id.") },
+            required: ["id"],
+        },
+        handler: wrap(client, h.tagArchive),
+    },
+    {
+        name: "tag_unarchive",
+        description: "Unarchive a tag. Returns the TagDto. Idempotent.",
+        parameters: {
+            type: "object",
+            properties: { id: strId("Tag id.") },
+            required: ["id"],
+        },
+        handler: wrap(client, h.tagUnarchive),
+    },
+    {
+        name: "tag_delete",
+        description: "Hard-delete a tag and its links. Returns null. Destructive.",
+        parameters: {
+            type: "object",
+            properties: { id: strId("Tag id.") },
+            required: ["id"],
+        },
+        handler: wrap(client, h.tagDelete),
+    },
+    {
+        name: "tag_cards",
+        description: "List cards linked to a tag. Returns JSON array of CardDto.",
+        parameters: {
+            type: "object",
+            properties: {
+                id: strId("Tag id."),
+                include_archived: boolFlag("Include archived links."),
+                limit: num("Max rows."),
+                offset: num("Row offset."),
+            },
+            required: ["id"],
+        },
+        handler: wrap(client, h.tagCards),
+    },
+    {
+        name: "card_tags",
+        description: "List tags on a card. Returns JSON array of TagDto.",
+        parameters: {
+            type: "object",
+            properties: {
+                card_id: strId("Card id."),
+                include_archived: boolFlag("Include archived tags."),
+                limit: num("Max rows."),
+                offset: num("Row offset."),
+            },
+            required: ["card_id"],
+        },
+        handler: wrap(client, h.cardTags),
+    },
+    {
+        name: "card_tag_add",
+        description:
+            "Link a tag to a card. Returns the updated CardDto. Idempotent. Fails 400 if the tag is archived.",
+        parameters: {
+            type: "object",
+            properties: {
+                card_id: strId("Card id."),
+                tag_id: strId("Tag id."),
+            },
+            required: ["card_id", "tag_id"],
+        },
+        handler: wrap(client, h.cardTagAdd),
+    },
+    {
+        name: "card_tag_remove",
+        description: "Unlink a tag from a card. Returns the updated CardDto. Idempotent.",
+        parameters: {
+            type: "object",
+            properties: {
+                card_id: strId("Card id."),
+                tag_id: strId("Tag id."),
+            },
+            required: ["card_id", "tag_id"],
+        },
+        handler: wrap(client, h.cardTagRemove),
+    },
+
+    // ---------- search ----------
+    {
+        name: "card_search",
+        description:
+            "Full-text search across cards. Supports FTS5 syntax. Returns JSON array of CardSearchHit.",
+        parameters: {
+            type: "object",
+            properties: {
+                q: strId("Search query (FTS5)."),
+                include_archived: boolFlag("Include archived cards."),
+                limit: num("Max hits."),
+                offset: num("Row offset."),
+            },
+            required: ["q"],
+        },
+        handler: wrap(client, h.cardSearch),
+    },
+];

@@ -1,10 +1,16 @@
 {
     "name": "kanso-cli-ext",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "private": true,
     "type": "module",
     "description": "Copilot CLI extension for kanso. Talks to the local kanso-api over loopback.",
+    "scripts": {
+        "test": "vitest run"
+    },
     "dependencies": {
         "@kanso/client": "*"
+    },
+    "devDependencies": {
+        "vitest": "^2.1.8"
     }
 }

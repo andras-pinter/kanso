@@ -120,7 +120,6 @@ export function computeVisibleCardsByColumn(
   const out: Record<string, CardDto[]> = {};
   for (const [colId, list] of Object.entries(cardsByColumn)) {
     out[colId] = list.filter((c) => {
-      if (c.archived_at !== null) return false;
       const tags = cardTagMap[c.id] ?? [];
       return selectedTagIds.every((tid) => tags.includes(tid));
     });

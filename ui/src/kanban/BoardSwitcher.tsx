@@ -1,4 +1,4 @@
-// Header dropdown for switching boards. Lists live boards, a divider, and
+// Header dropdown for switching boards. Lists boards, a divider, and
 // shortcuts for creating a new board and opening the manage drawer.
 
 import { useEffect, useRef, useState } from 'react';
@@ -48,7 +48,6 @@ export default function BoardSwitcher({ onOpenManage }: Props) {
     if (creating) inputRef.current?.focus();
   }, [creating]);
 
-  const live = boards.filter((b) => b.archived_at === null);
   const current = boards.find((b) => b.id === currentId) ?? null;
 
   const commitCreate = async () => {
@@ -79,7 +78,7 @@ export default function BoardSwitcher({ onOpenManage }: Props) {
           ·
         </span>
         <span className="kanso-switcher-current">
-          {current?.name ?? (live.length === 0 ? 'No boards' : 'Pick a board')}
+          {current?.name ?? (boards.length === 0 ? 'No boards' : 'Pick a board')}
         </span>
         <span className="kanso-switcher-caret" aria-hidden="true">
           ▾
@@ -87,10 +86,10 @@ export default function BoardSwitcher({ onOpenManage }: Props) {
       </button>
       {open && (
         <div className="kanso-menu kanso-switcher-menu" role="menu">
-          {live.length === 0 && (
-            <div className="kanso-menu-empty">No live boards</div>
+          {boards.length === 0 && (
+            <div className="kanso-menu-empty">No boards</div>
           )}
-          {live.map((b) => (
+          {boards.map((b) => (
             <button
               key={b.id}
               type="button"
@@ -118,7 +117,7 @@ export default function BoardSwitcher({ onOpenManage }: Props) {
             <div className="kanso-menu-create">
               <input
                 ref={inputRef}
-                className="kanso-add-column-input"
+                className="kanso-title-input"
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => {

@@ -6,40 +6,25 @@
 
 import { create } from 'zustand';
 import {
-  boardArchive,
   boardCardTagsList,
   boardCreate,
   boardDelete,
-  boardUnarchive,
   boardUpdate,
   boardsList,
-  cardArchive,
   cardCreate,
+  cardDelete,
   cardMove,
   cardTagAdd,
   cardTagRemove,
-  cardUnarchive,
   cardUpdate,
   cardsList,
-  columnArchive,
-  columnCreate,
-  columnMove,
-  columnUnarchive,
-  columnUpdate,
   columnsList,
   defaultColumn,
-  tagArchive,
   tagCreate,
   tagDelete,
-  tagUnarchive,
   tagUpdate,
   tagsList,
 } from '../api/client';
-import {
-  applyColumnReorder,
-  computeColumnAnchors,
-  type ColumnDragResolution,
-} from '../columnDragEnd';
 import type {
   BoardDto,
   CardDto,
@@ -54,13 +39,13 @@ type Status = 'idle' | 'loading' | 'ready' | 'error';
 const STORAGE_KEY = 'kanso.currentBoardId';
 
 // Monotonic token for board-content fetches. Each call to switchBoard,
-// setShowArchived, or any other full reload claims a fresh token; only
-// the latest token may write its result back, so a slow in-flight fetch
-// can never overwrite the user's newer board/toggle selection.
+// boardDelete, or any other full reload claims a fresh token; only the
+// latest token may write its result back, so a slow in-flight fetch can
+// never overwrite the user's newer board selection.
 let loadVersion = 0;
 
 // Per-card monotonic sequence for single-card mutations (updateCard,
-// archiveCard). Each mutation bumps the counter and captures its own
+// deleteCard). Each mutation bumps the counter and captures its own
 // sequence; only the latest in-flight mutation for a card is allowed to
 // write its result (or rollback) back to the store. Otherwise a slow
 // "title=A" response can clobber a newer "title=B" that already landed.
@@ -80,15 +65,12 @@ interface KanbanState {
   error: string | null;
   boards: BoardDto[];
   currentBoardId: string | null;
-  showArchived: boolean;
   columns: ColumnDto[];
   cardsByColumn: Record<string, CardDto[]>;
   selectedCardId: string | null;
   tags: TagDto[];
   tagsLoaded: boolean;
   // cardId -> tagIds. Refreshed via reloadTagMap whenever links change.
-  // Includes ALL tags (live + archived) so card chips don't blink when a
-  // tag flips archived; picker UIs filter by `tags.archived_at === null`.
   cardTagMap: Record<string, string[]>;
   // Tag ids currently selected as a board filter (AND semantics). Not
   // persisted across app restarts.
@@ -96,21 +78,11 @@ interface KanbanState {
 
   load: () => Promise<void>;
   switchBoard: (id: string) => Promise<boolean>;
-  setShowArchived: (v: boolean) => Promise<void>;
 
   boardCreate: (name: string) => Promise<BoardDto | null>;
   boardRename: (id: string, name: string) => Promise<void>;
   boardSetColor: (id: string, color: string | null) => Promise<void>;
-  boardArchive: (id: string) => Promise<void>;
-  boardUnarchive: (id: string) => Promise<void>;
   boardDelete: (id: string) => Promise<void>;
-
-  addColumn: (name: string) => Promise<void>;
-  renameColumn: (id: string, name: string) => Promise<void>;
-  setColumnColor: (id: string, color: string | null) => Promise<void>;
-  archiveColumn: (id: string) => Promise<void>;
-  unarchiveColumn: (id: string) => Promise<void>;
-  reorderColumn: (resolution: ColumnDragResolution) => Promise<void>;
 
   selectCard: (id: string | null) => void;
   // Switches to the card's board (if different) then opens its drawer.
@@ -121,8 +93,7 @@ interface KanbanState {
   // Returns true iff the API call succeeded. Callers (e.g. the card
   // modal) use this to decide whether to tear down UI that would
   // otherwise orphan the user's intent on failure.
-  archiveCard: (id: string) => Promise<boolean>;
-  unarchiveCard: (id: string) => Promise<boolean>;
+  deleteCard: (id: string) => Promise<boolean>;
   moveCard: (
     cardId: string,
     fromColumnId: string,
@@ -134,8 +105,6 @@ interface KanbanState {
   reloadTagMap: () => Promise<void>;
   tagCreate: (name: string, color?: string | null) => Promise<TagDto | null>;
   tagUpdate: (id: string, patch: TagPatch) => Promise<void>;
-  tagArchive: (id: string) => Promise<void>;
-  tagUnarchive: (id: string) => Promise<void>;
   tagDelete: (id: string) => Promise<void>;
   addCardTag: (cardId: string, tagId: string) => Promise<void>;
   removeCardTag: (cardId: string, tagId: string) => Promise<void>;
@@ -194,15 +163,11 @@ function persistBoardId(id: string | null): void {
   }
 }
 
-const liveBoards = (boards: readonly BoardDto[]): BoardDto[] =>
-  boards.filter((b) => b.archived_at === null);
-
 async function fetchBoardContents(
   boardId: string,
-  includeArchived: boolean,
 ): Promise<{ columns: ColumnDto[]; cardsByColumn: Record<string, CardDto[]> }> {
-  const columns = await columnsList(boardId, includeArchived);
-  const lists = await Promise.all(columns.map((c) => cardsList(c.id, includeArchived)));
+  const columns = await columnsList(boardId);
+  const lists = await Promise.all(columns.map((c) => cardsList(c.id)));
   const cardsByColumn: Record<string, CardDto[]> = {};
   columns.forEach((c, i) => {
     cardsByColumn[c.id] = lists[i] ?? [];
@@ -211,8 +176,7 @@ async function fetchBoardContents(
 }
 
 // Build a `cardId -> tagIds[]` map for a board in a single round-trip.
-// Phase 4 W2 collapsed the previous `1 + N_tags` walk into one bulk
-// endpoint. Returns an empty map when no board is active.
+// Returns an empty map when no board is active.
 async function fetchCardTagMap(
   boardId: string | null,
 ): Promise<Record<string, string[]>> {
@@ -232,7 +196,6 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
   error: null,
   boards: [],
   currentBoardId: null,
-  showArchived: false,
   columns: [],
   cardsByColumn: {},
   selectedCardId: null,
@@ -249,19 +212,17 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
     try {
       // Seed first so a brand-new install has at least one board + column.
       await defaultColumn();
-      const includeArchived = get().showArchived;
-      const allBoards = await boardsList(true);
-      const live = liveBoards(allBoards);
+      const boards = await boardsList();
       const persisted = readPersistedBoardId();
       const target =
-        (persisted && live.find((b) => b.id === persisted)) ?? live[0] ?? null;
+        (persisted && boards.find((b) => b.id === persisted)) ?? boards[0] ?? null;
 
       if (!target) {
         if (myVersion !== loadVersion) return;
         persistBoardId(null);
         set({
           status: 'ready',
-          boards: allBoards,
+          boards,
           currentBoardId: null,
           columns: [],
           cardsByColumn: {},
@@ -271,12 +232,12 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
         return;
       }
 
-      const { columns, cardsByColumn } = await fetchBoardContents(target.id, includeArchived);
+      const { columns, cardsByColumn } = await fetchBoardContents(target.id);
       if (myVersion !== loadVersion) return;
       persistBoardId(target.id);
       set({
         status: 'ready',
-        boards: allBoards,
+        boards,
         currentBoardId: target.id,
         columns,
         cardsByColumn,
@@ -293,7 +254,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
     if (get().currentBoardId === id) return true;
     const myVersion = ++loadVersion;
     try {
-      const { columns, cardsByColumn } = await fetchBoardContents(id, get().showArchived);
+      const { columns, cardsByColumn } = await fetchBoardContents(id);
       if (myVersion !== loadVersion) return false;
       persistBoardId(id);
       set({ currentBoardId: id, columns, cardsByColumn, selectedCardId: null, error: null });
@@ -303,22 +264,6 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
       if (myVersion !== loadVersion) return false;
       set({ error: formatError(e) });
       return false;
-    }
-  },
-
-  setShowArchived: async (v) => {
-    set({ showArchived: v });
-    const id = get().currentBoardId;
-    if (!id) return;
-    const myVersion = ++loadVersion;
-    try {
-      const { columns, cardsByColumn } = await fetchBoardContents(id, v);
-      if (myVersion !== loadVersion) return;
-      set({ columns, cardsByColumn });
-      await get().reloadTagMap();
-    } catch (e) {
-      if (myVersion !== loadVersion) return;
-      set({ error: formatError(e) });
     }
   },
 
@@ -370,79 +315,19 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
     }
   },
 
-  boardArchive: async (id) => {
-    try {
-      await boardArchive(id);
-      const all = await boardsList(true);
-      const live = liveBoards(all);
-      const wasCurrent = get().currentBoardId === id;
-      if (wasCurrent) {
-        const next = live[0] ?? null;
-        if (next) {
-          const myVersion = ++loadVersion;
-          const { columns, cardsByColumn } = await fetchBoardContents(
-            next.id,
-            get().showArchived,
-          );
-          if (myVersion !== loadVersion) return;
-          persistBoardId(next.id);
-          set({
-            boards: all,
-            currentBoardId: next.id,
-            columns,
-            cardsByColumn,
-            selectedCardId: null,
-            error: null,
-          });
-          await get().reloadTagMap();
-        } else {
-          ++loadVersion;
-          persistBoardId(null);
-          set({
-            boards: all,
-            currentBoardId: null,
-            columns: [],
-            cardsByColumn: {},
-            cardTagMap: {},
-            selectedCardId: null,
-            error: null,
-          });
-        }
-      } else {
-        set({ boards: all });
-      }
-    } catch (e) {
-      set({ error: formatError(e) });
-    }
-  },
-
-  boardUnarchive: async (id) => {
-    try {
-      await boardUnarchive(id);
-      const all = await boardsList(true);
-      set({ boards: all });
-    } catch (e) {
-      set({ error: formatError(e) });
-    }
-  },
-
   boardDelete: async (id) => {
     try {
       await boardDelete(id);
-      const all = await boardsList(true);
-      const live = liveBoards(all);
+      const boards = await boardsList();
       if (get().currentBoardId === id) {
-        const next = live[0] ?? null;
+        const next = boards[0] ?? null;
         if (next) {
           const myVersion = ++loadVersion;
-          const { columns, cardsByColumn } = await fetchBoardContents(
-            next.id,
-            get().showArchived,
-          );
+          const { columns, cardsByColumn } = await fetchBoardContents(next.id);
           if (myVersion !== loadVersion) return;
           persistBoardId(next.id);
           set({
-            boards: all,
+            boards,
             currentBoardId: next.id,
             columns,
             cardsByColumn,
@@ -453,7 +338,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
           ++loadVersion;
           persistBoardId(null);
           set({
-            boards: all,
+            boards,
             currentBoardId: null,
             columns: [],
             cardsByColumn: {},
@@ -462,103 +347,10 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
           });
         }
       } else {
-        set({ boards: all });
+        set({ boards });
       }
     } catch (e) {
       set({ error: formatError(e) });
-    }
-  },
-
-  addColumn: async (name) => {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    const boardId = get().currentBoardId;
-    if (!boardId) return;
-    try {
-      const created = await columnCreate(boardId, trimmed);
-      set((s) => ({
-        columns: [...s.columns, created],
-        cardsByColumn: { ...s.cardsByColumn, [created.id]: [] },
-      }));
-    } catch (e) {
-      set({ error: formatError(e) });
-    }
-  },
-
-  renameColumn: async (id, name) => {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    const prev = get().columns.find((c) => c.id === id);
-    if (!prev || prev.name === trimmed) return;
-    set((s) => ({ columns: s.columns.map((c) => (c.id === id ? { ...c, name: trimmed } : c)) }));
-    try {
-      const fresh = await columnUpdate(id, { name: trimmed });
-      set((s) => ({ columns: s.columns.map((c) => (c.id === id ? fresh : c)) }));
-    } catch (e) {
-      set((s) => ({
-        columns: s.columns.map((c) => (c.id === id ? prev : c)),
-        error: formatError(e),
-      }));
-    }
-  },
-
-  setColumnColor: async (id, color) => {
-    const prev = get().columns.find((c) => c.id === id);
-    if (!prev) return;
-    set((s) => ({ columns: s.columns.map((c) => (c.id === id ? { ...c, color } : c)) }));
-    try {
-      const fresh = await columnUpdate(id, { color });
-      set((s) => ({ columns: s.columns.map((c) => (c.id === id ? fresh : c)) }));
-    } catch (e) {
-      set((s) => ({
-        columns: s.columns.map((c) => (c.id === id ? prev : c)),
-        error: formatError(e),
-      }));
-    }
-  },
-
-  archiveColumn: async (id) => {
-    const prev = get().columns.find((c) => c.id === id);
-    if (!prev) return;
-    try {
-      await columnArchive(id);
-      const boardId = get().currentBoardId;
-      if (!boardId) return;
-      const myVersion = ++loadVersion;
-      const { columns, cardsByColumn } = await fetchBoardContents(boardId, get().showArchived);
-      if (myVersion !== loadVersion) return;
-      set({ columns, cardsByColumn });
-    } catch (e) {
-      set({ error: formatError(e) });
-    }
-  },
-
-  unarchiveColumn: async (id) => {
-    try {
-      await columnUnarchive(id);
-      const boardId = get().currentBoardId;
-      if (!boardId) return;
-      const myVersion = ++loadVersion;
-      const { columns, cardsByColumn } = await fetchBoardContents(boardId, get().showArchived);
-      if (myVersion !== loadVersion) return;
-      set({ columns, cardsByColumn });
-    } catch (e) {
-      set({ error: formatError(e) });
-    }
-  },
-
-  reorderColumn: async (resolution) => {
-    const snapshot = get().columns.slice();
-    const optimistic = applyColumnReorder(snapshot, resolution);
-    set({ columns: optimistic });
-    const anchors = computeColumnAnchors(resolution.reordered, resolution.columnId);
-    try {
-      const fresh = await columnMove(resolution.columnId, anchors);
-      set((s) => ({
-        columns: s.columns.map((c) => (c.id === fresh.id ? fresh : c)),
-      }));
-    } catch (e) {
-      set({ columns: snapshot, error: formatError(e) });
     }
   },
 
@@ -600,7 +392,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
     }
   },
 
-  archiveCard: async (id) => {
+  deleteCard: async (id) => {
     const prev = findCard(get().cardsByColumn, id);
     if (!prev) return false;
     // Pessimistic: keep the card visible (and the modal mounted) until
@@ -609,40 +401,15 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
     // Sequence bump still gates a concurrent updateCard's stale write.
     const mySeq = nextCardMutation(id);
     try {
-      await cardArchive(id);
-      // Archive success is terminal for the visible list — the card is
-      // gone on the server, so the UI must reflect that regardless of a
-      // concurrent updateCard's newer sequence. The seq guard only
-      // protects the archived-list refetch below, which is a field-level
-      // refresh that can legitimately race with unrelated mutations.
+      await cardDelete(id);
+      // Delete success is terminal — the card is gone on the server, so
+      // the UI must reflect that regardless of a concurrent updateCard's
+      // newer sequence.
       set((s) => removeCard(s, id));
       if (get().selectedCardId === id) set({ selectedCardId: null });
-      if (get().showArchived) {
-        const fresh = await cardsList(prev.column_id, true);
-        if (!isLatestCardMutation(id, mySeq)) return true;
-        set((s) => ({
-          cardsByColumn: { ...s.cardsByColumn, [prev.column_id]: fresh },
-        }));
-      }
       return true;
     } catch (e) {
       if (!isLatestCardMutation(id, mySeq)) return false;
-      set({ error: formatError(e) });
-      return false;
-    }
-  },
-
-  unarchiveCard: async (id) => {
-    try {
-      await cardUnarchive(id);
-      const boardId = get().currentBoardId;
-      if (!boardId) return true;
-      const myVersion = ++loadVersion;
-      const { columns, cardsByColumn } = await fetchBoardContents(boardId, get().showArchived);
-      if (myVersion !== loadVersion) return true;
-      set({ columns, cardsByColumn });
-      return true;
-    } catch (e) {
       set({ error: formatError(e) });
       return false;
     }
@@ -653,13 +420,6 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
     const fromList = state.cardsByColumn[fromColumnId] ?? [];
     const card = fromList.find((c) => c.id === cardId);
     if (!card) return;
-
-    // Guard against dropping a live card onto an archived column. The
-    // droppable is also disabled in the UI, but keyboard / programmatic
-    // moves should fail silently rather than ship the card to a hidden
-    // bucket.
-    const targetCol = state.columns.find((c) => c.id === targetColumnId);
-    if (targetCol && targetCol.archived_at !== null) return;
 
     const snapshotFrom = fromList.slice();
     const snapshotTo =
@@ -721,7 +481,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
 
   loadTags: async () => {
     try {
-      const tags = await tagsList(true);
+      const tags = await tagsList();
       set({ tags, tagsLoaded: true });
       const map = await fetchCardTagMap(get().currentBoardId);
       set({ cardTagMap: map });
@@ -778,29 +538,6 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
         tags: s.tags.map((t) => (t.id === id ? prev : t)),
         error: formatError(e),
       }));
-    }
-  },
-
-  tagArchive: async (id) => {
-    try {
-      await tagArchive(id);
-      const fresh = await tagsList(true);
-      set((s) => ({
-        tags: fresh,
-        selectedTagIds: s.selectedTagIds.filter((tid) => tid !== id),
-      }));
-    } catch (e) {
-      set({ error: formatError(e) });
-    }
-  },
-
-  tagUnarchive: async (id) => {
-    try {
-      await tagUnarchive(id);
-      const fresh = await tagsList(true);
-      set({ tags: fresh });
-    } catch (e) {
-      set({ error: formatError(e) });
     }
   },
 

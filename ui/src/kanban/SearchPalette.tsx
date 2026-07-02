@@ -46,7 +46,7 @@ export default function SearchPalette({ onClose }: Props) {
     const t = window.setTimeout(async () => {
       setSearching(true);
       try {
-        const hits = await cardSearch(q, false);
+        const hits = await cardSearch(q);
         if (id !== reqId.current) return;
         setResults(hits.slice(0, MAX_RESULTS));
         setErr(null);

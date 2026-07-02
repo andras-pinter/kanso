@@ -54,8 +54,6 @@ export default function TagPickerPopover({ cardId }: Props) {
     return () => document.removeEventListener('mousedown', onClick);
   }, [open]);
 
-  const liveTags = useMemo(() => tags.filter((t) => t.archived_at === null), [tags]);
-
   const currentTags = useMemo(
     () =>
       cardTagIds
@@ -65,12 +63,12 @@ export default function TagPickerPopover({ cardId }: Props) {
   );
 
   const filterLower = filter.trim().toLowerCase();
-  const available = liveTags.filter(
+  const available = tags.filter(
     (t) =>
       !cardTagIds.includes(t.id) &&
       (filterLower === '' || t.name.toLowerCase().includes(filterLower)),
   );
-  const exactMatch = liveTags.some((t) => t.name.toLowerCase() === filterLower);
+  const exactMatch = tags.some((t) => t.name.toLowerCase() === filterLower);
   const showCreate = filterLower.length > 0 && !exactMatch;
 
   const onCreate = async () => {

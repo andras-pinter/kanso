@@ -19,17 +19,12 @@ export default function QuickAddModal({ onClose }: Props) {
   const storeColumns = useKanbanStore((s) => s.columns);
   const addCard = useKanbanStore((s) => s.addCard);
 
-  const liveBoards = useMemo(
-    () => boards.filter((b) => b.archived_at === null),
-    [boards],
-  );
-
   const defaultBoardId = useMemo(() => {
-    if (currentBoardId && liveBoards.some((b) => b.id === currentBoardId)) {
+    if (currentBoardId && boards.some((b) => b.id === currentBoardId)) {
       return currentBoardId;
     }
-    return liveBoards[0]?.id ?? '';
-  }, [currentBoardId, liveBoards]);
+    return boards[0]?.id ?? '';
+  }, [currentBoardId, boards]);
 
   const [boardId, setBoardId] = useState(defaultBoardId);
   // Columns fetched for a board that isn't the current store board. Empty
@@ -44,13 +39,11 @@ export default function QuickAddModal({ onClose }: Props) {
   const modalRef = useRef<HTMLDivElement | null>(null);
   const titleRef = useRef<HTMLInputElement | null>(null);
 
-  // Columns to render: live store columns when the chosen board matches the
+  // Columns to render: store columns when the chosen board matches the
   // current store board, otherwise whatever the fetch effect produced.
   const columns = useMemo<ColumnDto[]>(() => {
     if (!boardId) return [];
-    if (boardId === currentBoardId) {
-      return storeColumns.filter((c) => c.archived_at === null);
-    }
+    if (boardId === currentBoardId) return storeColumns;
     return boardId === fetchedColumnsBoardId ? fetchedColumns : [];
   }, [boardId, currentBoardId, storeColumns, fetchedColumns, fetchedColumnsBoardId]);
 
@@ -70,7 +63,7 @@ export default function QuickAddModal({ onClose }: Props) {
   useEffect(() => {
     if (!boardId || boardId === currentBoardId) return;
     let alive = true;
-    void columnsList(boardId, false)
+    void columnsList(boardId)
       .then((cols) => {
         if (!alive) return;
         setFetchedColumns(cols);
@@ -156,7 +149,7 @@ export default function QuickAddModal({ onClose }: Props) {
           </button>
         </header>
         <form className="kanso-modal-body" onSubmit={onSubmit}>
-          {liveBoards.length === 0 ? (
+          {boards.length === 0 ? (
             <p className="kanso-board-state">No boards yet — create one first.</p>
           ) : (
             <>
@@ -184,7 +177,7 @@ export default function QuickAddModal({ onClose }: Props) {
                   value={boardId}
                   onChange={(e) => setBoardId(e.target.value)}
                 >
-                  {liveBoards.map((b) => (
+                  {boards.map((b) => (
                     <option key={b.id} value={b.id}>
                       {b.name}
                     </option>

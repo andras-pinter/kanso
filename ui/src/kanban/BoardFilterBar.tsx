@@ -11,15 +11,14 @@ export default function BoardFilterBar() {
   const toggleTagFilter = useKanbanStore((s) => s.toggleTagFilter);
   const clearTagFilters = useKanbanStore((s) => s.clearTagFilters);
 
-  const liveTags = tags.filter((t) => t.archived_at === null);
-  if (liveTags.length === 0) return null;
+  if (tags.length === 0) return null;
 
   const hasFilter = selectedTagIds.length > 0;
 
   return (
     <nav className="kanso-filter-bar" aria-label="Filter cards by tag">
       <div className="kanso-filter-chips" role="group" aria-label="Tag filter">
-        {liveTags.map((t) => {
+        {tags.map((t) => {
           const pressed = selectedTagIds.includes(t.id);
           return (
             <button

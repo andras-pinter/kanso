@@ -18,7 +18,7 @@ export default function TagChips({ cardId, max = DEFAULT_MAX }: Props) {
 
   const resolved = tagIds
     .map((id) => tags.find((t) => t.id === id))
-    .filter((t): t is NonNullable<typeof t> => Boolean(t) && t!.archived_at === null);
+    .filter((t): t is NonNullable<typeof t> => Boolean(t));
   if (resolved.length === 0) return null;
 
   const visible = resolved.slice(0, max);

@@ -7,7 +7,6 @@ export interface BoardDto {
   color: string | null;
   created_at: number;
   updated_at: number;
-  archived_at: number | null;
 }
 
 export interface ColumnDto {
@@ -18,7 +17,6 @@ export interface ColumnDto {
   color: string | null;
   created_at: number;
   updated_at: number;
-  archived_at: number | null;
 }
 
 export interface CardDto {
@@ -30,7 +28,6 @@ export interface CardDto {
   due_at: number | null;
   created_at: number;
   updated_at: number;
-  archived_at: number | null;
 }
 
 export interface CardBody {
@@ -59,11 +56,6 @@ export interface CardPatch {
   due_at?: number | null;
 }
 
-export interface ColumnPatch {
-  name?: string;
-  color?: string | null;
-}
-
 export interface BoardPatch {
   name?: string;
   color?: string | null;
@@ -75,17 +67,11 @@ export interface TagDto {
   color: string | null;
   created_at: number;
   updated_at: number;
-  archived_at: number | null;
 }
 
 export interface TagPatch {
   name?: string;
   color?: string | null;
-}
-
-export interface ColumnMoveArgs {
-  before?: string;
-  after?: string;
 }
 
 export interface CardSearchHitDto {
@@ -111,7 +97,6 @@ export interface SnapshotCardDto {
   due_at: number | null;
   created_at: number;
   updated_at: number;
-  archived_at: number | null;
 }
 
 export interface CardTagLinkDto {

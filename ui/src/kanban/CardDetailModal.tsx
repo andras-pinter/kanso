@@ -27,6 +27,8 @@ export default function CardDetailModal({ card }: Props) {
   const [title, setTitle] = useState(card.title);
   const [saved, setSaved] = useState(false);
   const [closeBlocked, setCloseBlocked] = useState(false);
+  const [archiveFailed, setArchiveFailed] = useState(false);
+  const [archiving, setArchiving] = useState(false);
   const savedTimer = useRef<number | null>(null);
   const editorRef = useRef<CardBodyEditorHandle | null>(null);
   const modalRef = useRef<HTMLDivElement | null>(null);
@@ -126,8 +128,10 @@ export default function CardDetailModal({ card }: Props) {
 
   // Archive must await title AND body saves before tearing the modal
   // down — otherwise a dirty edit vanishes silently. Failure keeps the
-  // modal open via the same closeBlocked banner as close().
+  // modal open via the same closeBlocked banner as close(), or an
+  // archive-specific banner when the archive API itself rejects.
   const archive = async (): Promise<void> => {
+    if (archiving) return;
     const nextFocus = computeNextFocusTarget();
     try {
       await commitTitle();
@@ -136,7 +140,14 @@ export default function CardDetailModal({ card }: Props) {
       setCloseBlocked(true);
       return;
     }
-    await archiveCard(card.id);
+    setArchiveFailed(false);
+    setArchiving(true);
+    const ok = await archiveCard(card.id);
+    setArchiving(false);
+    if (!ok) {
+      setArchiveFailed(true);
+      return;
+    }
     focusAfterArchive(nextFocus);
   };
 
@@ -244,6 +255,11 @@ export default function CardDetailModal({ card }: Props) {
               Can’t close yet — your last edit hasn’t saved. Retry above, then try again.
             </div>
           )}
+          {archiveFailed && (
+            <div className="kanso-editor-banner" role="alert">
+              Couldn’t archive this card — the request failed. Try again.
+            </div>
+          )}
           <div className="kanso-doc-content">
             <textarea
               ref={titleRef}
@@ -277,7 +293,9 @@ export default function CardDetailModal({ card }: Props) {
             Saved
           </span>
           <CardHeaderMenu
-            items={[{ label: 'Archive', onSelect: onArchive, danger: true }]}
+            items={[
+              { label: 'Archive', onSelect: onArchive, danger: true, disabled: archiving },
+            ]}
           />
           <button
             type="button"

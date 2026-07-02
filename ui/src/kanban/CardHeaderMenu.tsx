@@ -10,6 +10,7 @@ interface Item {
   label: string;
   onSelect: () => void;
   danger?: boolean;
+  disabled?: boolean;
 }
 
 interface Props {
@@ -67,6 +68,7 @@ export default function CardHeaderMenu({ items }: Props) {
               key={item.label}
               type="button"
               role="menuitem"
+              disabled={item.disabled}
               className={
                 item.danger
                   ? 'kanso-menu-item kanso-menu-item--danger'

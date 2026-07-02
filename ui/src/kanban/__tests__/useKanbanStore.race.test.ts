@@ -168,4 +168,54 @@ describe('useKanbanStore card mutation race gating', () => {
       useKanbanStore.getState().cardsByColumn.col1?.find((c) => c.id === 'c1'),
     ).toBeUndefined();
   });
+
+  it('archiveCard returns true on success and removes the card', async () => {
+    __setInvoker(async (cmd) => {
+      if (cmd === 'card_archive') return undefined as never;
+      return undefined as never;
+    });
+    const ok = await useKanbanStore.getState().archiveCard('c1');
+    expect(ok).toBe(true);
+    expect(
+      useKanbanStore.getState().cardsByColumn.col1?.find((c) => c.id === 'c1'),
+    ).toBeUndefined();
+  });
+
+  it('archiveCard returns false on API rejection and keeps the card', async () => {
+    __setInvoker(async (cmd) => {
+      if (cmd === 'card_archive') throw new Error('boom');
+      return undefined as never;
+    });
+    const ok = await useKanbanStore.getState().archiveCard('c1');
+    expect(ok).toBe(false);
+    // Pessimistic: card was never removed, so nothing to roll back.
+    expect(
+      useKanbanStore.getState().cardsByColumn.col1?.find((c) => c.id === 'c1')?.title,
+    ).toBe('orig');
+    expect(useKanbanStore.getState().error).toMatch(/boom/);
+  });
+
+  it('archiveCard returns true when a stale response arrives after a newer mutation', async () => {
+    // Newer mutation wins the store; the archive API call itself still
+    // succeeded on the server so we report true to the caller. Callers
+    // that own dependent UI (e.g. the modal close) get the "safe to
+    // proceed" signal even in the stale case.
+    const archiveGate = deferred<undefined>();
+    __setInvoker(async (cmd) => {
+      if (cmd === 'card_archive') return (await archiveGate.promise) as never;
+      if (cmd === 'card_update') return card('c1', 'newer') as never;
+      return undefined as never;
+    });
+
+    const pArchive = useKanbanStore.getState().archiveCard('c1');
+    // A newer mutation bumps the sequence past the archive.
+    await useKanbanStore.getState().updateCard('c1', { title: 'newer' });
+    archiveGate.resolve(undefined);
+    const ok = await pArchive;
+    expect(ok).toBe(true);
+    // The newer update's state stands.
+    expect(
+      useKanbanStore.getState().cardsByColumn.col1?.find((c) => c.id === 'c1')?.title,
+    ).toBe('newer');
+  });
 });

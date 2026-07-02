@@ -326,6 +326,37 @@ describe('CardDetailModal', () => {
     expect(screen.getByRole('alert')).toBeTruthy();
   });
 
+  it('archive keeps modal open and shows error when archive API rejects', async () => {
+    const invoker: InvokeFn = async (cmd) => {
+      if (cmd === 'card_archive') throw new Error('archive boom');
+      return undefined as never;
+    };
+    __setInvoker(invoker);
+    render(<CardDetailModal card={card()} />);
+    await screen.findByTestId('body-editor-mock');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Card menu' }));
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('menuitem', { name: /archive/i }));
+      // Let commitTitle (no-op), flush (resolves), then archiveCard settle.
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // Modal is still mounted and selection is retained.
+    expect(useKanbanStore.getState().selectedCardId).toBe('c1');
+    expect(screen.getByRole('dialog', { name: /card detail/i })).toBeTruthy();
+    // An error banner tells the user why the archive didn't happen.
+    const alerts = screen.getAllByRole('alert');
+    expect(alerts.some((el) => /archive/i.test(el.textContent ?? ''))).toBe(true);
+
+    // Archive menu is re-clickable after the failure (no lingering disable).
+    fireEvent.click(screen.getByRole('button', { name: 'Card menu' }));
+    const retryItem = await screen.findByRole('menuitem', { name: /archive/i });
+    expect(retryItem.hasAttribute('disabled')).toBe(false);
+  });
+
   it('body onSaved callback flashes the header Saved pill', async () => {
     __setInvoker(async () => undefined as never);
     render(<CardDetailModal card={card()} />);

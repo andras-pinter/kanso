@@ -118,8 +118,11 @@ interface KanbanState {
   openCardOnBoard: (cardId: string, boardId: string) => Promise<void>;
   addCard: (columnId: string, title: string) => Promise<void>;
   updateCard: (id: string, patch: CardPatch) => Promise<void>;
-  archiveCard: (id: string) => Promise<void>;
-  unarchiveCard: (id: string) => Promise<void>;
+  // Returns true iff the API call succeeded. Callers (e.g. the card
+  // modal) use this to decide whether to tear down UI that would
+  // otherwise orphan the user's intent on failure.
+  archiveCard: (id: string) => Promise<boolean>;
+  unarchiveCard: (id: string) => Promise<boolean>;
   moveCard: (
     cardId: string,
     fromColumnId: string,
@@ -599,25 +602,29 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
 
   archiveCard: async (id) => {
     const prev = findCard(get().cardsByColumn, id);
-    if (!prev) return;
+    if (!prev) return false;
+    // Pessimistic: keep the card visible (and the modal mounted) until
+    // the server confirms. Optimistic removal used to snap the modal
+    // shut on rollback, orphaning the user's intent on failure.
+    // Sequence bump still gates a concurrent updateCard's stale write.
     const mySeq = nextCardMutation(id);
-    set((s) => removeCard(s, id));
-    if (get().selectedCardId === id) set({ selectedCardId: null });
     try {
       await cardArchive(id);
-      if (!isLatestCardMutation(id, mySeq)) return;
-      // Refresh active column so archived rows reappear if showArchived is on.
+      if (!isLatestCardMutation(id, mySeq)) return true;
+      set((s) => removeCard(s, id));
+      if (get().selectedCardId === id) set({ selectedCardId: null });
       if (get().showArchived) {
         const fresh = await cardsList(prev.column_id, true);
-        if (!isLatestCardMutation(id, mySeq)) return;
+        if (!isLatestCardMutation(id, mySeq)) return true;
         set((s) => ({
           cardsByColumn: { ...s.cardsByColumn, [prev.column_id]: fresh },
         }));
       }
+      return true;
     } catch (e) {
-      if (!isLatestCardMutation(id, mySeq)) return;
+      if (!isLatestCardMutation(id, mySeq)) return false;
       set({ error: formatError(e) });
-      await get().load();
+      return false;
     }
   },
 
@@ -625,13 +632,15 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
     try {
       await cardUnarchive(id);
       const boardId = get().currentBoardId;
-      if (!boardId) return;
+      if (!boardId) return true;
       const myVersion = ++loadVersion;
       const { columns, cardsByColumn } = await fetchBoardContents(boardId, get().showArchived);
-      if (myVersion !== loadVersion) return;
+      if (myVersion !== loadVersion) return true;
       set({ columns, cardsByColumn });
+      return true;
     } catch (e) {
       set({ error: formatError(e) });
+      return false;
     }
   },
 

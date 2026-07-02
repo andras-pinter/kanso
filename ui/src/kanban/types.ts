@@ -40,8 +40,8 @@ export interface CardBody {
 }
 
 export interface CardBodySet {
-  body_blocksuite_b64: string;
-  body_text: string;
+  body_blocksuite_b64?: string | null;
+  body_text?: string | null;
 }
 
 export interface SeedIds {

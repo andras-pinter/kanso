@@ -178,12 +178,7 @@ export const cardUnarchive = (id: string): Promise<CardDto> => invoker('card_una
 
 export const cardBodyGet = (id: string): Promise<CardBody> => invoker('card_body_get', { id });
 
-export interface CardBodyStamp {
-  id: string;
-  updated_at: string;
-}
-
-export const cardBodySet = (id: string, body: CardBodySet): Promise<CardBodyStamp> =>
+export const cardBodySet = (id: string, body: CardBodySet): Promise<CardDto> =>
   invoker('card_body_set', { id, body });
 
 // ---------- search ----------

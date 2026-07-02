@@ -153,6 +153,16 @@ describe('kanban api client', () => {
     ]);
   });
 
+  it('supports text-only card body writes', async () => {
+    await cardBodySet('k2', { body_text: 'plain' });
+    expect(calls).toEqual([
+      {
+        cmd: 'card_body_set',
+        args: { id: 'k2', body: { body_text: 'plain' } },
+      },
+    ]);
+  });
+
   it('serializes tag + search commands', async () => {
     await tagsList(true);
     await tagGet('t1');

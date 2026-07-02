@@ -5,8 +5,8 @@
 // uses the same `tagCreate` action and auto-links the result.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import ColorPicker from './ColorPicker';
 import { useKanbanStore } from './hooks/useKanbanStore';
+import { tagChipStyle } from './tagChipStyle';
 import type { TagDto } from './types';
 
 interface Props {
@@ -37,7 +37,6 @@ export default function TagPickerPopover({ cardId }: Props) {
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState('');
   const [creatingName, setCreatingName] = useState<string | null>(null);
-  const [newColor, setNewColor] = useState<string | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -77,12 +76,11 @@ export default function TagPickerPopover({ cardId }: Props) {
   const onCreate = async () => {
     const name = creatingName ?? filter.trim();
     if (!name) return;
-    const created = await createTag(name, newColor);
+    const created = await createTag(name);
     if (created) {
       await addCardTag(cardId, created.id);
     }
     setCreatingName(null);
-    setNewColor(null);
     setFilter('');
   };
 
@@ -90,12 +88,11 @@ export default function TagPickerPopover({ cardId }: Props) {
     <div className="kanso-tag-picker">
       <div className="kanso-tag-chip-row" aria-label="Card tags">
         {currentTags.map((t) => (
-          <span key={t.id} className="kanso-tag-chip kanso-tag-chip--removable">
-            <span
-              className="kanso-tag-dot"
-              style={{ backgroundColor: t.color ?? 'var(--text-muted)' }}
-              aria-hidden="true"
-            />
+          <span
+            key={t.id}
+            className="kanso-tag-chip kanso-tag-chip--removable"
+            style={tagChipStyle(t.id)}
+          >
             <span className="kanso-tag-chip-name">{t.name}</span>
             <button
               type="button"
@@ -127,7 +124,6 @@ export default function TagPickerPopover({ cardId }: Props) {
                 placeholder="Tag name"
                 autoFocus
               />
-              <ColorPicker value={newColor} onChange={setNewColor} />
               <div className="kanso-tag-create-actions">
                 <button type="button" className="kanso-btn" onClick={() => setCreatingName(null)}>
                   Cancel
@@ -162,12 +158,9 @@ export default function TagPickerPopover({ cardId }: Props) {
                         setFilter('');
                       }}
                     >
-                      <span
-                        className="kanso-tag-dot"
-                        style={{ backgroundColor: t.color ?? 'var(--text-muted)' }}
-                        aria-hidden="true"
-                      />
-                      <span>{t.name}</span>
+                      <span className="kanso-tag-chip" style={tagChipStyle(t.id)}>
+                        <span className="kanso-tag-chip-name">{t.name}</span>
+                      </span>
                     </button>
                   </li>
                 ))}
@@ -181,7 +174,6 @@ export default function TagPickerPopover({ cardId }: Props) {
                   className="kanso-tag-create-trigger"
                   onClick={() => {
                     setCreatingName(filter.trim());
-                    setNewColor(null);
                   }}
                 >
                   ⊕ Create &quot;{filter.trim()}&quot;

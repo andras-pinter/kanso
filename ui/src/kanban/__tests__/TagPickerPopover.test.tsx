@@ -18,7 +18,7 @@ function tag(id: string, name: string): TagDto {
   return {
     id,
     name,
-    color: '#abcdef',
+    color: 'IGNORED',
     created_at: 0,
     updated_at: 0,
     archived_at: null,

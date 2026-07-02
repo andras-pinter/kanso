@@ -93,3 +93,83 @@ describe('resolveDragEnd', () => {
     expect(resolveDragEnd('a', 'mystery', layout)).toBeNull();
   });
 });
+
+describe('resolveDragEnd with a tag filter (visibleCardsByColumn)', () => {
+  // Full: [A(no-tag), B(X), C(no-tag), D(X)] in col `todo`, visible=[B, D].
+  // Full: [E(no-tag), F(X), G(no-tag)]      in col `doing`, visible=[F].
+  // Full: []                                 in col `done`, visible=[].
+  const filtered = {
+    cardsByColumn: {
+      todo: [card('A', 'todo'), card('B', 'todo'), card('C', 'todo'), card('D', 'todo')],
+      doing: [card('E', 'doing'), card('F', 'doing'), card('G', 'doing')],
+      done: [] as CardDto[],
+    },
+    visibleCardsByColumn: {
+      todo: [card('B', 'todo'), card('D', 'todo')],
+      doing: [card('F', 'doing')],
+      done: [] as CardDto[],
+    },
+  };
+
+  it('same column: drop D onto B → insert D before B in absolute space', () => {
+    // Simulates the finding #3 scenario. Absolute insert index for B is 1;
+    // no shift needed because D (currentIdx=3) > 1.
+    expect(resolveDragEnd('D', 'B', filtered)).toEqual({
+      cardId: 'D',
+      fromColumnId: 'todo',
+      targetColumnId: 'todo',
+      insertIndex: 1,
+    });
+    // After moveCard applies this: [A, D, B, C]. Hidden A and C keep their
+    // ordering relative to each other and to B/D that didn't move.
+  });
+
+  it('cross-column: drop D onto F → insert before F, hidden neighbours untouched', () => {
+    expect(resolveDragEnd('D', 'F', filtered)).toEqual({
+      cardId: 'D',
+      fromColumnId: 'todo',
+      targetColumnId: 'doing',
+      insertIndex: 1,
+    });
+    // Target becomes [E, D, F, G] — hidden E stays first, hidden G stays last.
+  });
+
+  it('cross-column drop on column body appends after last VISIBLE card, not full end', () => {
+    // Drop D on doing body. Old (buggy) behaviour was insertIndex = 3
+    // (full length), pushing D past hidden G. Fix inserts after F at 2.
+    expect(resolveDragEnd('D', 'column:doing', filtered)).toEqual({
+      cardId: 'D',
+      fromColumnId: 'todo',
+      targetColumnId: 'doing',
+      insertIndex: 2,
+    });
+  });
+
+  it('same-column drop on column body appends after last visible in that column', () => {
+    // Drop B on todo body. Filtered end is after D. Absolute idx = idx(D)+1 = 4.
+    // Same-column shift: currentIdx(B)=1, insertIndex=4 → effective=3.
+    // Post-removal list is [A, C, D]; inserting B at 3 → [A, C, D, B].
+    expect(resolveDragEnd('B', 'column:todo', filtered)).toEqual({
+      cardId: 'B',
+      fromColumnId: 'todo',
+      targetColumnId: 'todo',
+      insertIndex: 3,
+    });
+  });
+
+  it('same-column drop on body of a card already at the visible end is a no-op', () => {
+    // D is already the last visible card in todo. Absolute insert = 4,
+    // currentIdx = 3, effective = 3 → matches current position → null.
+    expect(resolveDragEnd('D', 'column:todo', filtered)).toBeNull();
+  });
+
+  it('cross-column drop on body of a column with no visible cards falls back to full end', () => {
+    // done has neither hidden nor visible cards — behaviour is unchanged.
+    expect(resolveDragEnd('D', 'column:done', filtered)).toEqual({
+      cardId: 'D',
+      fromColumnId: 'todo',
+      targetColumnId: 'done',
+      insertIndex: 0,
+    });
+  });
+});

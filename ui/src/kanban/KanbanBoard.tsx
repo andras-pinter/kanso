@@ -29,7 +29,7 @@ import ManageTagsDrawer from './ManageTagsDrawer';
 import SearchPalette from './SearchPalette';
 import QuickAddModal from '../quick-add/QuickAddModal';
 import { useQuickAddOpenEvent } from '../quick-add/useQuickAddOpenEvent';
-import { resolveDragEnd } from './dragEnd';
+import { computeVisibleCardsByColumn, resolveDragEnd } from './dragEnd';
 import { COLUMN_DRAG_PREFIX, filterCollidersForActive, parseColumnDragId, resolveColumnDragEnd } from './columnDragEnd';
 import type { CardDto } from './types';
 import { PromptDialog } from '../Dialog';
@@ -133,8 +133,14 @@ export default function KanbanBoard() {
         if (resolution) void reorderColumn(resolution);
         return;
       }
+      const state = useKanbanStore.getState();
       const resolution = resolveDragEnd(activeId, overId, {
-        cardsByColumn: useKanbanStore.getState().cardsByColumn,
+        cardsByColumn: state.cardsByColumn,
+        visibleCardsByColumn: computeVisibleCardsByColumn(
+          state.cardsByColumn,
+          state.selectedTagIds,
+          state.cardTagMap,
+        ),
       });
       if (!resolution) return;
       void moveCard(

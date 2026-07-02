@@ -36,7 +36,6 @@ function card(id = 'c1', title = 'orig'): CardDto {
     due_at: null,
     created_at: 0,
     updated_at: 0,
-    archived_at: null,
   };
 }
 
@@ -46,7 +45,6 @@ function seedStore(c: CardDto) {
     error: null,
     boards: [],
     currentBoardId: 'b1',
-    showArchived: false,
     columns: [
       {
         id: 'col1',
@@ -56,7 +54,6 @@ function seedStore(c: CardDto) {
         position: 'a',
         created_at: 0,
         updated_at: 0,
-        archived_at: null,
       },
     ],
     cardsByColumn: { col1: [c] },

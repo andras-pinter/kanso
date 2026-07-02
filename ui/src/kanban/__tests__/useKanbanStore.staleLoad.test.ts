@@ -16,7 +16,6 @@ function board(id: string): BoardDto {
     color: null,
     created_at: 0,
     updated_at: 0,
-    archived_at: null,
   };
 }
 
@@ -29,7 +28,6 @@ function column(id: string, boardId: string): ColumnDto {
     color: null,
     created_at: 0,
     updated_at: 0,
-    archived_at: null,
   };
 }
 
@@ -43,7 +41,6 @@ function card(id: string, columnId: string): CardDto {
     due_at: null,
     created_at: 0,
     updated_at: 0,
-    archived_at: null,
   };
 }
 
@@ -76,7 +73,6 @@ describe('useKanbanStore stale-load gating', () => {
       error: null,
       boards: [board('a'), board('b'), board('c')],
       currentBoardId: 'a',
-      showArchived: false,
       columns: [column('ca', 'a')],
       cardsByColumn: { ca: [card('k1', 'ca')] },
       selectedCardId: null,
@@ -132,41 +128,5 @@ describe('useKanbanStore stale-load gating', () => {
     const s = useKanbanStore.getState();
     expect(s.currentBoardId).toBe('c');
     expect(s.columns.map((c) => c.id)).toEqual(['cc']);
-  });
-
-  it('setShowArchived racing with switchBoard discards the loser', async () => {
-    // Goal: setShowArchived kicks off a fetch for board 'a', then the user
-    // immediately switches to board 'b'. The 'b' fetch returns fast; 'a'
-    // returns late. State must reflect 'b'.
-    let resolveA!: () => void;
-    const aGate = new Promise<void>((r) => {
-      resolveA = r;
-    });
-
-    const invoker: InvokeFn = async (cmd, args) => {
-      const a = (args ?? {}) as Record<string, unknown>;
-      if (cmd === 'columns_list') {
-        const boardId = a.boardId as string;
-        if (boardId === 'a') await aGate;
-        return [{ ...column(`c${boardId}`, boardId), name: `name-${boardId}` }] as never;
-      }
-      if (cmd === 'cards_list') return [] as never;
-      return undefined as never;
-    };
-    __setInvoker(invoker);
-
-    // Kick off slow fetch for current board 'a'.
-    const pArchived = useKanbanStore.getState().setShowArchived(true);
-    // Then switch boards — fast fetch for 'b'.
-    const pSwitch = useKanbanStore.getState().switchBoard('b');
-    await pSwitch;
-    expect(useKanbanStore.getState().currentBoardId).toBe('b');
-    expect(useKanbanStore.getState().columns[0]?.name).toBe('name-b');
-
-    // Release the slow archived fetch — its write must be discarded.
-    resolveA();
-    await pArchived;
-    expect(useKanbanStore.getState().currentBoardId).toBe('b');
-    expect(useKanbanStore.getState().columns[0]?.name).toBe('name-b');
   });
 });

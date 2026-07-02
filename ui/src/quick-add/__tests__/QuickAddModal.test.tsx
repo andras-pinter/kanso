@@ -14,7 +14,6 @@ function board(id: string, name: string): BoardDto {
     color: null,
     created_at: 0,
     updated_at: 0,
-    archived_at: null,
   };
 }
 
@@ -27,7 +26,6 @@ function column(id: string, board_id: string, name: string): ColumnDto {
     color: null,
     created_at: 0,
     updated_at: 0,
-    archived_at: null,
   };
 }
 
@@ -41,7 +39,6 @@ function card(id: string, column_id: string, title: string): CardDto {
     due_at: null,
     created_at: 0,
     updated_at: 0,
-    archived_at: null,
   };
 }
 
@@ -54,7 +51,6 @@ function seedStore(opts: { currentBoardId: string | null }) {
     error: null,
     boards: [b1, b2],
     currentBoardId: opts.currentBoardId,
-    showArchived: false,
     columns: cols,
     cardsByColumn: { col1: [], col2: [] },
     selectedCardId: null,

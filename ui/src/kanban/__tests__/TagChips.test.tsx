@@ -4,7 +4,7 @@ import { useKanbanStore } from '../hooks/useKanbanStore';
 import TagChips from '../TagChips';
 import type { TagDto } from '../types';
 
-function tag(id: string, name: string, archived = false): TagDto {
+function tag(id: string, name: string): TagDto {
   return {
     id,
     name,
@@ -13,7 +13,6 @@ function tag(id: string, name: string, archived = false): TagDto {
     color: 'IGNORED',
     created_at: 0,
     updated_at: 0,
-    archived_at: archived ? 1 : null,
   };
 }
 
@@ -23,7 +22,6 @@ function resetStore(state: Partial<ReturnType<typeof useKanbanStore.getState>>) 
     error: null,
     boards: [],
     currentBoardId: null,
-    showArchived: false,
     columns: [],
     cardsByColumn: {},
     selectedCardId: null,
@@ -59,15 +57,5 @@ describe('TagChips', () => {
     expect(screen.getByText('three')).toBeTruthy();
     expect(screen.queryByText('four')).toBeNull();
     expect(screen.getByText('+2')).toBeTruthy();
-  });
-
-  it('skips archived tags', () => {
-    resetStore({
-      tags: [tag('t1', 'live'), tag('t2', 'gone', true)],
-      cardTagMap: { c1: ['t1', 't2'] },
-    });
-    render(<TagChips cardId="c1" />);
-    expect(screen.getByText('live')).toBeTruthy();
-    expect(screen.queryByText('gone')).toBeNull();
   });
 });

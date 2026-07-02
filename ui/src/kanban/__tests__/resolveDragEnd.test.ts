@@ -12,7 +12,6 @@ function card(id: string, columnId: string, position = id): CardDto {
     due_at: null,
     created_at: 0,
     updated_at: 0,
-    archived_at: null,
   };
 }
 

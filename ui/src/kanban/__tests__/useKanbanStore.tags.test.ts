@@ -4,14 +4,13 @@ import { invoke as realInvoke } from '@tauri-apps/api/core';
 import { useKanbanStore } from '../hooks/useKanbanStore';
 import type { TagDto } from '../types';
 
-function tag(id: string, name: string, archived = false): TagDto {
+function tag(id: string, name: string): TagDto {
   return {
     id,
     name,
     color: '#abcdef',
     created_at: 0,
     updated_at: 0,
-    archived_at: archived ? 1 : null,
   };
 }
 
@@ -26,7 +25,7 @@ function buildInvoker(server: FakeServer): InvokeFn {
     const a = (args ?? {}) as Record<string, unknown>;
     switch (cmd) {
       case 'tags_list':
-        return (a.includeArchived ? server.tags : server.tags.filter((t) => t.archived_at === null)) as never;
+        return server.tags as never;
       case 'board_card_tags_list': {
         const pairs: { card_id: string; tag_id: string }[] = [];
         for (const [cid, tags] of Object.entries(server.links)) {
@@ -56,16 +55,6 @@ function buildInvoker(server: FakeServer): InvokeFn {
             : t,
         );
         return server.tags.find((t) => t.id === id) as never;
-      }
-      case 'tag_archive': {
-        const id = a.id as string;
-        server.tags = server.tags.map((t) => (t.id === id ? { ...t, archived_at: 1 } : t));
-        return undefined as never;
-      }
-      case 'tag_unarchive': {
-        const id = a.id as string;
-        server.tags = server.tags.map((t) => (t.id === id ? { ...t, archived_at: null } : t));
-        return undefined as never;
       }
       case 'tag_delete': {
         const id = a.id as string;
@@ -101,7 +90,6 @@ function reset() {
     error: null,
     boards: [],
     currentBoardId: 'board1',
-    showArchived: false,
     columns: [],
     cardsByColumn: {},
     selectedCardId: null,
@@ -161,12 +149,6 @@ describe('useKanbanStore tag actions', () => {
     const created = await useKanbanStore.getState().tagCreate('green', '#00ff00');
     expect(created?.name).toBe('green');
     expect(useKanbanStore.getState().tags.find((t) => t.id === created?.id)?.color).toBe('#00ff00');
-  });
-
-  it('tagArchive refreshes tag list with archived flag', async () => {
-    await useKanbanStore.getState().loadTags();
-    await useKanbanStore.getState().tagArchive('t1');
-    expect(useKanbanStore.getState().tags.find((t) => t.id === 't1')?.archived_at).toBe(1);
   });
 
   it('tagDelete removes from tags and prunes card-tag map', async () => {
@@ -267,23 +249,6 @@ describe('useKanbanStore tag actions', () => {
     expect(m.card3?.sort()).toEqual(['t1', 't2']);
   });
 
-  it('setShowArchived refreshes cardTagMap', async () => {
-    let bulkCalls = 0;
-    __setInvoker(async (cmd, args) => {
-      if (cmd === 'columns_list') return [] as never;
-      if (cmd === 'board_card_tags_list') {
-        bulkCalls += 1;
-        return [] as never;
-      }
-      return buildInvoker(server)(cmd, args);
-    });
-
-    await useKanbanStore.getState().loadTags();
-    const before = bulkCalls;
-    await useKanbanStore.getState().setShowArchived(true);
-    expect(bulkCalls).toBe(before + 1);
-  });
-
   it('boot: loadTags after load populates map even if tags resolve first', async () => {
     // Reproduces a real boot race: KanbanBoard fires load() and loadTags()
     // concurrently. loadTags reads get().currentBoardId; if load hasn't
@@ -295,7 +260,7 @@ describe('useKanbanStore tag actions', () => {
     });
 
     const tagsPayload: TagDto[] = [tag('t1', 'red')];
-    const boardPayload = [{ id: 'board1', name: 'B1', archived_at: null, created_at: 0, updated_at: 0 }];
+    const boardPayload = [{ id: 'board1', name: 'B1', position: 'a', color: null, created_at: 0, updated_at: 0 }];
     const linksPayload = [{ card_id: 'card1', tag_id: 't1' }];
 
     __setInvoker(async (cmd, _args) => {

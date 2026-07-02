@@ -4,14 +4,13 @@ import { useKanbanStore } from '../hooks/useKanbanStore';
 import BoardFilterBar from '../BoardFilterBar';
 import type { TagDto } from '../types';
 
-function tag(id: string, name: string, archived = false): TagDto {
+function tag(id: string, name: string): TagDto {
   return {
     id,
     name,
     color: null,
     created_at: 0,
     updated_at: 0,
-    archived_at: archived ? 1 : null,
   };
 }
 
@@ -21,7 +20,6 @@ function resetStore(state: Partial<ReturnType<typeof useKanbanStore.getState>>) 
     error: null,
     boards: [],
     currentBoardId: null,
-    showArchived: false,
     columns: [],
     cardsByColumn: {},
     selectedCardId: null,
@@ -37,15 +35,15 @@ describe('BoardFilterBar', () => {
   beforeEach(() => resetStore({}));
   afterEach(() => resetStore({}));
 
-  it('renders nothing when there are no live tags', () => {
-    resetStore({ tags: [tag('t1', 'archived-only', true)] });
+  it('renders nothing when there are no tags', () => {
+    resetStore({ tags: [] });
     const { container } = render(<BoardFilterBar />);
     expect(container.firstChild).toBeNull();
   });
 
-  it('renders one chip per live tag with aria-pressed reflecting state', () => {
+  it('renders one chip per tag with aria-pressed reflecting state', () => {
     resetStore({
-      tags: [tag('t1', 'red'), tag('t2', 'blue'), tag('t3', 'gone', true)],
+      tags: [tag('t1', 'red'), tag('t2', 'blue')],
       selectedTagIds: ['t2'],
     });
     render(<BoardFilterBar />);
@@ -53,7 +51,6 @@ describe('BoardFilterBar', () => {
     const blue = screen.getByRole('button', { name: 'blue' });
     expect(red.getAttribute('aria-pressed')).toBe('false');
     expect(blue.getAttribute('aria-pressed')).toBe('true');
-    expect(screen.queryByRole('button', { name: 'gone' })).toBeNull();
   });
 
   it('toggles a tag on click', () => {

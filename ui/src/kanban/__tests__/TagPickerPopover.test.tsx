@@ -21,7 +21,6 @@ function tag(id: string, name: string): TagDto {
     color: 'IGNORED',
     created_at: 0,
     updated_at: 0,
-    archived_at: null,
   };
 }
 
@@ -44,7 +43,6 @@ function buildInvoker(opts: { tags: TagDto[]; cardTagLinks: Record<string, strin
             due_at: null,
             created_at: 0,
             updated_at: 0,
-            archived_at: null,
           }));
         return cardIds as never;
       }

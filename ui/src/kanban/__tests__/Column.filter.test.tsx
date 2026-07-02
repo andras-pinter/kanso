@@ -6,7 +6,7 @@ import Column from '../Column';
 import type { CardDto, ColumnDto, TagDto } from '../types';
 
 function tag(id: string, name: string): TagDto {
-  return { id, name, color: null, created_at: 0, updated_at: 0, archived_at: null };
+  return { id, name, color: null, created_at: 0, updated_at: 0 };
 }
 
 function card(id: string, title: string, columnId = 'col1'): CardDto {
@@ -19,7 +19,6 @@ function card(id: string, title: string, columnId = 'col1'): CardDto {
     due_at: null,
     created_at: 0,
     updated_at: 0,
-    archived_at: null,
   };
 }
 
@@ -31,7 +30,6 @@ const column: ColumnDto = {
   color: null,
   created_at: 0,
   updated_at: 0,
-  archived_at: null,
 };
 
 function resetStore(state: Partial<ReturnType<typeof useKanbanStore.getState>>) {
@@ -40,7 +38,6 @@ function resetStore(state: Partial<ReturnType<typeof useKanbanStore.getState>>) 
     error: null,
     boards: [],
     currentBoardId: 'b1',
-    showArchived: false,
     columns: [column],
     cardsByColumn: { col1: [] },
     selectedCardId: null,

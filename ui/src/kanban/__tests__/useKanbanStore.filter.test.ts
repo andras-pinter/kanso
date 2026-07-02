@@ -7,7 +7,6 @@ function reset() {
     error: null,
     boards: [],
     currentBoardId: null,
-    showArchived: false,
     columns: [],
     cardsByColumn: {},
     selectedCardId: null,

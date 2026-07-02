@@ -14,7 +14,6 @@ function makeColumn(color: string | null): ColumnDto {
     color,
     created_at: 0,
     updated_at: 0,
-    archived_at: null,
   };
 }
 
@@ -24,7 +23,6 @@ function resetStore(column: ColumnDto, cards: CardDto[]) {
     error: null,
     boards: [],
     currentBoardId: 'b1',
-    showArchived: false,
     columns: [column],
     cardsByColumn: { col1: cards },
     selectedCardId: null,
@@ -87,7 +85,6 @@ describe('Column count quiet-zero styling', () => {
         due_at: null,
         created_at: 0,
         updated_at: 0,
-        archived_at: null,
       },
     ];
     resetStore(column, cards);

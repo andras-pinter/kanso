@@ -1,8 +1,8 @@
-// Regression: single-card mutations (updateCard, archiveCard) must ignore
+// Regression: single-card mutations (updateCard, deleteCard) must ignore
 // stale API responses for field-level state. Two rapid updateCards to the
 // same card can resolve out of order; the older response used to overwrite
 // the newer store value. Per-card mutation-sequence gating fixes that.
-// Archive success is terminal for the visible list — the card is gone on
+// Delete success is terminal for the visible list — the card is gone on
 // the server, so it must be removed regardless of a newer mutation's seq.
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -21,7 +21,6 @@ function card(id: string, title: string): CardDto {
     due_at: null,
     created_at: 0,
     updated_at: 0,
-    archived_at: null,
   };
 }
 
@@ -31,7 +30,6 @@ function seed(cards: CardDto[]) {
     error: null,
     boards: [],
     currentBoardId: 'b1',
-    showArchived: false,
     columns: [
       {
         id: 'col1',
@@ -41,7 +39,6 @@ function seed(cards: CardDto[]) {
         position: 'a',
         created_at: 0,
         updated_at: 0,
-        archived_at: null,
       },
     ],
     cardsByColumn: { col1: cards },
@@ -135,30 +132,30 @@ describe('useKanbanStore card mutation race gating', () => {
     expect(s.error).toBeNull();
   });
 
-  it('archiveCard mutation bumps the same per-card sequence as updateCard', async () => {
-    // If an updateCard is already in flight and an archiveCard fires
-    // after it, the archive should bump the sequence so the older
-    // update's response is discarded. Practically the modal's archive
-    // path (commitTitle → archiveCard) relies on this ordering.
+  it('deleteCard mutation bumps the same per-card sequence as updateCard', async () => {
+    // If an updateCard is already in flight and an deleteCard fires
+    // after it, the delete should bump the sequence so the older
+    // update's response is discarded. Practically the modal's delete
+    // path (commitTitle → deleteCard) relies on this ordering.
     const updateGate = deferred<CardDto>();
-    const archiveGate = deferred<CardDto>();
+    const deleteGate = deferred<CardDto>();
 
     const invoker: InvokeFn = async (cmd, args) => {
       if (cmd === 'card_update') {
         const a = args as { patch: { title?: string } };
         if (a.patch.title === 'A') return (await updateGate.promise) as never;
       }
-      if (cmd === 'card_archive') return (await archiveGate.promise) as never;
+      if (cmd === 'card_delete') return (await deleteGate.promise) as never;
       return undefined as never;
     };
     __setInvoker(invoker);
 
     const pUpdate = useKanbanStore.getState().updateCard('c1', { title: 'A' });
-    const pArchive = useKanbanStore.getState().archiveCard('c1');
+    const pDelete = useKanbanStore.getState().deleteCard('c1');
 
-    // Archive resolves first — card gone from store.
-    archiveGate.resolve(card('c1', 'orig'));
-    await pArchive;
+    // Delete resolves first — card gone from store.
+    deleteGate.resolve(card('c1', 'orig'));
+    await pDelete;
     expect(
       useKanbanStore.getState().cardsByColumn.col1?.find((c) => c.id === 'c1'),
     ).toBeUndefined();
@@ -171,24 +168,24 @@ describe('useKanbanStore card mutation race gating', () => {
     ).toBeUndefined();
   });
 
-  it('archiveCard returns true on success and removes the card', async () => {
+  it('deleteCard returns true on success and removes the card', async () => {
     __setInvoker(async (cmd) => {
-      if (cmd === 'card_archive') return undefined as never;
+      if (cmd === 'card_delete') return undefined as never;
       return undefined as never;
     });
-    const ok = await useKanbanStore.getState().archiveCard('c1');
+    const ok = await useKanbanStore.getState().deleteCard('c1');
     expect(ok).toBe(true);
     expect(
       useKanbanStore.getState().cardsByColumn.col1?.find((c) => c.id === 'c1'),
     ).toBeUndefined();
   });
 
-  it('archiveCard returns false on API rejection and keeps the card', async () => {
+  it('deleteCard returns false on API rejection and keeps the card', async () => {
     __setInvoker(async (cmd) => {
-      if (cmd === 'card_archive') throw new Error('boom');
+      if (cmd === 'card_delete') throw new Error('boom');
       return undefined as never;
     });
-    const ok = await useKanbanStore.getState().archiveCard('c1');
+    const ok = await useKanbanStore.getState().deleteCard('c1');
     expect(ok).toBe(false);
     // Pessimistic: card was never removed, so nothing to roll back.
     expect(
@@ -197,24 +194,24 @@ describe('useKanbanStore card mutation race gating', () => {
     expect(useKanbanStore.getState().error).toMatch(/boom/);
   });
 
-  it('archiveCard removes the card even when a newer mutation bumped the seq (stale success)', async () => {
-    // Archive success is terminal for the visible list — the server
-    // archived the card, so the UI must drop it regardless of a
+  it('deleteCard removes the card even when a newer mutation bumped the seq (stale success)', async () => {
+    // Delete success is terminal for the visible list — the server
+    // deleted the card, so the UI must drop it regardless of a
     // concurrent updateCard's newer sequence. Anything else leaves a
     // ghost card until the next full reload.
-    const archiveGate = deferred<undefined>();
+    const deleteGate = deferred<undefined>();
     __setInvoker(async (cmd) => {
-      if (cmd === 'card_archive') return (await archiveGate.promise) as never;
+      if (cmd === 'card_delete') return (await deleteGate.promise) as never;
       if (cmd === 'card_update') return card('c1', 'newer') as never;
       return undefined as never;
     });
 
     useKanbanStore.setState({ selectedCardId: 'c1' });
-    const pArchive = useKanbanStore.getState().archiveCard('c1');
-    // A newer mutation bumps the sequence past the archive.
+    const pDelete = useKanbanStore.getState().deleteCard('c1');
+    // A newer mutation bumps the sequence past the delete.
     await useKanbanStore.getState().updateCard('c1', { title: 'newer' });
-    archiveGate.resolve(undefined);
-    const ok = await pArchive;
+    deleteGate.resolve(undefined);
+    const ok = await pDelete;
     expect(ok).toBe(true);
     expect(
       useKanbanStore.getState().cardsByColumn.col1?.find((c) => c.id === 'c1'),
@@ -222,22 +219,22 @@ describe('useKanbanStore card mutation race gating', () => {
     expect(useKanbanStore.getState().selectedCardId).toBeNull();
   });
 
-  it('archiveCard returns false on stale failure without rolling back', async () => {
-    // Pessimistic archive never removed the card, so a stale failure
+  it('deleteCard returns false on stale failure without rolling back', async () => {
+    // Pessimistic delete never removed the card, so a stale failure
     // needs no rollback. The seq guard suppresses the error surface
     // because a newer mutation already owns the store state.
-    const archiveGate = deferred<undefined>();
+    const deleteGate = deferred<undefined>();
     __setInvoker(async (cmd) => {
-      if (cmd === 'card_archive') return (await archiveGate.promise) as never;
+      if (cmd === 'card_delete') return (await deleteGate.promise) as never;
       if (cmd === 'card_update') return card('c1', 'newer') as never;
       return undefined as never;
     });
 
     useKanbanStore.setState({ selectedCardId: 'c1' });
-    const pArchive = useKanbanStore.getState().archiveCard('c1');
+    const pDelete = useKanbanStore.getState().deleteCard('c1');
     await useKanbanStore.getState().updateCard('c1', { title: 'newer' });
-    archiveGate.reject(new Error('boom'));
-    const ok = await pArchive;
+    deleteGate.reject(new Error('boom'));
+    const ok = await pDelete;
     expect(ok).toBe(false);
     const s = useKanbanStore.getState();
     expect(s.cardsByColumn.col1?.find((c) => c.id === 'c1')?.title).toBe('newer');

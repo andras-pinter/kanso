@@ -4,46 +4,37 @@ import { invoke as realInvoke } from '@tauri-apps/api/core';
 import { useKanbanStore } from '../hooks/useKanbanStore';
 import type { BoardDto, CardDto, ColumnDto } from '../types';
 
-function makeBoard(id: string, archived = false): BoardDto {
-  return {
-    id,
-    name: id.toUpperCase(),
-    position: id,
-    color: null,
-    created_at: 0,
-    updated_at: 0,
-    archived_at: archived ? 1 : null,
-  };
-}
+const makeBoard = (id: string): BoardDto => ({
+  id,
+  name: id.toUpperCase(),
+  position: id,
+  color: null,
+  created_at: 0,
+  updated_at: 0,
+});
 
-function makeColumn(id: string, boardId: string): ColumnDto {
-  return {
-    id,
-    board_id: boardId,
-    name: id.toUpperCase(),
-    position: id,
-    color: null,
-    created_at: 0,
-    updated_at: 0,
-    archived_at: null,
-  };
-}
+const makeColumn = (id: string, boardId: string): ColumnDto => ({
+  id,
+  board_id: boardId,
+  name: id.toUpperCase(),
+  position: id,
+  color: null,
+  created_at: 0,
+  updated_at: 0,
+});
 
-function makeCard(id: string, columnId: string): CardDto {
-  return {
-    id,
-    column_id: columnId,
-    title: id,
-    body_text: null,
-    position: id,
-    due_at: null,
-    created_at: 0,
-    updated_at: 0,
-    archived_at: null,
-  };
-}
+const makeCard = (id: string, columnId: string): CardDto => ({
+  id,
+  column_id: columnId,
+  title: id,
+  body_text: null,
+  position: id,
+  due_at: null,
+  created_at: 0,
+  updated_at: 0,
+});
 
-function installLocalStorageShim() {
+const installLocalStorageShim = () => {
   const store = new Map<string, string>();
   const shim: Storage = {
     get length() {
@@ -69,28 +60,22 @@ function installLocalStorageShim() {
     configurable: true,
     value: shim,
   });
-}
+};
 
-/**
- * Fake server backing the invoker. Just enough fidelity to drive the
- * store's board flow.
- */
 interface FakeServer {
   boards: BoardDto[];
   columns: ColumnDto[];
   cards: CardDto[];
 }
 
-function buildInvoker(server: FakeServer): InvokeFn {
+const buildInvoker = (server: FakeServer): InvokeFn => {
   return async (cmd, args) => {
     const a = (args ?? {}) as Record<string, unknown>;
     switch (cmd) {
       case 'default_column':
         return { board_id: server.boards[0]?.id ?? '', column_id: '' } as never;
       case 'boards_list':
-        return (a.includeArchived
-          ? server.boards
-          : server.boards.filter((b) => b.archived_at === null)) as never;
+        return server.boards as never;
       case 'columns_list':
         return server.columns.filter((c) => c.board_id === a.boardId) as never;
       case 'cards_list':
@@ -109,43 +94,16 @@ function buildInvoker(server: FakeServer): InvokeFn {
         );
         return server.boards.find((b) => b.id === id) as never;
       }
-      case 'board_archive': {
-        const id = a.id as string;
-        server.boards = server.boards.map((b) =>
-          b.id === id ? { ...b, archived_at: 1 } : b,
-        );
-        return undefined as never;
-      }
-      case 'board_unarchive': {
-        const id = a.id as string;
-        server.boards = server.boards.map((b) =>
-          b.id === id ? { ...b, archived_at: null } : b,
-        );
-        return undefined as never;
-      }
       case 'board_delete': {
         const id = a.id as string;
         server.boards = server.boards.filter((b) => b.id !== id);
         return undefined as never;
       }
-      case 'column_update': {
-        const id = a.id as string;
-        const patch = (a.patch ?? {}) as { name?: string; color?: string | null };
-        server.columns = server.columns.map((c) =>
-          c.id === id ? { ...c, ...patch } : c,
-        );
-        return server.columns.find((c) => c.id === id) as never;
-      }
-      case 'column_move': {
-        // Just echo back the column unchanged — store only uses the row
-        // to refresh, ordering already applied optimistically.
-        return server.columns.find((c) => c.id === a.id) as never;
-      }
       default:
         return undefined as never;
     }
   };
-}
+};
 
 describe('useKanbanStore boards', () => {
   let server: FakeServer;
@@ -158,13 +116,11 @@ describe('useKanbanStore boards', () => {
     };
     __setInvoker(buildInvoker(server));
     installLocalStorageShim();
-    // Reset store
     useKanbanStore.setState({
       status: 'idle',
       error: null,
       boards: [],
       currentBoardId: null,
-      showArchived: false,
       columns: [],
       cardsByColumn: {},
       selectedCardId: null,
@@ -178,7 +134,7 @@ describe('useKanbanStore boards', () => {
     __setInvoker(realInvoke);
   });
 
-  it('load picks first live board when no persisted id', async () => {
+  it('load picks first board when no persisted id', async () => {
     await useKanbanStore.getState().load();
     const s = useKanbanStore.getState();
     expect(s.status).toBe('ready');
@@ -193,7 +149,7 @@ describe('useKanbanStore boards', () => {
     expect(useKanbanStore.getState().currentBoardId).toBe('b2');
   });
 
-  it('falls back to first live board when persisted id is gone', async () => {
+  it('falls back to first board when persisted id is gone', async () => {
     window.localStorage.setItem('kanso.currentBoardId', 'ghost');
     await useKanbanStore.getState().load();
     expect(useKanbanStore.getState().currentBoardId).toBe('b1');
@@ -215,20 +171,20 @@ describe('useKanbanStore boards', () => {
     expect(useKanbanStore.getState().boards.map((b) => b.id)).toContain(created?.id);
   });
 
-  it('archiving the current board switches to the next live board', async () => {
+  it('deleting the current board switches to the next remaining board', async () => {
     await useKanbanStore.getState().load();
     expect(useKanbanStore.getState().currentBoardId).toBe('b1');
-    await useKanbanStore.getState().boardArchive('b1');
+    await useKanbanStore.getState().boardDelete('b1');
     expect(useKanbanStore.getState().currentBoardId).toBe('b2');
   });
 
-  it('archiving the last live board lands on empty state', async () => {
+  it('deleting the last board lands on empty state', async () => {
     server.boards = [makeBoard('only')];
     server.columns = [];
     server.cards = [];
     await useKanbanStore.getState().load();
     expect(useKanbanStore.getState().currentBoardId).toBe('only');
-    await useKanbanStore.getState().boardArchive('only');
+    await useKanbanStore.getState().boardDelete('only');
     expect(useKanbanStore.getState().currentBoardId).toBeNull();
     expect(useKanbanStore.getState().columns).toEqual([]);
     expect(window.localStorage.getItem('kanso.currentBoardId')).toBeNull();
@@ -236,7 +192,6 @@ describe('useKanbanStore boards', () => {
 
   it('boardRename is optimistic and rolls back on failure', async () => {
     await useKanbanStore.getState().load();
-    // Swap to a failing invoker just for rename
     const baseInvoker = buildInvoker(server);
     __setInvoker(async (cmd, args) => {
       if (cmd === 'board_update') throw { kind: 'failed', message: 'nope' };
@@ -246,51 +201,5 @@ describe('useKanbanStore boards', () => {
     const s = useKanbanStore.getState();
     expect(s.boards.find((b) => b.id === 'b1')?.name).toBe('B1');
     expect(s.error).toMatch(/nope/);
-  });
-
-  it('setColumnColor is optimistic and rolls back on failure', async () => {
-    await useKanbanStore.getState().load();
-    const baseInvoker = buildInvoker(server);
-    __setInvoker(async (cmd, args) => {
-      if (cmd === 'column_update') throw { kind: 'failed', message: 'no color' };
-      return baseInvoker(cmd, args);
-    });
-    await useKanbanStore.getState().setColumnColor('c1', '#ff0000');
-    const s = useKanbanStore.getState();
-    expect(s.columns.find((c) => c.id === 'c1')?.color).toBeNull();
-    expect(s.error).toMatch(/no color/);
-  });
-
-  it('reorderColumn applies optimistic order + restores on failure', async () => {
-    server.boards = [makeBoard('only')];
-    server.columns = [
-      makeColumn('a', 'only'),
-      makeColumn('b', 'only'),
-      makeColumn('c', 'only'),
-    ];
-    server.cards = [];
-    await useKanbanStore.getState().load();
-    expect(useKanbanStore.getState().columns.map((c) => c.id)).toEqual(['a', 'b', 'c']);
-
-    const baseInvoker = buildInvoker(server);
-    __setInvoker(async (cmd, args) => {
-      if (cmd === 'column_move') throw { kind: 'failed', message: 'reorder boom' };
-      return baseInvoker(cmd, args);
-    });
-    const colA = useKanbanStore.getState().columns.find((c) => c.id === 'a');
-    const colC = useKanbanStore.getState().columns.find((c) => c.id === 'c');
-    if (!colA || !colC) throw new Error('expected fixtures');
-    // a -> over c → [b, c, a]
-    await useKanbanStore.getState().reorderColumn({
-      columnId: 'a',
-      reordered: [
-        useKanbanStore.getState().columns[1],
-        useKanbanStore.getState().columns[2],
-        useKanbanStore.getState().columns[0],
-      ],
-    });
-    const s = useKanbanStore.getState();
-    expect(s.columns.map((c) => c.id)).toEqual(['a', 'b', 'c']);
-    expect(s.error).toMatch(/reorder boom/);
   });
 });

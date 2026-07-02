@@ -16,7 +16,6 @@ function board(id: string): BoardDto {
     color: null,
     created_at: 0,
     updated_at: 0,
-    archived_at: null,
   };
 }
 
@@ -29,7 +28,6 @@ function column(id: string, boardId: string): ColumnDto {
     color: null,
     created_at: 0,
     updated_at: 0,
-    archived_at: null,
   };
 }
 
@@ -43,7 +41,6 @@ function card(id: string, columnId: string): CardDto {
     due_at: null,
     created_at: 0,
     updated_at: 0,
-    archived_at: null,
   };
 }
 
@@ -76,7 +73,6 @@ describe('useKanbanStore.openCardOnBoard race safety', () => {
       error: null,
       boards: [board('a'), board('b'), board('c')],
       currentBoardId: 'a',
-      showArchived: false,
       columns: [column('ca', 'a')],
       cardsByColumn: { ca: [card('ka', 'ca')] },
       selectedCardId: null,

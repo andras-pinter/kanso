@@ -14,7 +14,6 @@ function card(due: number | null = null): CardDto {
     due_at: due,
     created_at: 0,
     updated_at: 0,
-    archived_at: null,
   };
 }
 
@@ -28,7 +27,6 @@ describe('DueDateEditor', () => {
       error: null,
       boards: [],
       currentBoardId: null,
-      showArchived: false,
       columns: [],
       cardsByColumn: {},
       selectedCardId: null,

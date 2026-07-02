@@ -8,7 +8,7 @@ import type { CardDto } from '../types';
 
 // Module-level controls for the mocked CardBodyEditor. Each test sets a
 // `flushImpl` that returns a deferred / rejection so we can drive the
-// close/archive coordination paths. `onSaved` is captured so title-only
+// close/delete coordination paths. `onSaved` is captured so title-only
 // save flow can be asserted without triggering the body path.
 const editorState: {
   flushImpl: () => Promise<void>;
@@ -55,7 +55,6 @@ function card(id = 'c1', title = 'Hello'): CardDto {
     due_at: null,
     created_at: 0,
     updated_at: 0,
-    archived_at: null,
   };
 }
 
@@ -67,7 +66,6 @@ function resetStore(seed: CardDto | CardDto[]) {
     error: null,
     boards: [],
     currentBoardId: 'b1',
-    showArchived: false,
     columns: [
       {
         id: 'col1',
@@ -77,7 +75,6 @@ function resetStore(seed: CardDto | CardDto[]) {
         position: 'a',
         created_at: 0,
         updated_at: 0,
-        archived_at: null,
       },
     ],
     cardsByColumn: { col1: cards },
@@ -268,13 +265,13 @@ describe('CardDetailModal', () => {
     expect(editorState.flushCalls).toBe(0);
   });
 
-  it('archive via overflow menu awaits flush then calls card_archive', async () => {
+  it('delete via overflow menu awaits flush then calls card_delete', async () => {
     const def = deferred<void>();
     editorState.flushImpl = () => def.promise;
-    let archived = false;
+    let deleted = false;
     const invoker: InvokeFn = async (cmd) => {
-      if (cmd === 'card_archive') {
-        archived = true;
+      if (cmd === 'card_delete') {
+        deleted = true;
         return undefined as never;
       }
       return undefined as never;
@@ -284,28 +281,28 @@ describe('CardDetailModal', () => {
     await screen.findByTestId('body-editor-mock');
 
     fireEvent.click(screen.getByRole('button', { name: 'Card menu' }));
-    const item = await screen.findByRole('menuitem', { name: /archive/i });
+    const item = await screen.findByRole('menuitem', { name: /delete/i });
     await act(async () => {
       fireEvent.click(item);
       await Promise.resolve();
     });
     expect(editorState.flushCalls).toBe(1);
-    expect(archived).toBe(false);
+    expect(deleted).toBe(false);
 
     await act(async () => {
       def.resolve();
       await Promise.resolve();
       await Promise.resolve();
     });
-    await waitFor(() => expect(archived).toBe(true));
+    await waitFor(() => expect(deleted).toBe(true));
   });
 
-  it('archive keeps modal open when body flush rejects', async () => {
+  it('delete keeps modal open when body flush rejects', async () => {
     editorState.flushImpl = () => Promise.reject(new Error('save failed'));
-    let archived = false;
+    let deleted = false;
     const invoker: InvokeFn = async (cmd) => {
-      if (cmd === 'card_archive') {
-        archived = true;
+      if (cmd === 'card_delete') {
+        deleted = true;
         return undefined as never;
       }
       return undefined as never;
@@ -315,20 +312,20 @@ describe('CardDetailModal', () => {
     await screen.findByTestId('body-editor-mock');
 
     fireEvent.click(screen.getByRole('button', { name: 'Card menu' }));
-    const item = await screen.findByRole('menuitem', { name: /archive/i });
+    const item = await screen.findByRole('menuitem', { name: /delete/i });
     await act(async () => {
       fireEvent.click(item);
       await Promise.resolve();
       await Promise.resolve();
     });
 
-    expect(archived).toBe(false);
+    expect(deleted).toBe(false);
     expect(screen.getByRole('alert')).toBeTruthy();
   });
 
-  it('archive keeps modal open and shows error when archive API rejects', async () => {
+  it('delete keeps modal open and shows error when delete API rejects', async () => {
     const invoker: InvokeFn = async (cmd) => {
-      if (cmd === 'card_archive') throw new Error('archive boom');
+      if (cmd === 'card_delete') throw new Error('delete boom');
       return undefined as never;
     };
     __setInvoker(invoker);
@@ -337,8 +334,8 @@ describe('CardDetailModal', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Card menu' }));
     await act(async () => {
-      fireEvent.click(await screen.findByRole('menuitem', { name: /archive/i }));
-      // Let commitTitle (no-op), flush (resolves), then archiveCard settle.
+      fireEvent.click(await screen.findByRole('menuitem', { name: /delete/i }));
+      // Let commitTitle (no-op), flush (resolves), then deleteCard settle.
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
@@ -347,13 +344,13 @@ describe('CardDetailModal', () => {
     // Modal is still mounted and selection is retained.
     expect(useKanbanStore.getState().selectedCardId).toBe('c1');
     expect(screen.getByRole('dialog', { name: /card detail/i })).toBeTruthy();
-    // An error banner tells the user why the archive didn't happen.
+    // An error banner tells the user why the delete didn't happen.
     const alerts = screen.getAllByRole('alert');
-    expect(alerts.some((el) => /archive/i.test(el.textContent ?? ''))).toBe(true);
+    expect(alerts.some((el) => /delete/i.test(el.textContent ?? ''))).toBe(true);
 
-    // Archive menu is re-clickable after the failure (no lingering disable).
+    // Delete menu is re-clickable after the failure (no lingering disable).
     fireEvent.click(screen.getByRole('button', { name: 'Card menu' }));
-    const retryItem = await screen.findByRole('menuitem', { name: /archive/i });
+    const retryItem = await screen.findByRole('menuitem', { name: /delete/i });
     expect(retryItem.hasAttribute('disabled')).toBe(false);
   });
 
@@ -408,7 +405,7 @@ describe('CardDetailModal', () => {
     expect(input.tagName).toBe('TEXTAREA');
   });
 
-  it('archive returns focus to the next card in the same column', async () => {
+  it('delete returns focus to the next card in the same column', async () => {
     resetStore([card('c1', 'First'), card('c2', 'Second')]);
     const nextEl = document.createElement('div');
     nextEl.setAttribute('data-card-id', 'c2');
@@ -416,7 +413,7 @@ describe('CardDetailModal', () => {
     document.body.appendChild(nextEl);
 
     const invoker: InvokeFn = async (cmd) => {
-      if (cmd === 'card_archive') return undefined as never;
+      if (cmd === 'card_delete') return undefined as never;
       return undefined as never;
     };
     __setInvoker(invoker);
@@ -425,7 +422,7 @@ describe('CardDetailModal', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Card menu' }));
     await act(async () => {
-      fireEvent.click(await screen.findByRole('menuitem', { name: /archive/i }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: /delete/i }));
     });
     // Let queueMicrotask fire.
     await act(async () => {

@@ -172,6 +172,9 @@ export const createClient = (options = {}) => {
             request("POST", path, body ?? {}),
         patch: (/** @type {string} */ path, /** @type {unknown} */ body) =>
             request("PATCH", path, body ?? {}),
+        put: (/** @type {string} */ path, /** @type {unknown} */ body) =>
+            request("PUT", path, body ?? {}),
+        delete: (/** @type {string} */ path) => request("DELETE", path),
         invalidate,
     };
 };

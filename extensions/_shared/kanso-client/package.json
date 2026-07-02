@@ -10,7 +10,8 @@
         "./port": "./port.mjs",
         "./client": "./client.mjs",
         "./tools": "./tools.mjs",
-        "./resources": "./resources.mjs"
+        "./resources": "./resources.mjs",
+        "./crud": "./crud.mjs"
     },
     "scripts": {
         "test": "vitest run"

@@ -656,7 +656,10 @@ async fn card_body_put_get_roundtrip_via_http() {
         ))
         .await
         .unwrap();
-    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+    assert_eq!(res.status(), StatusCode::OK);
+    let stamp: kanso_api::CardBodyStampDto = serde_json::from_value(body_json(res).await).unwrap();
+    assert_eq!(stamp.id, card.id);
+    assert!(stamp.updated_at >= card.updated_at);
 
     let res = app
         .clone()
@@ -724,7 +727,8 @@ async fn card_body_put_under_limit_succeeds() {
         .oneshot(req_json("PUT", &format!("/cards/{}/body", card.id), body))
         .await
         .unwrap();
-    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+    assert_eq!(res.status(), StatusCode::OK);
+    let _stamp: kanso_api::CardBodyStampDto = serde_json::from_value(body_json(res).await).unwrap();
 }
 
 #[tokio::test]
@@ -1212,7 +1216,8 @@ async fn card_body_put_above_1mib_still_accepted() {
         .oneshot(req_json("PUT", &format!("/cards/{}/body", card.id), payload))
         .await
         .unwrap();
-    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+    assert_eq!(res.status(), StatusCode::OK);
+    let _stamp: kanso_api::CardBodyStampDto = serde_json::from_value(body_json(res).await).unwrap();
 }
 
 #[tokio::test]

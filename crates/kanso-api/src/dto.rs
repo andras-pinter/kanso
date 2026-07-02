@@ -251,6 +251,15 @@ pub struct CardBodySetDto {
     pub body_text: String,
 }
 
+/// Response shape for `PUT /cards/:id/body`. Small on purpose — the caller
+/// already has the body they just sent, but they don't have the fresh
+/// `updated_at` without a follow-up GET. This closes that gap in one call.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CardBodyStampDto {
+    pub id: String,
+    pub updated_at: i64,
+}
+
 // ---------- Tag ----------
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

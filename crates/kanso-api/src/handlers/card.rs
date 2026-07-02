@@ -8,8 +8,8 @@ use serde::Deserialize;
 use kanso_core::repo::CardRepo;
 
 use crate::dto::{
-    CardBodyDto, CardBodySetDto, CardDto, CardPatchDto, CardSearchHitDto, CreateCardBody,
-    MoveCardBody,
+    CardBodyDto, CardBodySetDto, CardBodyStampDto, CardDto, CardPatchDto, CardSearchHitDto,
+    CreateCardBody, MoveCardBody,
 };
 use crate::error::{require_non_empty, ApiError};
 use crate::handlers::resolve_page;
@@ -167,7 +167,7 @@ async fn put_body(
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(body): Json<CardBodySetDto>,
-) -> Result<StatusCode, ApiError> {
+) -> Result<Json<CardBodyStampDto>, ApiError> {
     let blob = B64
         .decode(body.body_blocksuite_b64.as_bytes())
         .map_err(|e| {
@@ -176,7 +176,11 @@ async fn put_body(
             )))
         })?;
     CardRepo::set_body(&state.pool, &id, &blob, &body.body_text).await?;
-    Ok(StatusCode::NO_CONTENT)
+    let updated = CardRepo::get_body(&state.pool, &id).await?;
+    Ok(Json(CardBodyStampDto {
+        id,
+        updated_at: updated.updated_at,
+    }))
 }
 
 async fn search(

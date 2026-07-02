@@ -39,6 +39,14 @@ const fakeClient = (responses) => {
             calls.push({ method: "PATCH", path, body });
             return lookup(path);
         }),
+        put: vi.fn(async (path, body) => {
+            calls.push({ method: "PUT", path, body });
+            return lookup(path);
+        }),
+        delete: vi.fn(async (path) => {
+            calls.push({ method: "DELETE", path });
+            return lookup(path);
+        }),
         invalidate: vi.fn(),
     };
 };
@@ -59,17 +67,22 @@ const harness = async (client) => {
 };
 
 describe("tools/list", () => {
-    it("returns the 5 kanso_* tools with descriptions and input schemas", async () => {
+    it("registers the 5 legacy kanso_* tools and the expanded CRUD surface", async () => {
         const { mcpClient } = await harness(fakeClient({}));
         const { tools } = await mcpClient.listTools();
-        const names = tools.map((t) => t.name).sort();
-        expect(names).toEqual([
-            "kanso_add",
-            "kanso_done",
-            "kanso_list",
-            "kanso_move",
-            "kanso_search",
-        ]);
+        const names = tools.map((t) => t.name);
+        for (const legacy of ["kanso_add", "kanso_done", "kanso_list", "kanso_move", "kanso_search"]) {
+            expect(names).toContain(legacy);
+        }
+        for (const t of [
+            "board_list", "board_create", "board_archive", "board_delete",
+            "column_list", "column_move",
+            "card_get", "card_update", "card_body_set", "card_search",
+            "tag_list", "tag_create", "tag_delete",
+            "card_tag_add", "card_tag_remove",
+        ]) {
+            expect(names).toContain(t);
+        }
 
         const add = tools.find((t) => t.name === "kanso_add");
         expect(add?.description).toMatch(/create/i);
@@ -396,5 +409,50 @@ describe("resources/read", () => {
         const { mcpClient } = await harness(client);
         const res = await mcpClient.readResource({ uri: "kanso://cards/c1" });
         expect(res.contents[0].text).toContain("_(empty)_");
+    });
+});
+
+describe("expanded CRUD tools", () => {
+    it("board_archive posts and returns the updated board DTO as JSON", async () => {
+        const client = fakeClient({
+            "/boards/b1/archive": { id: "b1", name: "Ideas", archived_at: "2024-01-01T00:00:00Z" },
+        });
+        const { mcpClient } = await harness(client);
+        const res = await mcpClient.callTool({
+            name: "board_archive",
+            arguments: { id: "b1" },
+        });
+        expect(res.isError).not.toBe(true);
+        const dto = JSON.parse(res.content[0].text);
+        expect(dto).toMatchObject({ id: "b1", archived_at: "2024-01-01T00:00:00Z" });
+        expect(client.calls).toContainEqual({ method: "POST", path: "/boards/b1/archive", body: undefined });
+    });
+
+    it("card_tag_add posts and returns the updated card DTO", async () => {
+        const client = fakeClient({
+            "/cards/c1/tags/t1": { id: "c1", title: "Ship", tags: [{ id: "t1", name: "urgent" }] },
+        });
+        const { mcpClient } = await harness(client);
+        const res = await mcpClient.callTool({
+            name: "card_tag_add",
+            arguments: { card_id: "c1", tag_id: "t1" },
+        });
+        expect(res.isError).not.toBe(true);
+        const dto = JSON.parse(res.content[0].text);
+        expect(dto.tags).toHaveLength(1);
+    });
+
+    it("card_body_set puts and returns the stamp DTO", async () => {
+        const client = fakeClient({
+            "/cards/c1/body": { id: "c1", updated_at: "2024-06-01T00:00:00Z" },
+        });
+        const { mcpClient } = await harness(client);
+        const res = await mcpClient.callTool({
+            name: "card_body_set",
+            arguments: { id: "c1", body_text: "hello" },
+        });
+        expect(res.isError).not.toBe(true);
+        const dto = JSON.parse(res.content[0].text);
+        expect(dto).toEqual({ id: "c1", updated_at: "2024-06-01T00:00:00Z" });
     });
 });

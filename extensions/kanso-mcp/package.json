@@ -1,6 +1,6 @@
 {
     "name": "kanso-mcp",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "private": true,
     "type": "module",
     "description": "Model Context Protocol (MCP) stdio server for kanso. Exposes the kanso HTTP API to MCP hosts (Claude Desktop, Cursor, VS Code Copilot Chat, Zed) as tools and resources.",

@@ -67,6 +67,10 @@
 
   /* Type */
   --kanso-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  /* Doc-title (card modal). 22px semibold + tight tracking; used ONLY by
+     the card-as-doc modal title. Form inputs keep .kanso-title-input. */
+  --kanso-fs-doc-title: 22px;
 }
 
 /*
@@ -1088,7 +1092,19 @@ body {
   display: flex;
   flex-direction: column;
   box-shadow: var(--kanso-shadow-modal);
-  overflow: hidden;
+  /* No overflow:hidden — .kanso-modal-body clips its own scroll (below),
+     and the modal border-radius alone masks the outline. Header popovers
+     (overflow menu on the doc modal) need to extend past the header row
+     without being cut off. If the header ever gains its own background
+     colour, re-introduce overflow:hidden or the header will paint past
+     the rounded corners at the top. */
+}
+
+/* Card-as-doc modifier: the CardDetailModal renders body-then-header in
+   DOM (so Tab flows content → chrome) and flips it visually here. Reverse
+   order preserves the natural focus trap first/last semantics. */
+.kanso-modal--doc {
+  flex-direction: column-reverse;
 }
 
 .kanso-modal-header {
@@ -1128,6 +1144,123 @@ body {
   margin: 12px 0 0;
   color: var(--kanso-danger);
   font-size: 13px;
+}
+
+/* ---------- Card-as-doc modal ----------
+   Phase 1: the CardDetailModal is a document surface, not a form. Header
+   collapses to save-pill + overflow menu + close icon; the title IS the
+   document heading; body content wraps at reading width. Motion is
+   intentionally NOT added in this phase — modal enters/exits instantly.
+   prefers-reduced-motion is already respected globally. */
+
+.kanso-modal--doc .kanso-modal-header {
+  padding: 12px 16px 12px 24px;
+  border-bottom: none;
+  gap: 8px;
+  justify-content: flex-end;
+  min-height: 44px;
+}
+
+.kanso-modal--doc .kanso-modal-body {
+  padding: 8px 24px 32px;
+  gap: 28px;
+}
+
+/* Reading-width wrapper: modal chrome stays 880px, editor content wraps
+   at 680px. Applies to the doc-title, properties strip, and editor. */
+.kanso-doc-content {
+  max-width: 680px;
+  width: 100%;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.kanso-doc-title {
+  display: block;
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--kanso-fg);
+  font: inherit;
+  font-family: inherit;
+  font-size: var(--kanso-fs-doc-title);
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  padding: 0;
+  margin: 0;
+  resize: none;
+  overflow-y: auto;
+  /* 3 line cap: line-height 1.25 × font-size 22 = 27.5 → cap ≈ 82.5px. */
+  max-height: calc(var(--kanso-fs-doc-title) * 1.25 * 3);
+  min-height: calc(var(--kanso-fs-doc-title) * 1.25);
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.kanso-doc-title:focus {
+  outline: none;
+  /* Caret-only focus — no accent ring, no background swap. The document
+     doesn't need to shout that it's editable; the caret is enough. */
+}
+
+.kanso-doc-title::placeholder {
+  /* --kanso-fg-muted meets 4.5:1 on --kanso-bg-elevated in both themes. */
+  color: var(--kanso-fg-muted);
+  font-weight: 500;
+}
+
+/* Tags-only properties strip below the title. No label; the affordance
+   ("+ Add tag") lives inside TagPickerPopover itself. */
+.kanso-doc-props {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: -8px;
+}
+
+/* Ghost icon button used for the doc-modal Close (X) trigger and the
+   overflow-menu trigger. No border until hover/focus. */
+.kanso-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--kanso-radius-sm);
+  color: var(--kanso-fg-muted);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.kanso-icon-btn:hover {
+  background: var(--kanso-bg-hover);
+  color: var(--kanso-fg);
+}
+
+.kanso-icon-btn:focus-visible {
+  outline: none;
+  border-color: var(--kanso-accent);
+  box-shadow: 0 0 0 3px var(--kanso-accent-ring);
+  color: var(--kanso-fg);
+}
+
+/* Overflow menu on the card-doc header. Reuses .kanso-menu; positioning
+   is anchored to the icon button via its parent .kanso-card-menu-root. */
+.kanso-card-menu-root {
+  position: relative;
+  display: inline-flex;
+}
+
+.kanso-card-menu-root .kanso-menu {
+  left: auto;
+  right: 0;
 }
 
 /* ---------- Board switcher ---------- */

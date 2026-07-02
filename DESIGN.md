@@ -152,6 +152,17 @@ Tag color is a **derived identity signal, not a stored user choice.** The palett
 
 **Schema note:** the `tags.color` column is retained in the database but ignored by the UI. New tags are created without a color (server-side default = `NULL`); existing values on old rows have no visible effect. Dropping the column is a future migration decision, not part of this design.
 
+## Board tag filter
+
+Above the columns, a compact toolbar exposes one `.kanso-tag-chip--filter` per live tag. Selecting a chip narrows the board to cards that carry the tag; multiple selections compose with **AND** semantics — a card is only visible when it carries every selected tag.
+
+- **Selected state:** subtle `filter: brightness(0.96)` plus an inset 1.5px ring in the chip's own foreground (`box-shadow: inset 0 0 0 1.5px currentColor`). No color escalation — the chip stays in the tinted-neutral register so a selection doesn't shout over the accent.
+- **AND, not OR:** OR mode would need a toggle and a mental model. AND is what "narrow it down" means intuitively and it's what everyday task filters do. OR is a v-next question, not v1.
+- **Empty column state:** when a column has cards but none pass the filter, it shows a muted `No cards match this filter` message. Columns are never hidden — the board's structure stays visible so the user always knows where to drop the filter and where their cards live.
+- **Clear filter:** a ghost text button appears in the toolbar only when a selection is active. Always-available escape hatch, zero visual weight otherwise.
+- **Not persisted:** filter state is transient (v1). App restarts land on an unfiltered board.
+- **Composes with search:** the ⌘K palette is a text-based cross-board finder and stays orthogonal to the structural tag filter.
+
 ## Motion
 
 - Transitions: 120ms `ease` on `border-color`, `background`, `color`,

@@ -45,14 +45,14 @@ export default function Card({ card }: Props) {
       ref={setNodeRef}
       style={style}
       className={cls}
+      data-card-id={card.id}
+      {...attributes}
+      {...dragListeners}
       tabIndex={0}
       role="button"
       aria-roledescription="Draggable card"
       aria-label={card.title}
       aria-keyshortcuts="Space Enter Escape"
-      data-card-id={card.id}
-      {...attributes}
-      {...dragListeners}
       onClick={(e) => {
         if (isDragging) return;
         e.stopPropagation();

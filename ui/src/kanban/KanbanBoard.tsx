@@ -1,6 +1,5 @@
-// Top-level kanban board. Hosts the dnd-kit DndContext that handles BOTH
-// card and column drags — they're disambiguated by the active id prefix
-// (`col:` for columns).
+// Top-level kanban board. Hosts the dnd-kit DndContext that handles
+// card drags. Columns are fixed order — no column drag.
 
 import { Keyboard, Plus, Search, Tag } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -12,7 +11,6 @@ import {
   closestCorners,
   useSensor,
   useSensors,
-  type CollisionDetection,
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
@@ -30,7 +28,6 @@ import SearchPalette from './SearchPalette';
 import QuickAddModal from '../quick-add/QuickAddModal';
 import { useQuickAddOpenEvent } from '../quick-add/useQuickAddOpenEvent';
 import { computeVisibleCardsByColumn, resolveDragEnd } from './dragEnd';
-import { COLUMN_DRAG_PREFIX, filterCollidersForActive, parseColumnDragId, resolveColumnDragEnd } from './columnDragEnd';
 import type { CardDto } from './types';
 import { PromptDialog } from '../Dialog';
 import ShortcutsOverlay from '../ShortcutsOverlay';
@@ -44,7 +41,6 @@ export default function KanbanBoard() {
   const loadTags = useKanbanStore((s) => s.loadTags);
   const cardsByColumn = useKanbanStore((s) => s.cardsByColumn);
   const moveCard = useKanbanStore((s) => s.moveCard);
-  const reorderColumn = useKanbanStore((s) => s.reorderColumn);
   const selectedCardId = useKanbanStore((s) => s.selectedCardId);
   const currentBoardId = useKanbanStore((s) => s.currentBoardId);
   const boardCreate = useKanbanStore((s) => s.boardCreate);
@@ -78,22 +74,6 @@ export default function KanbanBoard() {
     }),
   );
 
-  // Custom collision detection: during a column drag we only want to consider
-  // other column sortables — card / body droppables shadow the column they
-  // belong to and `closestCorners` would otherwise return a non-`col:` id,
-  // which `resolveColumnDragEnd` rejects.
-  const collisionDetection = useCallback<CollisionDetection>((args) => {
-    const activeId = String(args.active.id);
-    const allowed = new Set(
-      filterCollidersForActive(
-        activeId,
-        args.droppableContainers.map((c) => String(c.id)),
-      ),
-    );
-    const filtered = args.droppableContainers.filter((c) => allowed.has(String(c.id)));
-    return closestCorners({ ...args, droppableContainers: filtered });
-  }, []);
-
   const draggingCard = useMemo<CardDto | null>(() => {
     if (!draggingCardId) return null;
     for (const list of Object.values(cardsByColumn)) {
@@ -113,10 +93,7 @@ export default function KanbanBoard() {
   }, [selectedCardId, cardsByColumn]);
 
   const onDragStart = useCallback((e: DragStartEvent) => {
-    const id = String(e.active.id);
-    // Column drags don't need an overlay (dnd-kit's transform handles it);
-    // only track card drags for the floating preview.
-    if (!id.startsWith(COLUMN_DRAG_PREFIX)) setDraggingCardId(id);
+    setDraggingCardId(String(e.active.id));
   }, []);
 
   const onDragEnd = useCallback(
@@ -124,13 +101,6 @@ export default function KanbanBoard() {
       setDraggingCardId(null);
       const activeId = String(e.active.id);
       const overId = e.over ? String(e.over.id) : null;
-      if (parseColumnDragId(activeId)) {
-        const resolution = resolveColumnDragEnd(activeId, overId, {
-          columns: useKanbanStore.getState().columns,
-        });
-        if (resolution) void reorderColumn(resolution);
-        return;
-      }
       const state = useKanbanStore.getState();
       const resolution = resolveDragEnd(activeId, overId, {
         cardsByColumn: state.cardsByColumn,
@@ -148,7 +118,7 @@ export default function KanbanBoard() {
         resolution.insertIndex,
       );
     },
-    [moveCard, reorderColumn],
+    [moveCard],
   );
 
   const onDragCancel = useCallback(() => setDraggingCardId(null), []);
@@ -196,7 +166,7 @@ export default function KanbanBoard() {
       </div>
       <DndContext
         sensors={sensors}
-        collisionDetection={collisionDetection}
+        collisionDetection={closestCorners}
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
         onDragCancel={onDragCancel}

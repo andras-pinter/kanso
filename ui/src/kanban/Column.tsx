@@ -1,15 +1,13 @@
-// Single kanban column. The header is the drag handle (when the column is
-// live) so the card list inside the body stays free for card drag.
+// Single kanban column. Fixed order + fixed name — the header just shows
+// a color dot, the name, and a card count. The body is a droppable so
+// cards can be moved between columns.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { useCallback } from 'react';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useDroppable } from '@dnd-kit/core';
-import { CSS } from '@dnd-kit/utilities';
 import type { CardDto, ColumnDto } from './types';
 import Card from './Card';
 import AddCardInline from './AddCardInline';
-import ColumnHeaderMenu from './ColumnHeaderMenu';
-import { columnDragId } from './columnDragEnd';
 import { useKanbanStore } from './hooks/useKanbanStore';
 
 interface Props {
@@ -19,79 +17,28 @@ interface Props {
 
 export default function Column({ column, cards }: Props) {
   const addCard = useKanbanStore((s) => s.addCard);
-  const renameColumn = useKanbanStore((s) => s.renameColumn);
-  const unarchiveColumn = useKanbanStore((s) => s.unarchiveColumn);
-  const unarchiveCard = useKanbanStore((s) => s.unarchiveCard);
-  const showArchived = useKanbanStore((s) => s.showArchived);
   const selectedTagIds = useKanbanStore((s) => s.selectedTagIds);
   const cardTagMap = useKanbanStore((s) => s.cardTagMap);
-
-  const isArchived = column.archived_at !== null;
-
-  const {
-    attributes,
-    listeners,
-    setNodeRef: setColumnRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
-    id: columnDragId(column.id),
-    data: { type: 'column-sort', columnId: column.id },
-    disabled: isArchived,
-  });
-  const dragStyle = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.4 : undefined,
-  };
 
   const onSubmitCard = useCallback(
     (title: string) => addCard(column.id, title),
     [addCard, column.id],
   );
 
-  // Column body is a droppable so empty-list / end-of-list card drops resolve.
-  // Archived columns do NOT accept drops — otherwise a live card could be
-  // dragged into an archived column and disappear from the live view without
-  // actually being archived.
   const { setNodeRef: setBodyRef } = useDroppable({
     id: `column:${column.id}`,
     data: { type: 'column', columnId: column.id },
-    disabled: isArchived,
   });
 
-  const [renaming, setRenaming] = useState(false);
-  const [draft, setDraft] = useState(column.name);
-  const inputRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    if (renaming) inputRef.current?.select();
-  }, [renaming]);
-
-  const commitRename = () => {
-    const trimmed = draft.trim();
-    if (!trimmed || trimmed === column.name) {
-      setDraft(column.name);
-      setRenaming(false);
-      return;
-    }
-    void renameColumn(column.id, trimmed);
-    setRenaming(false);
-  };
-
-  const liveCards = cards.filter((c) => c.archived_at === null);
-  const archivedCards = cards.filter((c) => c.archived_at !== null);
-
   const filterActive = selectedTagIds.length > 0;
-  const visibleLiveCards = filterActive
-    ? liveCards.filter((c) => {
+  const visibleCards = filterActive
+    ? cards.filter((c) => {
         const tagIds = cardTagMap[c.id] ?? [];
         return selectedTagIds.every((tid) => tagIds.includes(tid));
       })
-    : liveCards;
-  const hiddenByFilter = filterActive && liveCards.length > 0 && visibleLiveCards.length === 0;
-  const trulyEmpty = !isArchived && liveCards.length === 0;
+    : cards;
+  const hiddenByFilter = filterActive && cards.length > 0 && visibleCards.length === 0;
+  const trulyEmpty = cards.length === 0;
 
   const stripeStyle = column.color
     ? { borderTopColor: column.color, borderTopWidth: 3 }
@@ -99,19 +46,11 @@ export default function Column({ column, cards }: Props) {
 
   return (
     <section
-      ref={setColumnRef}
-      style={{ ...dragStyle, ...(stripeStyle ?? {}) }}
-      className={`kanso-column${isArchived ? ' kanso-column--archived' : ''}${
-        isDragging ? ' kanso-column--dragging' : ''
-      }`}
+      style={stripeStyle}
+      className="kanso-column"
       aria-label={column.name}
     >
-      <header
-        className="kanso-column-header"
-        {...attributes}
-        {...(isArchived ? {} : listeners)}
-      >
-        {isArchived && <span className="kanso-column-archived-tag">Archived</span>}
+      <header className="kanso-column-header">
         <div className="kanso-column-title">
           {column.color && (
             <span
@@ -120,106 +59,36 @@ export default function Column({ column, cards }: Props) {
               aria-hidden="true"
             />
           )}
-          {renaming ? (
-            <input
-              ref={inputRef}
-              className="kanso-column-rename"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onBlur={commitRename}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  commitRename();
-                } else if (e.key === 'Escape') {
-                  e.preventDefault();
-                  setDraft(column.name);
-                  setRenaming(false);
-                }
-              }}
-              // Stop pointerdown so the drag listeners don't grab the input
-              onPointerDown={(e) => e.stopPropagation()}
-            />
-          ) : (
-            <h2
-              className="kanso-column-name"
-              onDoubleClick={() => {
-                if (!isArchived) {
-                  setDraft(column.name);
-                  setRenaming(true);
-                }
-              }}
-            >
-              {column.name}
-            </h2>
-          )}
+          <h2 className="kanso-column-name">{column.name}</h2>
         </div>
         <span
           className={`kanso-column-count${
-            visibleLiveCards.length === 0 ? ' kanso-column-count--empty' : ''
+            visibleCards.length === 0 ? ' kanso-column-count--empty' : ''
           }`}
         >
-          {visibleLiveCards.length}
+          {visibleCards.length}
         </span>
-        {isArchived ? (
-          <button
-            type="button"
-            className="kanso-btn"
-            onClick={() => void unarchiveColumn(column.id)}
-          >
-            Unarchive
-          </button>
-        ) : (
-          <ColumnHeaderMenu
-            column={column}
-            onStartRename={() => {
-              setDraft(column.name);
-              setRenaming(true);
-            }}
-          />
-        )}
       </header>
       <SortableContext
-        items={isArchived ? [] : visibleLiveCards.map((c) => c.id)}
+        items={visibleCards.map((c) => c.id)}
         strategy={verticalListSortingStrategy}
       >
         <div
           ref={setBodyRef}
-          className={`kanso-cards${visibleLiveCards.length === 0 ? ' kanso-cards--empty' : ''}`}
+          className={`kanso-cards${visibleCards.length === 0 ? ' kanso-cards--empty' : ''}`}
         >
-          {visibleLiveCards.map((c) => (
+          {visibleCards.map((c) => (
             <Card key={c.id} card={c} />
           ))}
-          {trulyEmpty && (
-            <p className="kanso-column-empty">No cards yet</p>
-          )}
+          {trulyEmpty && <p className="kanso-column-empty">No cards yet</p>}
           {hiddenByFilter && (
             <p className="kanso-column-empty-filter">No cards match this filter</p>
           )}
         </div>
       </SortableContext>
-      {showArchived && archivedCards.length > 0 && (
-        <details className="kanso-archived-cards">
-          <summary>{archivedCards.length} archived</summary>
-          {archivedCards.map((c) => (
-            <div key={c.id} className="kanso-archived-card">
-              <span className="kanso-archived-card-title">{c.title}</span>
-              <button
-                type="button"
-                className="kanso-btn"
-                onClick={() => void unarchiveCard(c.id)}
-              >
-                Unarchive
-              </button>
-            </div>
-          ))}
-        </details>
-      )}
-      {!isArchived && (
-        <footer className="kanso-column-footer">
-          <AddCardInline onSubmit={onSubmitCard} columnId={column.id} />
-        </footer>
-      )}
+      <footer className="kanso-column-footer">
+        <AddCardInline onSubmit={onSubmitCard} columnId={column.id} />
+      </footer>
     </section>
   );
 }

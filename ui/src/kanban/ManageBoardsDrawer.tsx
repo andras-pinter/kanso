@@ -1,6 +1,5 @@
-// Right-side drawer for managing boards: rename, recolor, archive, delete.
-// Shares the `.kanso-drawer` chrome with `ManageTagsDrawer`. Archived
-// boards are shown under a toggleable section.
+// Right-side drawer for managing boards: rename, recolor, delete.
+// Shares the `.kanso-drawer` chrome with `ManageTagsDrawer`.
 
 import { useEffect, useRef, useState } from 'react';
 import ColorPicker from './ColorPicker';
@@ -16,10 +15,7 @@ export default function ManageBoardsDrawer({ onClose }: Props) {
   const boards = useKanbanStore((s) => s.boards);
   const rename = useKanbanStore((s) => s.boardRename);
   const setColor = useKanbanStore((s) => s.boardSetColor);
-  const archive = useKanbanStore((s) => s.boardArchive);
-  const unarchive = useKanbanStore((s) => s.boardUnarchive);
   const remove = useKanbanStore((s) => s.boardDelete);
-  const [showArchived, setShowArchived] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<BoardDto | null>(null);
 
   useEffect(() => {
@@ -29,9 +25,6 @@ export default function ManageBoardsDrawer({ onClose }: Props) {
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
-
-  const live = boards.filter((b) => b.archived_at === null);
-  const archived = boards.filter((b) => b.archived_at !== null);
 
   return (
     <>
@@ -50,42 +43,19 @@ export default function ManageBoardsDrawer({ onClose }: Props) {
         </header>
         <div className="kanso-drawer-body">
           <section className="kanso-field">
-            <span className="kanso-label">Live ({live.length})</span>
-            {live.length === 0 && (
-              <p className="kanso-board-state">No live boards.</p>
+            <span className="kanso-label">Boards ({boards.length})</span>
+            {boards.length === 0 && (
+              <p className="kanso-board-state">No boards yet.</p>
             )}
-            {live.map((b) => (
+            {boards.map((b) => (
               <BoardRow
                 key={b.id}
                 board={b}
                 onRename={(name) => void rename(b.id, name)}
                 onColor={(c) => void setColor(b.id, c)}
-                onArchive={() => void archive(b.id)}
                 onDelete={() => setPendingDelete(b)}
               />
             ))}
-          </section>
-          <section className="kanso-field">
-            <button
-              type="button"
-              className="kanso-btn"
-              onClick={() => setShowArchived((v) => !v)}
-              aria-expanded={showArchived}
-            >
-              {showArchived ? '▾' : '▸'} Archived ({archived.length})
-            </button>
-            {showArchived &&
-              archived.map((b) => (
-                <BoardRow
-                  key={b.id}
-                  board={b}
-                  archived
-                  onRename={(name) => void rename(b.id, name)}
-                  onColor={(c) => void setColor(b.id, c)}
-                  onUnarchive={() => void unarchive(b.id)}
-                  onDelete={() => setPendingDelete(b)}
-                />
-              ))}
           </section>
         </div>
       </aside>
@@ -111,23 +81,12 @@ export default function ManageBoardsDrawer({ onClose }: Props) {
 
 interface RowProps {
   board: BoardDto;
-  archived?: boolean;
   onRename: (name: string) => void;
   onColor: (c: string | null) => void;
-  onArchive?: () => void;
-  onUnarchive?: () => void;
   onDelete: () => void;
 }
 
-function BoardRow({
-  board,
-  archived = false,
-  onRename,
-  onColor,
-  onArchive,
-  onUnarchive,
-  onDelete,
-}: RowProps) {
+function BoardRow({ board, onRename, onColor, onDelete }: RowProps) {
   const [name, setName] = useState(board.name);
   const [lastBoardName, setLastBoardName] = useState(board.name);
   const [showColors, setShowColors] = useState(false);
@@ -148,7 +107,7 @@ function BoardRow({
   };
 
   return (
-    <div className={`kanso-board-row${archived ? ' kanso-board-row--archived' : ''}`}>
+    <div className="kanso-board-row">
       <button
         type="button"
         className="kanso-swatch kanso-swatch--small"
@@ -171,18 +130,8 @@ function BoardRow({
             (e.target as HTMLInputElement).blur();
           }
         }}
-        disabled={archived}
       />
       <div className="kanso-board-row-actions">
-        {archived ? (
-          <button type="button" className="kanso-btn" onClick={onUnarchive}>
-            Unarchive
-          </button>
-        ) : (
-          <button type="button" className="kanso-btn" onClick={onArchive}>
-            Archive
-          </button>
-        )}
         <button type="button" className="kanso-btn kanso-btn--danger" onClick={onDelete}>
           Delete
         </button>

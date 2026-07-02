@@ -56,8 +56,10 @@ function CardBodyEditorImpl(
   // re-instantiating useDebouncedSave (which would drop pending saves).
   const onSavedRef = useRef(onSaved);
   const onSaveErrorRef = useRef(onSaveError);
-  onSavedRef.current = onSaved;
-  onSaveErrorRef.current = onSaveError;
+  useEffect(() => {
+    onSavedRef.current = onSaved;
+    onSaveErrorRef.current = onSaveError;
+  }, [onSaved, onSaveError]);
 
   const saver = useDebouncedSave<{ blob: Uint8Array; text: string }>(async (value) => {
     const b64 = bytesToBase64(value.blob);

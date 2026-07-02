@@ -1,9 +1,10 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { X } from 'lucide-react';
 import { useKanbanStore } from './hooks/useKanbanStore';
 import type { CardDto } from './types';
 import type { CardBodyEditorHandle } from './CardBodyEditor';
 import TagPickerPopover from './TagPickerPopover';
-import DueDateEditor from './DueDateEditor';
+import CardHeaderMenu from './CardHeaderMenu';
 
 // Lazy boundary: keep ALL @blocksuite/* imports out of the entry chunk.
 const CardBodyEditor = lazy(() => import('./CardBodyEditor'));
@@ -29,6 +30,7 @@ export default function CardDetailModal({ card }: Props) {
   const savedTimer = useRef<number | null>(null);
   const editorRef = useRef<CardBodyEditorHandle | null>(null);
   const modalRef = useRef<HTMLDivElement | null>(null);
+  const titleRef = useRef<HTMLTextAreaElement | null>(null);
   const closingRef = useRef(false);
 
   const flashSaved = () => {
@@ -37,40 +39,101 @@ export default function CardDetailModal({ card }: Props) {
     savedTimer.current = window.setTimeout(() => setSaved(false), 1400);
   };
 
-  const onTitleBlur = () => {
+  // Single source of truth for title persistence. Blur triggers it via a
+  // fire-and-forget wrapper; close()/archive() await it so a dirty title
+  // can't vanish silently when the modal unmounts.
+  const commitTitle = async (): Promise<void> => {
     const trimmed = title.trim();
     if (trimmed.length === 0) {
       setTitle(card.title);
       return;
     }
     if (trimmed === card.title) return;
-    void updateCard(card.id, { title: trimmed }).then(flashSaved);
+    await updateCard(card.id, { title: trimmed });
+    flashSaved();
   };
 
-  const onArchive = (): void => {
-    void archive();
+  const onTitleBlur = (): void => {
+    commitTitle().catch(() => {
+      // Blur-time failures surface through the same banner as close/archive.
+      setCloseBlocked(true);
+    });
   };
 
-  // M4: Archive must await pending editor saves like Close does — otherwise
-  // the modal unmounts mid-flush and a failed cleanup save would silently
-  // lose edits.
+  // Autosize the title textarea to fit its content (capped by CSS at 3
+  // lines; beyond that the textarea scrolls internally).
+  const autosize = (el: HTMLTextAreaElement): void => {
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  };
+
+  useLayoutEffect(() => {
+    if (titleRef.current) autosize(titleRef.current);
+  }, [title]);
+
+  // Compute where focus should land after the archived card unmounts.
+  // Prefers the next card in the same column; falls back to the previous
+  // card, then to the column's "add card" affordance, then document.
+  const computeNextFocusTarget = (): string | null => {
+    const state = useKanbanStore.getState();
+    const list = state.cardsByColumn[card.column_id];
+    if (!list) return null;
+    const idx = list.findIndex((c) => c.id === card.id);
+    if (idx === -1) return null;
+    const next = list[idx + 1] ?? list[idx - 1];
+    return next ? next.id : null;
+  };
+
+  const focusAfterArchive = (nextCardId: string | null): void => {
+    // queueMicrotask so the archive re-render / selectCard(null) has
+    // committed and the card node (or add-card control) exists.
+    queueMicrotask(() => {
+      const doc = typeof document !== 'undefined' ? document : null;
+      if (!doc) return;
+      if (nextCardId) {
+        const el = doc.querySelector<HTMLElement>(
+          `[data-card-id="${CSS.escape(nextCardId)}"]`,
+        );
+        if (el) {
+          el.focus();
+          return;
+        }
+      }
+      const addBtn = doc.querySelector<HTMLElement>(
+        `[data-column-add="${CSS.escape(card.column_id)}"]`,
+      );
+      addBtn?.focus();
+    });
+  };
+
+  // Archive must await title AND body saves before tearing the modal
+  // down — otherwise a dirty edit vanishes silently. Failure keeps the
+  // modal open via the same closeBlocked banner as close().
   const archive = async (): Promise<void> => {
+    const nextFocus = computeNextFocusTarget();
     try {
+      await commitTitle();
       await editorRef.current?.flush();
     } catch {
       setCloseBlocked(true);
       return;
     }
     await archiveCard(card.id);
+    focusAfterArchive(nextFocus);
   };
 
-  // H4: Close must await the editor's pending save. If the save fails the
-  // editor surfaces a "Save failed — retry" pill; we keep the modal open
-  // (and show a brief banner) so the user can resolve it.
+  const onArchive = (): void => {
+    void archive();
+  };
+
+  // Close awaits pending saves. On failure the editor's own retry
+  // affordance is already visible; we surface a banner so the user knows
+  // why the modal didn't close.
   const close = async (): Promise<void> => {
     if (closingRef.current) return;
     closingRef.current = true;
     try {
+      await commitTitle();
       await editorRef.current?.flush();
     } catch {
       setCloseBlocked(true);
@@ -80,20 +143,26 @@ export default function CardDetailModal({ card }: Props) {
     selectCard(null);
   };
 
-  // Sync wrapper for JSX onClick handlers (React ignores the returned promise).
   const onClose = (): void => {
     void close();
   };
 
+  // Initial focus is the doc title, cursor at the end so users can type
+  // straight away. Not "first focusable in DOM" — Tab flow (body →
+  // header) means the natural first focusable is the title anyway, but
+  // being explicit keeps this correct if the DOM order ever shifts.
   useEffect(() => {
-    const root = modalRef.current;
-    if (!root) return;
-    // Focus first focusable so Esc/Tab work without a manual click.
-    const first = root.querySelector<HTMLElement>(FOCUSABLE);
-    first?.focus();
+    const el = titleRef.current;
+    if (!el) return;
+    el.focus();
+    const end = el.value.length;
+    el.setSelectionRange(end, end);
   }, []);
 
-  // Esc closes (subject to closeBlocked retry) + Tab focus trap.
+  // Modal-level keydown: Esc closes (or retries after closeBlocked); Tab
+  // wraps focus inside the dialog. The title textarea handles its own
+  // Enter/Esc and stopPropagation'es them so this handler never sees
+  // them while the title is focused. Same for the overflow menu.
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Escape') {
       e.stopPropagation();
@@ -118,6 +187,21 @@ export default function CardDetailModal({ card }: Props) {
     }
   };
 
+  // Title-scoped keys. Enter → blur (titles don't have line breaks).
+  // Esc → revert local state and blur, without closing the modal.
+  const onTitleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.currentTarget.blur();
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      setTitle(card.title);
+      e.currentTarget.blur();
+    }
+  };
+
   return (
     <div
       className="kanso-modal-backdrop"
@@ -126,64 +210,66 @@ export default function CardDetailModal({ card }: Props) {
     >
       <div
         ref={modalRef}
-        className="kanso-modal"
+        className="kanso-modal kanso-modal--doc"
         role="dialog"
         aria-modal="true"
         aria-label="Card detail"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={onKeyDown}
       >
-        <header className="kanso-modal-header">
-          <h3 className="kanso-modal-title">Card</h3>
-          <span
-            className={`kanso-saved-pill${saved ? ' kanso-saved-pill--visible' : ''}`}
-            aria-live="polite"
-          >
-            Saved
-          </span>
-          <button type="button" className="kanso-btn" onClick={onClose}>
-            Close
-          </button>
-        </header>
+        {/* Body first in DOM so Tab flows title → tags → editor → header
+            controls (overflow, close). .kanso-modal--doc flips flex order
+            visually to keep the header on top. */}
         <div className="kanso-modal-body">
           {closeBlocked && (
             <div className="kanso-editor-banner" role="alert">
               Can’t close yet — your last edit hasn’t saved. Retry above, then try again.
             </div>
           )}
-          <div className="kanso-field">
-            <label className="kanso-label" htmlFor="kanso-card-title">
-              Title
-            </label>
-            <input
-              id="kanso-card-title"
-              className="kanso-title-input"
+          <div className="kanso-doc-content">
+            <textarea
+              ref={titleRef}
+              className="kanso-doc-title"
+              aria-label="Card title"
+              placeholder="Untitled"
               value={title}
+              rows={1}
+              spellCheck={false}
               onChange={(e) => setTitle(e.target.value)}
               onBlur={onTitleBlur}
+              onKeyDown={onTitleKeyDown}
             />
-          </div>
-          <div className="kanso-field">
-            <span className="kanso-label">Tags</span>
-            <TagPickerPopover cardId={card.id} />
-          </div>
-          <div className="kanso-field">
-            <span className="kanso-label">Due date</span>
-            <DueDateEditor card={card} />
-          </div>
-          <div className="kanso-field">
-            <span className="kanso-label">Body</span>
+            <div className="kanso-doc-props">
+              <TagPickerPopover cardId={card.id} />
+            </div>
             <Suspense fallback={<div className="kanso-editor-loading">Loading editor…</div>}>
-              <CardBodyEditor cardId={card.id} ref={editorRef} />
+              <CardBodyEditor
+                cardId={card.id}
+                ref={editorRef}
+                onSaved={flashSaved}
+              />
             </Suspense>
           </div>
         </div>
-        <footer className="kanso-modal-footer">
-          <button type="button" className="kanso-btn kanso-btn--danger" onClick={onArchive}>
-            Archive
+        <header className="kanso-modal-header">
+          <span
+            className={`kanso-saved-pill${saved ? ' kanso-saved-pill--visible' : ''}`}
+            aria-live="polite"
+          >
+            Saved
+          </span>
+          <CardHeaderMenu
+            items={[{ label: 'Archive', onSelect: onArchive, danger: true }]}
+          />
+          <button
+            type="button"
+            className="kanso-icon-btn"
+            aria-label="Close card"
+            onClick={onClose}
+          >
+            <X size={16} aria-hidden="true" />
           </button>
-          <span />
-        </footer>
+        </header>
       </div>
     </div>
   );

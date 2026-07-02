@@ -184,7 +184,7 @@ export default function Column({ column, cards }: Props) {
       )}
       {!isArchived && (
         <footer className="kanso-column-footer">
-          <AddCardInline onSubmit={onSubmitCard} />
+          <AddCardInline onSubmit={onSubmitCard} columnId={column.id} />
         </footer>
       )}
     </section>

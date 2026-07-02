@@ -2,9 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface Props {
   onSubmit: (title: string) => void | Promise<void>;
+  /** Column ID used as a focus-target hook for post-archive focus
+   * placement in CardDetailModal. */
+  columnId?: string;
 }
 
-export default function AddCardInline({ onSubmit }: Props) {
+export default function AddCardInline({ onSubmit, columnId }: Props) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState('');
   const ref = useRef<HTMLTextAreaElement | null>(null);
@@ -38,7 +41,12 @@ export default function AddCardInline({ onSubmit }: Props) {
 
   if (!open) {
     return (
-      <button type="button" className="kanso-add-btn" onClick={() => setOpen(true)}>
+      <button
+        type="button"
+        className="kanso-add-btn"
+        data-column-add={columnId}
+        onClick={() => setOpen(true)}
+      >
         + Add card
       </button>
     );

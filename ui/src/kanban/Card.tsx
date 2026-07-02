@@ -50,6 +50,7 @@ export default function Card({ card }: Props) {
       aria-roledescription="Draggable card"
       aria-label={card.title}
       aria-keyshortcuts="Space Enter Escape"
+      data-card-id={card.id}
       {...attributes}
       {...dragListeners}
       onClick={(e) => {

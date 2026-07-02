@@ -18,14 +18,14 @@ const FOCUSABLE =
 // react-hooks lint rule disallows) and the modal always starts fresh.
 export default function CardDetailModal({ card }: Props) {
   const updateCard = useKanbanStore((s) => s.updateCard);
-  const archiveCard = useKanbanStore((s) => s.archiveCard);
+  const deleteCard = useKanbanStore((s) => s.deleteCard);
   const selectCard = useKanbanStore((s) => s.selectCard);
 
   const [title, setTitle] = useState(card.title);
   const [saved, setSaved] = useState(false);
   const [closeBlocked, setCloseBlocked] = useState(false);
-  const [archiveFailed, setArchiveFailed] = useState(false);
-  const [archiving, setArchiving] = useState(false);
+  const [deleteFailed, setDeleteFailed] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const savedTimer = useRef<number | null>(null);
   const editorRef = useRef<CardBodyEditorHandle | null>(null);
   const modalRef = useRef<HTMLDivElement | null>(null);
@@ -45,7 +45,7 @@ export default function CardDetailModal({ card }: Props) {
   };
 
   // Single source of truth for title persistence. Blur triggers it via a
-  // fire-and-forget wrapper; close()/archive() await it so a dirty title
+  // fire-and-forget wrapper; close()/deleteThis() await it so a dirty title
   // can't vanish silently when the modal unmounts. The store's updateCard
   // swallows API failures (optimistic rollback + store.error), so we
   // verify persistence by reading state back and throwing on mismatch.
@@ -72,7 +72,7 @@ export default function CardDetailModal({ card }: Props) {
 
   const onTitleBlur = (): void => {
     commitTitle().catch(() => {
-      // Blur-time failures surface through the same banner as close/archive.
+      // Blur-time failures surface through the same banner as close/delete.
       setCloseBlocked(true);
     });
   };
@@ -88,7 +88,7 @@ export default function CardDetailModal({ card }: Props) {
     if (titleRef.current) autosize(titleRef.current);
   }, [title]);
 
-  // Compute where focus should land after the archived card unmounts.
+  // Compute where focus should land after the deleted card unmounts.
   // Prefers the next card in the same column; falls back to the previous
   // card, then to the column's "add card" affordance, then document.
   const computeNextFocusTarget = (): string | null => {
@@ -101,8 +101,8 @@ export default function CardDetailModal({ card }: Props) {
     return next ? next.id : null;
   };
 
-  const focusAfterArchive = (nextCardId: string | null): void => {
-    // queueMicrotask so the archive re-render / selectCard(null) has
+  const focusAfterDelete = (nextCardId: string | null): void => {
+    // queueMicrotask so the delete re-render / selectCard(null) has
     // committed and the card node (or add-card control) exists.
     queueMicrotask(() => {
       const doc = typeof document !== 'undefined' ? document : null;
@@ -123,12 +123,12 @@ export default function CardDetailModal({ card }: Props) {
     });
   };
 
-  // Archive must await title AND body saves before tearing the modal
+  // Delete must await title AND body saves before tearing the modal
   // down — otherwise a dirty edit vanishes silently. Failure keeps the
-  // modal open via the same closeBlocked banner as close(), or an
-  // archive-specific banner when the archive API itself rejects.
-  const archive = async (): Promise<void> => {
-    if (archiving) return;
+  // modal open via the same closeBlocked banner as close(), or a
+  // delete-specific banner when the delete API itself rejects.
+  const deleteThis = async (): Promise<void> => {
+    if (deleting) return;
     const nextFocus = computeNextFocusTarget();
     try {
       await commitTitle();
@@ -137,19 +137,19 @@ export default function CardDetailModal({ card }: Props) {
       setCloseBlocked(true);
       return;
     }
-    setArchiveFailed(false);
-    setArchiving(true);
-    const ok = await archiveCard(card.id);
-    setArchiving(false);
+    setDeleteFailed(false);
+    setDeleting(true);
+    const ok = await deleteCard(card.id);
+    setDeleting(false);
     if (!ok) {
-      setArchiveFailed(true);
+      setDeleteFailed(true);
       return;
     }
-    focusAfterArchive(nextFocus);
+    focusAfterDelete(nextFocus);
   };
 
-  const onArchive = (): void => {
-    void archive();
+  const onDelete = (): void => {
+    void deleteThis();
   };
 
   // Close awaits pending saves. On failure the editor's own retry
@@ -252,9 +252,9 @@ export default function CardDetailModal({ card }: Props) {
               Can’t close yet — your last edit hasn’t saved. Retry above, then try again.
             </div>
           )}
-          {archiveFailed && (
+          {deleteFailed && (
             <div className="kanso-editor-banner" role="alert">
-              Couldn’t archive this card — the request failed. Try again.
+              Couldn’t delete this card — the request failed. Try again.
             </div>
           )}
           <div className="kanso-doc-content">
@@ -289,7 +289,7 @@ export default function CardDetailModal({ card }: Props) {
           </span>
           <CardHeaderMenu
             items={[
-              { label: 'Archive', onSelect: onArchive, danger: true, disabled: archiving },
+              { label: 'Delete', onSelect: onDelete, danger: true, disabled: deleting },
             ]}
           />
           <button

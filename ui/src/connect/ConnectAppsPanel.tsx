@@ -327,7 +327,7 @@ export default function ConnectAppsPanel() {
     <main className="kanso-connect">
       <section className="kanso-connect-hero">
         <div>
-          <h1>Connect Apps</h1>
+          <h1>Connect apps</h1>
           <p>
             Wire kanso into AI hosts by copying the snippet for each detected app. kanso never
             writes these host configs for you.

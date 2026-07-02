@@ -56,7 +56,7 @@ export default function App() {
               className={`kanso-nav-btn${view === 'connect' ? ' kanso-nav-btn--active' : ''}`}
               onClick={() => setView('connect')}
             >
-              Connect Apps
+              Connect apps
             </button>
           </nav>
         </div>

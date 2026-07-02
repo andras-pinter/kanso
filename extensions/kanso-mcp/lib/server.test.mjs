@@ -442,10 +442,19 @@ describe("expanded CRUD tools", () => {
         expect(dto.tags).toHaveLength(1);
     });
 
-    it("card_body_set puts and returns the stamp DTO", async () => {
-        const client = fakeClient({
-            "/cards/c1/body": { id: "c1", updated_at: "2024-06-01T00:00:00Z" },
-        });
+    it("card_body_set puts text-only and returns the full CardDto", async () => {
+        const cardDto = {
+            id: "c1",
+            column_id: "col1",
+            title: "T",
+            position: "a",
+            due_at: null,
+            created_at: 1,
+            updated_at: 2,
+            archived_at: null,
+            tags: [],
+        };
+        const client = fakeClient({ "/cards/c1/body": cardDto });
         const { mcpClient } = await harness(client);
         const res = await mcpClient.callTool({
             name: "card_body_set",
@@ -453,6 +462,10 @@ describe("expanded CRUD tools", () => {
         });
         expect(res.isError).not.toBe(true);
         const dto = JSON.parse(res.content[0].text);
-        expect(dto).toEqual({ id: "c1", updated_at: "2024-06-01T00:00:00Z" });
+        expect(dto).toEqual(cardDto);
+        // Text-only call must not send body_blocksuite_b64.
+        expect(client.calls).toEqual([
+            { method: "PUT", path: "/cards/c1/body", body: { body_text: "hello" } },
+        ]);
     });
 });

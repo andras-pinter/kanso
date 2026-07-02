@@ -388,11 +388,21 @@ export const createKansoMcpServer = ({ client, name = "kanso-mcp", version = "0.
     reg("card_body_get", "Fetch a card's body (BlockSuite Yjs blob + plaintext).", { id: S.id }, crud.cardBodyGet);
     reg(
         "card_body_set",
-        "Replace a card's body. Returns { id, updated_at } stamp.",
+        "Replace a card's body. At least one of body_text or body_blocksuite_b64 must be provided; text-only writes clear the BlockSuite blob so the UI seeds fresh content from the plaintext on next open. Returns the full CardDto.",
         {
             id: S.id,
-            body_blocksuite_b64: z.string().nullable().optional().describe("Base64-encoded BlockSuite Yjs update."),
-            body_text: z.string().nullable().optional().describe("Plaintext fallback."),
+            body_blocksuite_b64: z
+                .string()
+                .optional()
+                .describe(
+                    "Base64-encoded BlockSuite Yjs update. Agents typically pass body_text instead. At least one of body_text or body_blocksuite_b64 is required.",
+                ),
+            body_text: z
+                .string()
+                .optional()
+                .describe(
+                    "Plaintext body (indexed by FTS). At least one of body_text or body_blocksuite_b64 is required.",
+                ),
         },
         crud.cardBodySet,
     );

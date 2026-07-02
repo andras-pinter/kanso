@@ -43,7 +43,7 @@ pub async fn board_archive(
     id: String,
 ) -> Result<BoardDto, AppError> {
     BoardRepo::archive(&state.pool, &id).await?;
-    Ok(load_board(&state, &id).await?)
+    load_board(&state, &id).await
 }
 
 #[tauri::command]
@@ -52,7 +52,7 @@ pub async fn board_unarchive(
     id: String,
 ) -> Result<BoardDto, AppError> {
     BoardRepo::unarchive(&state.pool, &id).await?;
-    Ok(load_board(&state, &id).await?)
+    load_board(&state, &id).await
 }
 
 #[tauri::command]

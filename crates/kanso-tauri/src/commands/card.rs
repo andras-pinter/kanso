@@ -149,11 +149,20 @@ pub async fn list_cards(
 #[tauri::command]
 pub async fn card_search(
     state: State<'_, RuntimeState>,
-    query: String,
+    q: String,
     include_archived: Option<bool>,
+    limit: Option<u32>,
+    offset: Option<u32>,
 ) -> Result<Vec<CardSearchHitDto>, AppError> {
-    let rows =
-        CardRepo::search_with_context(&state.pool, &query, include_archived.unwrap_or(false))
-            .await?;
+    let limit = limit.unwrap_or(100).min(500);
+    let offset = offset.unwrap_or(0);
+    let rows = CardRepo::search_with_context_paged(
+        &state.pool,
+        &q,
+        include_archived.unwrap_or(false),
+        limit,
+        offset,
+    )
+    .await?;
     Ok(rows.into_iter().map(CardSearchHitDto::from).collect())
 }

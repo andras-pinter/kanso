@@ -1,36 +1,29 @@
 use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
 use axum::{Json, Router};
 use serde::Deserialize;
 
 use kanso_core::repo::ColumnRepo;
 use kanso_core::KansoError;
 
-use crate::dto::{ColumnDto, ColumnPatchDto, CreateColumnBody, MoveColumnBody};
-use crate::error::{require_non_empty, ApiError};
+use crate::dto::ColumnDto;
+use crate::error::ApiError;
 use crate::handlers::resolve_page;
 use crate::AppState;
 
 #[derive(Debug, Deserialize)]
 struct ListColumnsQuery {
     #[serde(default)]
-    include_archived: bool,
-    #[serde(default)]
     limit: Option<u32>,
     #[serde(default)]
     offset: Option<u32>,
 }
 
+/// Columns are fixed (Incoming / Todo / In Progress / Done) and are seeded
+/// when a board is created. There is no create/update/move/delete API.
 pub fn routes() -> Router<AppState> {
     Router::new()
-        .route(
-            "/boards/:board_id/columns",
-            axum::routing::get(list).post(create),
-        )
-        .route("/columns/:id", axum::routing::get(get_one).patch(update))
-        .route("/columns/:id/move", axum::routing::post(move_column))
-        .route("/columns/:id/archive", axum::routing::post(archive))
-        .route("/columns/:id/unarchive", axum::routing::post(unarchive))
+        .route("/boards/:board_id/columns", axum::routing::get(list))
+        .route("/columns/:id", axum::routing::get(get_one))
 }
 
 async fn list(
@@ -39,35 +32,8 @@ async fn list(
     Query(q): Query<ListColumnsQuery>,
 ) -> Result<Json<Vec<ColumnDto>>, ApiError> {
     let (limit, offset) = resolve_page(q.limit, q.offset);
-    let rows =
-        ColumnRepo::list_by_board_paged(&state.pool, &board_id, q.include_archived, limit, offset)
-            .await?;
+    let rows = ColumnRepo::list_by_board_paged(&state.pool, &board_id, limit, offset).await?;
     Ok(Json(rows.into_iter().map(ColumnDto::from).collect()))
-}
-
-async fn create(
-    State(state): State<AppState>,
-    Path(board_id): Path<String>,
-    Json(body): Json<CreateColumnBody>,
-) -> Result<(StatusCode, Json<ColumnDto>), ApiError> {
-    require_non_empty("name", &body.name)?;
-    let col = ColumnRepo::create(
-        &state.pool,
-        &board_id,
-        body.name.trim(),
-        body.color.as_deref(),
-    )
-    .await?;
-    Ok((StatusCode::CREATED, Json(ColumnDto::from(col))))
-}
-
-async fn update(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-    Json(patch): Json<ColumnPatchDto>,
-) -> Result<Json<ColumnDto>, ApiError> {
-    let col = ColumnRepo::update(&state.pool, &id, patch.into()).await?;
-    Ok(Json(ColumnDto::from(col)))
 }
 
 async fn get_one(
@@ -81,45 +47,4 @@ async fn get_one(
             id,
         })),
     }
-}
-
-async fn archive(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> Result<Json<ColumnDto>, ApiError> {
-    ColumnRepo::archive(&state.pool, &id).await?;
-    load_column(&state, id).await
-}
-
-async fn unarchive(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> Result<Json<ColumnDto>, ApiError> {
-    ColumnRepo::unarchive(&state.pool, &id).await?;
-    load_column(&state, id).await
-}
-
-async fn load_column(state: &AppState, id: String) -> Result<Json<ColumnDto>, ApiError> {
-    match ColumnRepo::get(&state.pool, &id).await? {
-        Some(col) => Ok(Json(ColumnDto::from(col))),
-        None => Err(ApiError(KansoError::NotFound {
-            entity: "column",
-            id,
-        })),
-    }
-}
-
-async fn move_column(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-    Json(body): Json<MoveColumnBody>,
-) -> Result<Json<ColumnDto>, ApiError> {
-    let col = ColumnRepo::move_column(
-        &state.pool,
-        &id,
-        body.before.as_deref(),
-        body.after.as_deref(),
-    )
-    .await?;
-    Ok(Json(ColumnDto::from(col)))
 }

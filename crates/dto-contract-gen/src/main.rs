@@ -28,8 +28,6 @@ use syn::{Attribute, Expr, Fields, ItemStruct, Lit, Meta, Type, TypePath, Visibi
 const CONTRACT_MAP: &[(&str, &str)] = &[
     ("board_create", "CreateBoardBody"),
     ("board_update_patch", "BoardPatchDto"),
-    ("column_create", "CreateColumnBody"),
-    ("column_update_patch", "ColumnPatchDto"),
     ("card_create", "CreateCardBody"),
     ("card_update_patch", "CardPatchDto"),
     ("tag_create", "CreateTagBody"),

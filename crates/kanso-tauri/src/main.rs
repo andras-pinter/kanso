@@ -219,22 +219,14 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             cmd_board::boards_list,
             cmd_board::board_create,
             cmd_board::board_update,
-            cmd_board::board_archive,
-            cmd_board::board_unarchive,
             cmd_board::board_delete,
             cmd_board::board_card_tags_list,
             cmd_column::columns_list,
-            cmd_column::column_create,
-            cmd_column::column_update,
-            cmd_column::column_move,
-            cmd_column::column_archive,
-            cmd_column::column_unarchive,
             cmd_card::cards_list,
             cmd_card::card_create,
             cmd_card::card_update,
             cmd_card::card_move,
-            cmd_card::card_archive,
-            cmd_card::card_unarchive,
+            cmd_card::card_delete,
             cmd_card::card_body_get,
             cmd_card::card_body_set,
             cmd_card::card_search,
@@ -242,8 +234,6 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             cmd_tag::tag_create,
             cmd_tag::tag_get,
             cmd_tag::tag_update,
-            cmd_tag::tag_archive,
-            cmd_tag::tag_unarchive,
             cmd_tag::tag_delete,
             cmd_tag::card_tags_list,
             cmd_tag::card_tag_add,
@@ -394,9 +384,10 @@ async fn bootstrap(
     })
 }
 
-/// On a truly empty DB seed one board "My Board" with three columns
-/// "To Do" / "In Progress" / "Done". After first launch this is a no-op even
-/// if the user later deletes any of the seeded rows.
+/// On a truly empty DB seed one board "My Board". Columns are auto-seeded by
+/// `BoardRepo::create` (Incoming / Todo / In Progress / Done). After first
+/// launch this is a no-op even if the user later deletes any of the seeded
+/// rows.
 async fn ensure_seed(
     pool: &SqlitePool,
 ) -> Result<SeedIds, Box<dyn std::error::Error + Send + Sync>> {
@@ -416,12 +407,15 @@ async fn ensure_seed(
     }
 
     let board = BoardRepo::create(pool, "My Board").await?;
-    let todo = ColumnRepo::create(pool, &board.id, "To Do", Some("#7aa2f7")).await?;
-    let _wip = ColumnRepo::create(pool, &board.id, "In Progress", Some("#e0af68")).await?;
-    let _done = ColumnRepo::create(pool, &board.id, "Done", Some("#9ece6a")).await?;
+    let columns = ColumnRepo::list_by_board(pool, &board.id).await?;
+    let column_id = columns
+        .into_iter()
+        .next()
+        .map(|c| c.id)
+        .ok_or_else(|| "BoardRepo::create did not seed any columns".to_string())?;
     Ok(SeedIds {
         board_id: board.id,
-        column_id: todo.id,
+        column_id,
     })
 }
 

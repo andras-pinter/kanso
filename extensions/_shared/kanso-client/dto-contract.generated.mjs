@@ -5,8 +5,6 @@
 export const DTO_CONTRACT = {
     board_create: { required: ["name"], optional: [] },
     board_update_patch: { required: [], optional: ["name", "color"] },
-    column_create: { required: ["name"], optional: ["color"] },
-    column_update_patch: { required: [], optional: ["name", "color"] },
     card_create: { required: ["title"], optional: [] },
     card_update_patch: { required: [], optional: ["title", "body_text", "due_at"] },
     tag_create: { required: ["name"], optional: ["color"] },

@@ -119,7 +119,7 @@ raw z-index numbers in component styles.
 Inventory (`ui/src/kanban/`):
 
 - **KanbanBoard** — top-level board with horizontal column list
-- **Column / ColumnList** — sortable columns with drag handle on header
+- **Column / ColumnList** — sortable columns with drag handle on header; header shows an 8px dot in `column.color` (omitted when unset) before the name, count on the right (quieter when 0)
 - **Card** — draggable card face: title + tag chips + subtle has-body dot
 - **CardDetailModal** — card-as-doc surface: autosizing title, tags row,
   BlockSuite editor at 680px reading width, overflow menu + X close
@@ -158,7 +158,7 @@ Above the columns, a compact toolbar exposes one `.kanso-tag-chip--filter` per l
 
 - **Selected state:** subtle `filter: brightness(0.96)` plus an inset 1.5px ring in the chip's own foreground (`box-shadow: inset 0 0 0 1.5px currentColor`). No color escalation — the chip stays in the tinted-neutral register so a selection doesn't shout over the accent.
 - **AND, not OR:** OR mode would need a toggle and a mental model. AND is what "narrow it down" means intuitively and it's what everyday task filters do. OR is a v-next question, not v1.
-- **Empty column state:** when a column has cards but none pass the filter, it shows a muted `No cards match this filter` message. Columns are never hidden — the board's structure stays visible so the user always knows where to drop the filter and where their cards live.
+- **Empty column state:** two distinct messages. `No cards yet` (muted, centered) when the column has zero live cards regardless of filter; `No cards match this filter` (italic, subtle) only when the column has cards but none pass the filter. Never both at once — the truer statement wins.
 - **Clear filter:** a ghost text button appears in the toolbar only when a selection is active. Always-available escape hatch, zero visual weight otherwise.
 - **Not persisted:** filter state is transient (v1). App restarts land on an unfiltered board.
 - **Composes with search:** the ⌘K palette is a text-based cross-board finder and stays orthogonal to the structural tag filter.

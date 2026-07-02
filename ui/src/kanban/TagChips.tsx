@@ -2,6 +2,7 @@
 // "+N" overflow chip so dense cards stay compact.
 
 import { useKanbanStore } from './hooks/useKanbanStore';
+import { tagChipStyle } from './tagChipStyle';
 
 interface Props {
   cardId: string;
@@ -26,12 +27,7 @@ export default function TagChips({ cardId, max = DEFAULT_MAX }: Props) {
   return (
     <div className="kanso-card-tags" aria-label="Tags">
       {visible.map((t) => (
-        <span key={t.id} className="kanso-tag-chip" title={t.name}>
-          <span
-            className="kanso-tag-dot"
-            style={{ backgroundColor: t.color ?? 'var(--text-muted)' }}
-            aria-hidden="true"
-          />
+        <span key={t.id} className="kanso-tag-chip" title={t.name} style={tagChipStyle(t.id)}>
           <span className="kanso-tag-chip-name">{t.name}</span>
         </span>
       ))}

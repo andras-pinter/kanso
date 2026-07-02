@@ -1683,13 +1683,14 @@ body {
   padding: 2px 8px;
   border-radius: 999px;
   background: var(--kanso-bg-subtle);
-  border: 1px solid var(--kanso-border);
   font-size: 11px;
+  font-weight: 500;
   color: var(--kanso-fg-muted);
   line-height: 1.4;
 }
 .kanso-tag-chip--overflow {
   color: var(--kanso-fg-subtle);
+  background: transparent;
 }
 .kanso-tag-chip--removable {
   padding-right: 4px;
@@ -1700,16 +1701,11 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.kanso-tag-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  display: inline-block;
-}
 .kanso-tag-chip-remove {
   border: 0;
   background: transparent;
-  color: var(--kanso-fg-subtle);
+  color: currentColor;
+  opacity: 0.65;
   cursor: pointer;
   padding: 0 2px;
   font-size: 12px;
@@ -1717,6 +1713,7 @@ body {
 }
 .kanso-tag-chip-remove:hover {
   color: var(--kanso-danger);
+  opacity: 1;
 }
 
 .kanso-tag-picker {

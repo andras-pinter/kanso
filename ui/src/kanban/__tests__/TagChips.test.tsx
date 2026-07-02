@@ -4,11 +4,13 @@ import { useKanbanStore } from '../hooks/useKanbanStore';
 import TagChips from '../TagChips';
 import type { TagDto } from '../types';
 
-function tag(id: string, name: string, color: string | null = '#ff0000', archived = false): TagDto {
+function tag(id: string, name: string, archived = false): TagDto {
   return {
     id,
     name,
-    color,
+    // UI must ignore this field. Set a sentinel so any accidental read
+    // shows up as an obviously-wrong style value in tests.
+    color: 'IGNORED',
     created_at: 0,
     updated_at: 0,
     archived_at: archived ? 1 : null,
@@ -61,7 +63,7 @@ describe('TagChips', () => {
 
   it('skips archived tags', () => {
     resetStore({
-      tags: [tag('t1', 'live'), tag('t2', 'gone', '#ff0000', true)],
+      tags: [tag('t1', 'live'), tag('t2', 'gone', true)],
       cardTagMap: { c1: ['t1', 't2'] },
     });
     render(<TagChips cardId="c1" />);

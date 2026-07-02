@@ -71,6 +71,17 @@
   /* Doc-title (card modal). 22px semibold + tight tracking; used ONLY by
      the card-as-doc modal title. Form inputs keep .kanso-title-input. */
   --kanso-fs-doc-title: 22px;
+
+  /* Semantic z-index ladder. Theme-agnostic — order matters more than the raw
+     numbers; each layer must stay above everything that can co-occur beneath
+     it. */
+  --kanso-z-overlay: 2;
+  --kanso-z-popover: 30;
+  --kanso-z-drawer-backdrop: 50;
+  --kanso-z-drawer: 51;
+  --kanso-z-palette: 55;
+  --kanso-z-modal: 60;
+  --kanso-z-shortcuts: 70;
 }
 
 /*
@@ -124,16 +135,6 @@
   --kanso-shadow-drag: 0 8px 24px rgba(0, 0, 0, 0.6);
   --kanso-shadow-drawer: -2px 0 16px rgba(0, 0, 0, 0.5);
   --kanso-shadow-modal: 0 16px 40px rgba(0, 0, 0, 0.7);
-
-  /* Semantic z-index ladder. Order matters more than the raw numbers;
-     each layer must stay above everything that can co-occur beneath it. */
-  --kanso-z-overlay: 2;
-  --kanso-z-popover: 30;
-  --kanso-z-drawer-backdrop: 50;
-  --kanso-z-drawer: 51;
-  --kanso-z-palette: 55;
-  --kanso-z-modal: 60;
-  --kanso-z-shortcuts: 70;
 }
 
 /* System default (no manual override) honors prefers-color-scheme. */

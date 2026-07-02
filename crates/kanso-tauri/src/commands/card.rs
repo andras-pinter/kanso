@@ -63,15 +63,32 @@ pub async fn card_move(
 }
 
 #[tauri::command]
-pub async fn card_archive(state: State<'_, RuntimeState>, id: String) -> Result<(), AppError> {
+pub async fn card_archive(
+    state: State<'_, RuntimeState>,
+    id: String,
+) -> Result<CardDto, AppError> {
     CardRepo::archive(&state.pool, &id).await?;
-    Ok(())
+    load_card(&state, &id).await
 }
 
 #[tauri::command]
-pub async fn card_unarchive(state: State<'_, RuntimeState>, id: String) -> Result<(), AppError> {
+pub async fn card_unarchive(
+    state: State<'_, RuntimeState>,
+    id: String,
+) -> Result<CardDto, AppError> {
     CardRepo::unarchive(&state.pool, &id).await?;
-    Ok(())
+    load_card(&state, &id).await
+}
+
+async fn load_card(state: &State<'_, RuntimeState>, id: &str) -> Result<CardDto, AppError> {
+    match CardRepo::get(&state.pool, id).await? {
+        Some(c) => Ok(c.into()),
+        None => Err(kanso_core::KansoError::NotFound {
+            entity: "card",
+            id: id.to_string(),
+        }
+        .into()),
+    }
 }
 
 #[tauri::command]

@@ -388,6 +388,9 @@ async fn card_archive_round_trip_via_http() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
+    let archived: CardDto = serde_json::from_value(body_json(res).await).unwrap();
+    assert_eq!(archived.id, a.id);
+    assert!(archived.archived_at.is_some());
 
     let res = app
         .clone()
@@ -413,6 +416,8 @@ async fn card_archive_round_trip_via_http() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
+    let unarchived: CardDto = serde_json::from_value(body_json(res).await).unwrap();
+    assert!(unarchived.archived_at.is_none());
 }
 
 #[tokio::test]

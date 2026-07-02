@@ -128,17 +128,27 @@ async fn move_card(
 async fn archive(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Result<StatusCode, ApiError> {
+) -> Result<Json<CardDto>, ApiError> {
     CardRepo::archive(&state.pool, &id).await?;
-    Ok(StatusCode::OK)
+    load_card(&state, id).await
 }
 
 async fn unarchive(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Result<StatusCode, ApiError> {
+) -> Result<Json<CardDto>, ApiError> {
     CardRepo::unarchive(&state.pool, &id).await?;
-    Ok(StatusCode::OK)
+    load_card(&state, id).await
+}
+
+async fn load_card(state: &AppState, id: String) -> Result<Json<CardDto>, ApiError> {
+    match CardRepo::get(&state.pool, &id).await? {
+        Some(card) => Ok(Json(CardDto::from(card))),
+        None => Err(ApiError(KansoError::NotFound {
+            entity: "card",
+            id,
+        })),
+    }
 }
 
 async fn get_body(

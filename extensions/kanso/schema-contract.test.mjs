@@ -106,4 +106,20 @@ describe("CLI tool schemas ↔ Rust DTO contract", () => {
         expect(topProps(tool)).not.toContain("position");
         expect(tool.description).toMatch(/column_move/);
     });
+
+    it("board_get takes a single required `id` string param", () => {
+        const tool = byName.get("board_get");
+        expect(tool).toBeDefined();
+        expect(topProps(tool)).toEqual(["id"]);
+        expect(tool.parameters.required).toEqual(["id"]);
+        expect(tool.parameters.properties.id.type).toBe("string");
+    });
+
+    it("card_get takes a single required `id` string param", () => {
+        const tool = byName.get("card_get");
+        expect(tool).toBeDefined();
+        expect(topProps(tool)).toEqual(["id"]);
+        expect(tool.parameters.required).toEqual(["id"]);
+        expect(tool.parameters.properties.id.type).toBe("string");
+    });
 });

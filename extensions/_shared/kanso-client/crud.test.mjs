@@ -4,10 +4,12 @@ import {
     boardArchive,
     boardCreate,
     boardDelete,
+    boardGet,
     boardList,
     cardArchive,
     cardBodySet,
     cardCreate,
+    cardGet,
     cardMove,
     cardSearch,
     cardTagAdd,
@@ -74,6 +76,17 @@ describe("boards", () => {
         await boardDelete(c, { id: "b1" });
         expect(c.calls).toEqual([{ method: "DELETE", path: "/boards/b1", body: undefined }]);
     });
+
+    it("boardGet hits GET /boards/:id and encodes the id", async () => {
+        const c = fakeClient();
+        await boardGet(c, { id: "b/1" });
+        expect(c.calls).toEqual([{ method: "GET", path: "/boards/b%2F1", body: undefined }]);
+    });
+
+    it("boardGet rejects empty id", () => {
+        const c = fakeClient();
+        expect(() => boardGet(c, { id: "" })).toThrow(/id is required/);
+    });
 });
 
 describe("columns", () => {
@@ -139,6 +152,17 @@ describe("cards", () => {
         const c = fakeClient();
         await cardArchive(c, { id: "k1" });
         expect(c.calls).toEqual([{ method: "POST", path: "/cards/k1/archive", body: undefined }]);
+    });
+
+    it("cardGet hits GET /cards/:id and encodes the id", async () => {
+        const c = fakeClient();
+        await cardGet(c, { id: "k 1" });
+        expect(c.calls).toEqual([{ method: "GET", path: "/cards/k%201", body: undefined }]);
+    });
+
+    it("cardGet rejects empty id", () => {
+        const c = fakeClient();
+        expect(() => cardGet(c, { id: "" })).toThrow(/id is required/);
     });
 
     it("cardBodySet PUTs only the fields that were provided", async () => {

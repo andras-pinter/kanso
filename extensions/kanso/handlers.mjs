@@ -13,6 +13,7 @@ const asJson = (fn) => async (client, args) => {
 
 // boards
 export const boardList = asJson(crud.boardList);
+export const boardGet = asJson(crud.boardGet);
 export const boardCreate = asJson(crud.boardCreate);
 export const boardUpdate = asJson(crud.boardUpdate);
 export const boardArchive = asJson(crud.boardArchive);
@@ -30,6 +31,7 @@ export const columnUnarchive = asJson(crud.columnUnarchive);
 
 // cards
 export const cardList = asJson(crud.cardList);
+export const cardGet = asJson(crud.cardGet);
 export const cardCreate = asJson(crud.cardCreate);
 export const cardUpdate = asJson(crud.cardUpdate);
 export const cardMove = asJson(crud.cardMove);

@@ -34,6 +34,12 @@ const requireId = (id, label = "id") => {
 export const boardList = (c, opts) => c.get(`/boards${pageQuery(opts)}`);
 
 /** @param {Client} c */
+export const boardGet = (c, { id }) => {
+    requireId(id);
+    return c.get(`/boards/${enc(id)}`);
+};
+
+/** @param {Client} c */
 export const boardCreate = (c, { name }) => {
     if (typeof name !== "string" || name.trim() === "") {
         throw new Error("kanso: name is required");
@@ -120,6 +126,12 @@ export const columnUnarchive = (c, { id }) => {
 export const cardList = (c, { column_id, ...opts } = {}) => {
     requireId(column_id, "column_id");
     return c.get(`/columns/${enc(column_id)}/cards${pageQuery(opts)}`);
+};
+
+/** @param {Client} c */
+export const cardGet = (c, { id }) => {
+    requireId(id);
+    return c.get(`/cards/${enc(id)}`);
 };
 
 /** @param {Client} c */

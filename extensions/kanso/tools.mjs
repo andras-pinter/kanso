@@ -43,6 +43,16 @@ export const buildTools = (client, kansoTools) => [
         handler: wrap(client, h.boardList),
     },
     {
+        name: "board_get",
+        description: "Fetch one board by id. Returns JSON BoardDto. Idempotent.",
+        parameters: {
+            type: "object",
+            properties: { id: strId("Board id.") },
+            required: ["id"],
+        },
+        handler: wrap(client, h.boardGet),
+    },
+    {
         name: "board_create",
         description: "Create a board. Returns the new BoardDto.",
         parameters: {
@@ -225,6 +235,16 @@ export const buildTools = (client, kansoTools) => [
             required: ["column_id"],
         },
         handler: wrap(client, h.cardList),
+    },
+    {
+        name: "card_get",
+        description: "Fetch one card by id. Returns JSON CardDto. Idempotent.",
+        parameters: {
+            type: "object",
+            properties: { id: strId("Card id.") },
+            required: ["id"],
+        },
+        handler: wrap(client, h.cardGet),
     },
     {
         name: "card_create",

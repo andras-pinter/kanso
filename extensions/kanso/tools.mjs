@@ -55,14 +55,20 @@ export const buildTools = (client, kansoTools) => [
     {
         name: "board_update",
         description:
-            "Patch a board (rename). Returns the updated BoardDto. Idempotent per field.",
+            "Patch a board (rename, recolor). Returns the updated BoardDto. Idempotent per field.",
         parameters: {
             type: "object",
             properties: {
                 id: strId("Board id."),
                 patch: {
                     type: "object",
-                    properties: { name: strId("New name.") },
+                    properties: {
+                        name: strId("New name."),
+                        color: {
+                            type: ["string", "null"],
+                            description: "New colour (hex like #RRGGBB), or null to clear.",
+                        },
+                    },
                 },
             },
             required: ["id", "patch"],
@@ -130,13 +136,17 @@ export const buildTools = (client, kansoTools) => [
     },
     {
         name: "column_create",
-        description: "Create a column on a board. Returns the new ColumnDto.",
+        description:
+            "Create a column on a board. Returns the new ColumnDto. Position is assigned server-side (appended); use column_move afterwards to reorder.",
         parameters: {
             type: "object",
             properties: {
                 board_id: strId("Board id."),
                 name: strId("Column name."),
-                position: num("Optional fractional position; omit to append."),
+                color: {
+                    type: ["string", "null"],
+                    description: "Optional colour (hex like #RRGGBB).",
+                },
             },
             required: ["board_id", "name"],
         },
@@ -153,7 +163,10 @@ export const buildTools = (client, kansoTools) => [
                     type: "object",
                     properties: {
                         name: strId("New name."),
-                        color: strId("Optional hex colour."),
+                        color: {
+                            type: ["string", "null"],
+                            description: "New colour (hex like #RRGGBB), or null to clear.",
+                        },
                     },
                 },
             },
@@ -238,8 +251,14 @@ export const buildTools = (client, kansoTools) => [
                     type: "object",
                     properties: {
                         title: strId("New title."),
-                        body_text: strId("New plaintext body."),
-                        due_at: strId("ISO-8601 due date, or null to clear."),
+                        body_text: {
+                            type: ["string", "null"],
+                            description: "New plaintext body, or null to clear.",
+                        },
+                        due_at: {
+                            type: ["integer", "null"],
+                            description: "Due date as Unix epoch milliseconds, or null to clear.",
+                        },
                     },
                 },
             },

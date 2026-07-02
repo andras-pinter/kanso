@@ -220,7 +220,7 @@ const listBoardResources = async (client) => {
  *
  * @param {ServerDeps} deps
  */
-export const createKansoMcpServer = ({ client, name = "kanso-mcp", version = "0.1.0" }) => {
+export const createKansoMcpServer = ({ client, name = "kanso-mcp", version = "0.2.1" }) => {
     const server = new McpServer({ name, version });
 
     // ---------- Tools (mirror the CLI extension) ----------
@@ -323,8 +323,20 @@ export const createKansoMcpServer = ({ client, name = "kanso-mcp", version = "0.
     reg("board_create", "Create a board. Returns the created BoardDto.", { name: z.string().describe("Board name.") }, crud.boardCreate);
     reg(
         "board_update",
-        "Patch a board (name, position). Returns the updated BoardDto.",
-        { id: S.id, patch: z.object({ name: z.string().optional(), position: z.number().optional() }).describe("Partial fields.") },
+        "Patch a board (name, color). Returns the updated BoardDto.",
+        {
+            id: S.id,
+            patch: z
+                .object({
+                    name: z.string().optional(),
+                    color: z
+                        .string()
+                        .nullable()
+                        .optional()
+                        .describe("Hex colour like #RRGGBB, or null to clear."),
+                })
+                .describe("Partial fields."),
+        },
         crud.boardUpdate,
     );
     reg("board_archive", "Archive a board. Returns the updated BoardDto with archived_at set. Idempotent.", { id: S.id }, crud.boardArchive);
@@ -336,14 +348,32 @@ export const createKansoMcpServer = ({ client, name = "kanso-mcp", version = "0.
     reg("column_list", "List columns on a board.", { board_id: S.board_id, ...S.page }, crud.columnList);
     reg(
         "column_create",
-        "Create a column on a board. Returns the created ColumnDto.",
-        { board_id: S.board_id, name: z.string(), position: z.number().optional() },
+        "Create a column on a board. Returns the created ColumnDto. Position is assigned server-side (appended); use column_move afterwards to reorder.",
+        {
+            board_id: S.board_id,
+            name: z.string(),
+            color: z
+                .string()
+                .nullable()
+                .optional()
+                .describe("Optional colour (hex like #RRGGBB)."),
+        },
         crud.columnCreate,
     );
     reg(
         "column_update",
-        "Patch a column (name, position). Returns the updated ColumnDto.",
-        { id: S.id, patch: z.object({ name: z.string().optional(), position: z.number().optional() }) },
+        "Patch a column (name, color). Returns the updated ColumnDto.",
+        {
+            id: S.id,
+            patch: z.object({
+                name: z.string().optional(),
+                color: z
+                    .string()
+                    .nullable()
+                    .optional()
+                    .describe("Hex colour like #RRGGBB, or null to clear."),
+            }),
+        },
         crud.columnUpdate,
     );
     reg(
@@ -361,13 +391,22 @@ export const createKansoMcpServer = ({ client, name = "kanso-mcp", version = "0.
     reg("card_create", "Create a card in a column. Returns the created CardDto.", { column_id: S.column_id, title: z.string() }, crud.cardCreate);
     reg(
         "card_update",
-        "Patch a card (title, due_at, description). Returns the updated CardDto.",
+        "Patch a card (title, due_at, body_text). Returns the updated CardDto.",
         {
             id: S.id,
             patch: z.object({
                 title: z.string().optional(),
-                due_at: z.string().nullable().optional(),
-                description: z.string().nullable().optional(),
+                due_at: z
+                    .number()
+                    .int()
+                    .nullable()
+                    .optional()
+                    .describe("Due date as Unix epoch milliseconds, or null to clear."),
+                body_text: z
+                    .string()
+                    .nullable()
+                    .optional()
+                    .describe("Plaintext body, or null to clear."),
             }),
         },
         crud.cardUpdate,

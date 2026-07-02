@@ -85,11 +85,19 @@ describe("columns", () => {
         ]);
     });
 
-    it("columnCreate trims name and forwards position when set", async () => {
+    it("columnCreate trims name and forwards color when set", async () => {
         const c = fakeClient();
-        await columnCreate(c, { board_id: "b1", name: " Todo ", position: 3.5 });
+        await columnCreate(c, { board_id: "b1", name: " Todo ", color: "#ff8800" });
         expect(c.calls).toEqual([
-            { method: "POST", path: "/boards/b1/columns", body: { name: "Todo", position: 3.5 } },
+            { method: "POST", path: "/boards/b1/columns", body: { name: "Todo", color: "#ff8800" } },
+        ]);
+    });
+
+    it("columnCreate omits color when not supplied (position is server-assigned)", async () => {
+        const c = fakeClient();
+        await columnCreate(c, { board_id: "b1", name: "Todo" });
+        expect(c.calls).toEqual([
+            { method: "POST", path: "/boards/b1/columns", body: { name: "Todo" } },
         ]);
     });
 

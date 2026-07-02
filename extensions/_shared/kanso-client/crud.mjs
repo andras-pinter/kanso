@@ -80,13 +80,13 @@ export const columnList = (c, { board_id, ...opts } = {}) => {
 };
 
 /** @param {Client} c */
-export const columnCreate = (c, { board_id, name, position }) => {
+export const columnCreate = (c, { board_id, name, color }) => {
     requireId(board_id, "board_id");
     if (typeof name !== "string" || name.trim() === "") {
         throw new Error("kanso: name is required");
     }
     const body = { name: name.trim() };
-    if (position !== undefined) body.position = position;
+    if (color !== undefined) body.color = color;
     return c.post(`/boards/${enc(board_id)}/columns`, body);
 };
 

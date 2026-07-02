@@ -11,7 +11,8 @@
         "./client": "./client.mjs",
         "./tools": "./tools.mjs",
         "./resources": "./resources.mjs",
-        "./crud": "./crud.mjs"
+        "./crud": "./crud.mjs",
+        "./dto-contract": "./dto-contract.mjs"
     },
     "scripts": {
         "test": "vitest run"

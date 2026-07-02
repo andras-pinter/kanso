@@ -4,9 +4,10 @@
  * the one that shipped in Phase 4b (position on column_create, `description`
  * on card_update, string-typed due_at).
  *
- * Ground truth lives in @kanso/client/dto-contract; that mirrors
- * `crates/kanso-api/src/dto.rs` by hand. If a DTO changes there, update
- * dto-contract.mjs and this test file together.
+ * Ground truth lives in @kanso/client/dto-contract; that re-exports
+ * DTO_CONTRACT from dto-contract.generated.mjs, which `cargo run -p
+ * dto-contract-gen` generates from `crates/kanso-api/src/dto.rs`. If a DTO
+ * changes there, rerun the generator; `just check` fails on drift.
  */
 
 import { describe, expect, it } from "vitest";

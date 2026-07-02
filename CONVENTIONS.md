@@ -47,3 +47,16 @@ Never commit to `master`. PRs only.
 - Circular crate dependencies. `kanso-core` depends on nothing app-specific.
 - Commit `node_modules/`, `target/`, `dist/`, Tauri `gen/`, or `.env*`.
 - Add a dependency without a clear reason.
+
+## Extension DTO contract
+
+`extensions/_shared/kanso-client/dto-contract.generated.mjs` is generated from
+`crates/kanso-api/src/dto.rs` by `cargo run -p dto-contract-gen`. It's what
+the CLI + MCP schema-contract tests diff each tool's advertised fields
+against, so if the JS mirror drifts from the Rust DTOs, agents silently ship
+tools that file 400/422s.
+
+After editing any request DTO in `dto.rs`, rerun the generator and commit
+the result. `just check` (and CI) runs the generator and fails on drift via
+`git diff --exit-code`. New request DTOs also need an allowlist entry in
+`crates/dto-contract-gen/src/main.rs`.

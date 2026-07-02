@@ -4,6 +4,7 @@ members = [
     "crates/kanso-core",
     "crates/kanso-api",
     "crates/kanso-tauri",
+    "crates/dto-contract-gen",
 ]
 
 [workspace.package]

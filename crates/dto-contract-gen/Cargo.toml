@@ -1,0 +1,12 @@
+[package]
+name = "dto-contract-gen"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+syn = { version = "2", features = ["full", "extra-traits"] }
+anyhow = { workspace = true }

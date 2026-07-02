@@ -1,37 +1,13 @@
 /**
- * Hand-maintained mirror of the Rust DTO field names in
- * `crates/kanso-api/src/dto.rs`. This is the ground truth extension tool
- * schemas are contract-tested against, so agents can't file 400/422 requests
- * because a schema advertised a field the API silently ignores or rejects.
+ * Extension-side view of the Rust request DTOs in
+ * `crates/kanso-api/src/dto.rs`. Consumed by CLI + MCP tool-schema contract
+ * tests to prevent tools from advertising fields the API rejects.
  *
- * Only lists request-body fields (the parts extensions send). Response DTOs
- * are richer but that's fine — extensions render whatever comes back.
- *
- * Keep in sync with dto.rs. If you change a DTO there, change this list too.
+ * `DTO_CONTRACT` is auto-generated from Rust via `cargo run -p dto-contract-gen`;
+ * `just check` fails on drift. `diffFields` is pure JS logic and stays here.
  */
 
-export const DTO_CONTRACT = {
-    // CreateBoardBody
-    board_create: { required: ["name"], optional: [] },
-    // BoardPatchDto — all optional; color is nullable (via double_option)
-    board_update_patch: { required: [], optional: ["name", "color"] },
-
-    // CreateColumnBody — position is server-assigned; NOT accepted here.
-    column_create: { required: ["name"], optional: ["color"] },
-    // ColumnPatchDto — no `position`; color is nullable.
-    column_update_patch: { required: [], optional: ["name", "color"] },
-
-    // CreateCardBody — title only. due_at/body_text land via card_update or card_body_set.
-    card_create: { required: ["title"], optional: [] },
-    // CardPatchDto — all optional; body_text + due_at nullable.
-    // due_at is i64 Unix epoch milliseconds.
-    card_update_patch: { required: [], optional: ["title", "body_text", "due_at"] },
-
-    // CreateTagBody
-    tag_create: { required: ["name"], optional: ["color"] },
-    // TagPatchDto — color nullable.
-    tag_update_patch: { required: [], optional: ["name", "color"] },
-};
+export { DTO_CONTRACT } from "./dto-contract.generated.mjs";
 
 /**
  * Assert a schema's advertised field names exactly match the DTO contract.

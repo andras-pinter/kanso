@@ -50,6 +50,13 @@ check:
     else \
         echo "skip: cargo clippy (no Cargo.toml)"; \
     fi
+    @if [ -f Cargo.toml ]; then \
+        cargo run -q -p dto-contract-gen; \
+        git diff --exit-code -- extensions/_shared/kanso-client/dto-contract.generated.mjs \
+            || { echo "ERR: dto contract drift — run 'cargo run -p dto-contract-gen' and commit the result"; exit 1; }; \
+    else \
+        echo "skip: dto-contract-gen (no Cargo.toml)"; \
+    fi
     @if [ -f ui/package.json ]; then \
         cd ui && npx --no-install tsc --noEmit && npx --no-install eslint .; \
     else \

@@ -84,9 +84,9 @@ pub async fn card_tag_add(
     state: State<'_, RuntimeState>,
     card_id: String,
     tag_id: String,
-) -> Result<(), AppError> {
+) -> Result<CardDto, AppError> {
     CardRepo::add_tag(&state.pool, &card_id, &tag_id).await?;
-    Ok(())
+    load_card(&state, card_id).await
 }
 
 #[tauri::command]
@@ -94,9 +94,20 @@ pub async fn card_tag_remove(
     state: State<'_, RuntimeState>,
     card_id: String,
     tag_id: String,
-) -> Result<(), AppError> {
+) -> Result<CardDto, AppError> {
     CardRepo::remove_tag(&state.pool, &card_id, &tag_id).await?;
-    Ok(())
+    load_card(&state, card_id).await
+}
+
+async fn load_card(state: &RuntimeState, id: String) -> Result<CardDto, AppError> {
+    match CardRepo::get(&state.pool, &id).await? {
+        Some(card) => Ok(CardDto::from(card)),
+        None => Err(kanso_core::KansoError::NotFound {
+            entity: "card",
+            id,
+        }
+        .into()),
+    }
 }
 
 #[tauri::command]

@@ -844,7 +844,9 @@ async fn card_tag_link_via_http() {
         .oneshot(req("POST", &format!("/cards/{}/tags/{}", card.id, tag.id)))
         .await
         .unwrap();
-    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+    assert_eq!(res.status(), StatusCode::OK);
+    let linked: CardDto = serde_json::from_value(body_json(res).await).unwrap();
+    assert_eq!(linked.id, card.id);
 
     // idempotent
     let res = app
@@ -852,7 +854,8 @@ async fn card_tag_link_via_http() {
         .oneshot(req("POST", &format!("/cards/{}/tags/{}", card.id, tag.id)))
         .await
         .unwrap();
-    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+    assert_eq!(res.status(), StatusCode::OK);
+    let _: CardDto = serde_json::from_value(body_json(res).await).unwrap();
 
     let res = app
         .clone()
@@ -879,7 +882,9 @@ async fn card_tag_link_via_http() {
         ))
         .await
         .unwrap();
-    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+    assert_eq!(res.status(), StatusCode::OK);
+    let unlinked: CardDto = serde_json::from_value(body_json(res).await).unwrap();
+    assert_eq!(unlinked.id, card.id);
 
     // idempotent unlink
     let res = app
@@ -890,7 +895,8 @@ async fn card_tag_link_via_http() {
         ))
         .await
         .unwrap();
-    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+    assert_eq!(res.status(), StatusCode::OK);
+    let _: CardDto = serde_json::from_value(body_json(res).await).unwrap();
 
     // missing card -> 404
     let res = app
@@ -1067,7 +1073,8 @@ async fn link_archived_tag_returns_400_and_archive_filter_works() {
         ))
         .await
         .unwrap();
-    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+    assert_eq!(res.status(), StatusCode::OK);
+    let _: CardDto = serde_json::from_value(body_json(res).await).unwrap();
 
     // Archive the tag.
     let res = app

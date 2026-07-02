@@ -4,6 +4,7 @@ use axum::{Json, Router};
 use serde::Deserialize;
 
 use kanso_core::repo::{CardRepo, TagRepo};
+use kanso_core::KansoError;
 
 use crate::dto::{CardDto, CreateTagBody, TagDto, TagPatchDto};
 use crate::error::{require_non_empty, ApiError};
@@ -132,17 +133,27 @@ async fn tags_for_card(
 async fn link_tag(
     State(state): State<AppState>,
     Path((card_id, tag_id)): Path<(String, String)>,
-) -> Result<StatusCode, ApiError> {
+) -> Result<Json<CardDto>, ApiError> {
     CardRepo::add_tag(&state.pool, &card_id, &tag_id).await?;
-    Ok(StatusCode::NO_CONTENT)
+    load_card(&state, card_id).await
 }
 
 async fn unlink_tag(
     State(state): State<AppState>,
     Path((card_id, tag_id)): Path<(String, String)>,
-) -> Result<StatusCode, ApiError> {
+) -> Result<Json<CardDto>, ApiError> {
     CardRepo::remove_tag(&state.pool, &card_id, &tag_id).await?;
-    Ok(StatusCode::NO_CONTENT)
+    load_card(&state, card_id).await
+}
+
+async fn load_card(state: &AppState, id: String) -> Result<Json<CardDto>, ApiError> {
+    match CardRepo::get(&state.pool, &id).await? {
+        Some(card) => Ok(Json(CardDto::from(card))),
+        None => Err(ApiError(KansoError::NotFound {
+            entity: "card",
+            id,
+        })),
+    }
 }
 
 async fn cards_with_tag(

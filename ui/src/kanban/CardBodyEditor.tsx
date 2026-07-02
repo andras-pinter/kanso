@@ -6,6 +6,14 @@ import { useDebouncedSave } from './hooks/useDebouncedSave';
 
 interface Props {
   cardId: string;
+  /** Optional callback fired when a save round-trips successfully. When
+   * provided the editor SUPPRESSES its own inline Saving…/Saved pill so
+   * the parent modal can render a single "Saved" indicator. */
+  onSaved?: () => void;
+  /** Optional callback fired when a save fails. The editor still renders
+   * its inline "Save failed — retry" affordance because retry is coupled
+   * to editor state; this is for parents that want their own error UI. */
+  onSaveError?: (message: string) => void;
 }
 
 /** Imperative handle exposed to the parent drawer so its Close button can
@@ -34,7 +42,7 @@ const DEBOUNCE_MS = 500;
 const SAVED_PILL_MS = 1400;
 
 function CardBodyEditorImpl(
-  { cardId }: Props,
+  { cardId, onSaved, onSaveError }: Props,
   ref: React.ForwardedRef<CardBodyEditorHandle>,
 ) {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -44,6 +52,12 @@ function CardBodyEditorImpl(
   const [fetchAttempt, setFetchAttempt] = useState(0);
   const savedTimerRef = useRef<number | null>(null);
   const lastSentRef = useRef<string | null>(null);
+  // Refs so the debounced save closure sees the latest callback without
+  // re-instantiating useDebouncedSave (which would drop pending saves).
+  const onSavedRef = useRef(onSaved);
+  const onSaveErrorRef = useRef(onSaveError);
+  onSavedRef.current = onSaved;
+  onSaveErrorRef.current = onSaveError;
 
   const saver = useDebouncedSave<{ blob: Uint8Array; text: string }>(async (value) => {
     const b64 = bytesToBase64(value.blob);
@@ -55,10 +69,12 @@ function CardBodyEditorImpl(
       setSaveState('saved');
       if (savedTimerRef.current !== null) window.clearTimeout(savedTimerRef.current);
       savedTimerRef.current = window.setTimeout(() => setSaveState('idle'), SAVED_PILL_MS);
+      onSavedRef.current?.();
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       console.error('[kanso] card_body_set failed', e);
       setSaveState({ kind: 'error', message });
+      onSaveErrorRef.current?.(message);
       // Rethrow so useDebouncedSave retains the value AND flush() rejects,
       // which lets the drawer close handler keep the drawer open.
       throw e;
@@ -191,6 +207,11 @@ function CardBodyEditorImpl(
 
   const fetchFailed = phase.kind === 'fetch-failed';
   const mountFailed = phase.kind === 'mount-failed';
+  // When the parent supplies onSaved, it renders its own "Saved" pill.
+  // Suppress the inline Saving…/Saved indicators so the user never sees
+  // two pills at once. The "Save failed — retry" affordance stays: retry
+  // is coupled to editor state and the parent can't replicate it.
+  const suppressInlinePill = onSaved !== undefined;
 
   return (
     <div className="kanso-editor">
@@ -199,8 +220,10 @@ function CardBodyEditorImpl(
         {phase.kind === 'mounting' && (
           <span className="kanso-editor-loading">Loading editor…</span>
         )}
-        {saveState === 'saving' && <span className="kanso-saved-pill">Saving…</span>}
-        {saveState === 'saved' && (
+        {!suppressInlinePill && saveState === 'saving' && (
+          <span className="kanso-saved-pill">Saving…</span>
+        )}
+        {!suppressInlinePill && saveState === 'saved' && (
           <span className="kanso-saved-pill kanso-saved-pill--visible">Saved</span>
         )}
         {typeof saveState === 'object' && (

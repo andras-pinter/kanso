@@ -85,9 +85,10 @@ export const boardCreate = (name: string): Promise<BoardDto> => invoker('board_c
 export const boardUpdate = (id: string, patch: BoardPatch): Promise<BoardDto> =>
   invoker('board_update', { id, patch });
 
-export const boardArchive = (id: string): Promise<void> => invoker('board_archive', { id });
+export const boardArchive = (id: string): Promise<BoardDto> => invoker('board_archive', { id });
 
-export const boardUnarchive = (id: string): Promise<void> => invoker('board_unarchive', { id });
+export const boardUnarchive = (id: string): Promise<BoardDto> =>
+  invoker('board_unarchive', { id });
 
 export const boardDelete = (id: string): Promise<void> => invoker('board_delete', { id });
 
@@ -102,9 +103,11 @@ export const columnCreate = (boardId: string, name: string, color?: string): Pro
 export const columnUpdate = (id: string, patch: ColumnPatch): Promise<ColumnDto> =>
   invoker('column_update', { id, patch });
 
-export const columnArchive = (id: string): Promise<void> => invoker('column_archive', { id });
+export const columnArchive = (id: string): Promise<ColumnDto> =>
+  invoker('column_archive', { id });
 
-export const columnUnarchive = (id: string): Promise<void> => invoker('column_unarchive', { id });
+export const columnUnarchive = (id: string): Promise<ColumnDto> =>
+  invoker('column_unarchive', { id });
 
 export const columnMove = (id: string, args: ColumnMoveArgs = {}): Promise<ColumnDto> =>
   invoker('column_move', { id, before: args.before, after: args.after });
@@ -122,9 +125,9 @@ export const tagCreate = (name: string, color?: string): Promise<TagDto> =>
 export const tagUpdate = (id: string, patch: TagPatch): Promise<TagDto> =>
   invoker('tag_update', { id, patch });
 
-export const tagArchive = (id: string): Promise<void> => invoker('tag_archive', { id });
+export const tagArchive = (id: string): Promise<TagDto> => invoker('tag_archive', { id });
 
-export const tagUnarchive = (id: string): Promise<void> => invoker('tag_unarchive', { id });
+export const tagUnarchive = (id: string): Promise<TagDto> => invoker('tag_unarchive', { id });
 
 export const tagDelete = (id: string): Promise<void> => invoker('tag_delete', { id });
 
@@ -134,10 +137,10 @@ export const tagCardsList = (tagId: string, includeArchived = false): Promise<Ca
 export const cardTagsList = (cardId: string, includeArchived = false): Promise<TagDto[]> =>
   invoker('card_tags_list', { cardId, includeArchived });
 
-export const cardTagAdd = (cardId: string, tagId: string): Promise<void> =>
+export const cardTagAdd = (cardId: string, tagId: string): Promise<CardDto> =>
   invoker('card_tag_add', { cardId, tagId });
 
-export const cardTagRemove = (cardId: string, tagId: string): Promise<void> =>
+export const cardTagRemove = (cardId: string, tagId: string): Promise<CardDto> =>
   invoker('card_tag_remove', { cardId, tagId });
 
 export const boardCardTagsList = (
@@ -169,13 +172,18 @@ export const cardMove = (id: string, args: CardMoveArgs): Promise<CardDto> =>
     after: args.after,
   });
 
-export const cardArchive = (id: string): Promise<void> => invoker('card_archive', { id });
+export const cardArchive = (id: string): Promise<CardDto> => invoker('card_archive', { id });
 
-export const cardUnarchive = (id: string): Promise<void> => invoker('card_unarchive', { id });
+export const cardUnarchive = (id: string): Promise<CardDto> => invoker('card_unarchive', { id });
 
 export const cardBodyGet = (id: string): Promise<CardBody> => invoker('card_body_get', { id });
 
-export const cardBodySet = (id: string, body: CardBodySet): Promise<void> =>
+export interface CardBodyStamp {
+  id: string;
+  updated_at: string;
+}
+
+export const cardBodySet = (id: string, body: CardBodySet): Promise<CardBodyStamp> =>
   invoker('card_body_set', { id, body });
 
 // ---------- search ----------

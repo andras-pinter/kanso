@@ -4,11 +4,16 @@ import { CSS } from '@dnd-kit/utilities';
 import type { CardDto } from './types';
 import { useKanbanStore } from './hooks/useKanbanStore';
 import TagChips from './TagChips';
-import DueBadge from './DueBadge';
 
 interface Props {
   card: CardDto;
 }
+
+// Phase 1: the card face carries content only — title, tag chips, and a
+// subtle "has notes" dot. DueBadge / body-text preview live in the modal,
+// not on the face.
+const hasBodyText = (card: CardDto): boolean =>
+  (card.body_text?.trim().length ?? 0) > 0;
 
 export default function Card({ card }: Props) {
   const selectCard = useKanbanStore((s) => s.selectCard);
@@ -18,7 +23,7 @@ export default function Card({ card }: Props) {
     data: { type: 'card', columnId: card.column_id },
   });
 
-  const firstBodyLine = card.body_text?.split('\n').find((l) => l.trim().length > 0);
+  const hasBody = hasBodyText(card);
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -68,10 +73,17 @@ export default function Card({ card }: Props) {
         aria-hidden="true"
         className="kanso-card-grip"
       />
-      <div className="kanso-card-title">{card.title}</div>
-      {firstBodyLine && <div className="kanso-card-body">{firstBodyLine}</div>}
+      <div className="kanso-card-title">
+        {card.title}
+        {hasBody && (
+          <span
+            className="kanso-card-has-body"
+            aria-label="Has notes"
+            title="Has notes"
+          />
+        )}
+      </div>
       <TagChips cardId={card.id} />
-      {card.due_at !== null && card.due_at !== undefined && <DueBadge dueAt={card.due_at} />}
     </div>
   );
 }
@@ -79,13 +91,20 @@ export default function Card({ card }: Props) {
 // Visual-only twin used inside <DragOverlay>. Doesn't subscribe to
 // useSortable — overlay manages its own transform/positioning.
 export function CardOverlay({ card }: Props) {
-  const firstBodyLine = card.body_text?.split('\n').find((l) => l.trim().length > 0);
+  const hasBody = hasBodyText(card);
   return (
     <div className="kanso-card kanso-card--overlay">
-      <div className="kanso-card-title">{card.title}</div>
-      {firstBodyLine && <div className="kanso-card-body">{firstBodyLine}</div>}
+      <div className="kanso-card-title">
+        {card.title}
+        {hasBody && (
+          <span
+            className="kanso-card-has-body"
+            aria-label="Has notes"
+            title="Has notes"
+          />
+        )}
+      </div>
       <TagChips cardId={card.id} />
-      {card.due_at !== null && card.due_at !== undefined && <DueBadge dueAt={card.due_at} />}
     </div>
   );
 }

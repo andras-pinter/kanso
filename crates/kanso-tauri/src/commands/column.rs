@@ -45,15 +45,32 @@ pub async fn column_update(
 }
 
 #[tauri::command]
-pub async fn column_archive(state: State<'_, RuntimeState>, id: String) -> Result<(), AppError> {
+pub async fn column_archive(
+    state: State<'_, RuntimeState>,
+    id: String,
+) -> Result<ColumnDto, AppError> {
     ColumnRepo::archive(&state.pool, &id).await?;
-    Ok(())
+    load_column(&state, &id).await
 }
 
 #[tauri::command]
-pub async fn column_unarchive(state: State<'_, RuntimeState>, id: String) -> Result<(), AppError> {
+pub async fn column_unarchive(
+    state: State<'_, RuntimeState>,
+    id: String,
+) -> Result<ColumnDto, AppError> {
     ColumnRepo::unarchive(&state.pool, &id).await?;
-    Ok(())
+    load_column(&state, &id).await
+}
+
+async fn load_column(state: &State<'_, RuntimeState>, id: &str) -> Result<ColumnDto, AppError> {
+    match ColumnRepo::get(&state.pool, id).await? {
+        Some(c) => Ok(c.into()),
+        None => Err(kanso_core::KansoError::NotFound {
+            entity: "column",
+            id: id.to_string(),
+        }
+        .into()),
+    }
 }
 
 #[tauri::command]

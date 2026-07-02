@@ -86,17 +86,27 @@ async fn get_one(
 async fn archive(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Result<StatusCode, ApiError> {
+) -> Result<Json<ColumnDto>, ApiError> {
     ColumnRepo::archive(&state.pool, &id).await?;
-    Ok(StatusCode::OK)
+    load_column(&state, id).await
 }
 
 async fn unarchive(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Result<StatusCode, ApiError> {
+) -> Result<Json<ColumnDto>, ApiError> {
     ColumnRepo::unarchive(&state.pool, &id).await?;
-    Ok(StatusCode::OK)
+    load_column(&state, id).await
+}
+
+async fn load_column(state: &AppState, id: String) -> Result<Json<ColumnDto>, ApiError> {
+    match ColumnRepo::get(&state.pool, &id).await? {
+        Some(col) => Ok(Json(ColumnDto::from(col))),
+        None => Err(ApiError(KansoError::NotFound {
+            entity: "column",
+            id,
+        })),
+    }
 }
 
 async fn move_column(

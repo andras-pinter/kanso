@@ -289,11 +289,16 @@ async fn column_crud_via_http() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
+    let archived: ColumnDto = serde_json::from_value(body_json(res).await).unwrap();
+    assert_eq!(archived.id, col.id);
+    assert!(archived.archived_at.is_some());
     let res = app
         .oneshot(req("POST", &format!("/columns/{}/unarchive", col.id)))
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
+    let unarchived: ColumnDto = serde_json::from_value(body_json(res).await).unwrap();
+    assert!(unarchived.archived_at.is_none());
 }
 
 #[tokio::test]

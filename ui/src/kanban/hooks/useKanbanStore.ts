@@ -610,7 +610,11 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
     const mySeq = nextCardMutation(id);
     try {
       await cardArchive(id);
-      if (!isLatestCardMutation(id, mySeq)) return true;
+      // Archive success is terminal for the visible list — the card is
+      // gone on the server, so the UI must reflect that regardless of a
+      // concurrent updateCard's newer sequence. The seq guard only
+      // protects the archived-list refetch below, which is a field-level
+      // refresh that can legitimately race with unrelated mutations.
       set((s) => removeCard(s, id));
       if (get().selectedCardId === id) set({ selectedCardId: null });
       if (get().showArchived) {

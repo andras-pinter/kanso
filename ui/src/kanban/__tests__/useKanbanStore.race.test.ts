@@ -1,7 +1,9 @@
 // Regression: single-card mutations (updateCard, archiveCard) must ignore
-// stale API responses. Two rapid updateCards to the same card can resolve
-// out of order; the older response used to overwrite the newer store
-// value. Per-card mutation-sequence gating fixes that.
+// stale API responses for field-level state. Two rapid updateCards to the
+// same card can resolve out of order; the older response used to overwrite
+// the newer store value. Per-card mutation-sequence gating fixes that.
+// Archive success is terminal for the visible list — the card is gone on
+// the server, so it must be removed regardless of a newer mutation's seq.
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { __setInvoker, type InvokeFn } from '../api/client';
@@ -195,11 +197,11 @@ describe('useKanbanStore card mutation race gating', () => {
     expect(useKanbanStore.getState().error).toMatch(/boom/);
   });
 
-  it('archiveCard returns true when a stale response arrives after a newer mutation', async () => {
-    // Newer mutation wins the store; the archive API call itself still
-    // succeeded on the server so we report true to the caller. Callers
-    // that own dependent UI (e.g. the modal close) get the "safe to
-    // proceed" signal even in the stale case.
+  it('archiveCard removes the card even when a newer mutation bumped the seq (stale success)', async () => {
+    // Archive success is terminal for the visible list — the server
+    // archived the card, so the UI must drop it regardless of a
+    // concurrent updateCard's newer sequence. Anything else leaves a
+    // ghost card until the next full reload.
     const archiveGate = deferred<undefined>();
     __setInvoker(async (cmd) => {
       if (cmd === 'card_archive') return (await archiveGate.promise) as never;
@@ -207,15 +209,39 @@ describe('useKanbanStore card mutation race gating', () => {
       return undefined as never;
     });
 
+    useKanbanStore.setState({ selectedCardId: 'c1' });
     const pArchive = useKanbanStore.getState().archiveCard('c1');
     // A newer mutation bumps the sequence past the archive.
     await useKanbanStore.getState().updateCard('c1', { title: 'newer' });
     archiveGate.resolve(undefined);
     const ok = await pArchive;
     expect(ok).toBe(true);
-    // The newer update's state stands.
     expect(
-      useKanbanStore.getState().cardsByColumn.col1?.find((c) => c.id === 'c1')?.title,
-    ).toBe('newer');
+      useKanbanStore.getState().cardsByColumn.col1?.find((c) => c.id === 'c1'),
+    ).toBeUndefined();
+    expect(useKanbanStore.getState().selectedCardId).toBeNull();
+  });
+
+  it('archiveCard returns false on stale failure without rolling back', async () => {
+    // Pessimistic archive never removed the card, so a stale failure
+    // needs no rollback. The seq guard suppresses the error surface
+    // because a newer mutation already owns the store state.
+    const archiveGate = deferred<undefined>();
+    __setInvoker(async (cmd) => {
+      if (cmd === 'card_archive') return (await archiveGate.promise) as never;
+      if (cmd === 'card_update') return card('c1', 'newer') as never;
+      return undefined as never;
+    });
+
+    useKanbanStore.setState({ selectedCardId: 'c1' });
+    const pArchive = useKanbanStore.getState().archiveCard('c1');
+    await useKanbanStore.getState().updateCard('c1', { title: 'newer' });
+    archiveGate.reject(new Error('boom'));
+    const ok = await pArchive;
+    expect(ok).toBe(false);
+    const s = useKanbanStore.getState();
+    expect(s.cardsByColumn.col1?.find((c) => c.id === 'c1')?.title).toBe('newer');
+    expect(s.selectedCardId).toBe('c1');
+    expect(s.error).toBeNull();
   });
 });

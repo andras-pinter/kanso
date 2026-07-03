@@ -1204,6 +1204,10 @@ body {
   border-bottom: none;
   display: block;
   min-height: 44px;
+  /* Grid tracks default to min-content; explicitly allow the title
+     column to shrink so a very long textarea doesn't push the actions
+     off the modal on narrow viewports. */
+  min-width: 0;
 }
 
 .kanso-modal--doc .kanso-modal-header-actions {
@@ -1242,6 +1246,7 @@ body {
 .kanso-doc-title {
   display: block;
   width: 100%;
+  min-width: 0;
   border: none;
   outline: none;
   background: transparent;

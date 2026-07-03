@@ -26,6 +26,11 @@ export default function CardDetailModal({ card }: Props) {
   const [closeBlocked, setCloseBlocked] = useState(false);
   const [deleteFailed, setDeleteFailed] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // Early-guard so a second Delete click during the pre-delete
+  // commitTitle/flush window doesn't fire another deleteThis() in
+  // parallel. `deleting` state alone is only true AFTER awaits, which
+  // leaves a race window where the overflow item is still enabled.
+  const deletingRef = useRef(false);
   const savedTimer = useRef<number | null>(null);
   const editorRef = useRef<CardBodyEditorHandle | null>(null);
   const modalRef = useRef<HTMLDivElement | null>(null);
@@ -128,13 +133,15 @@ export default function CardDetailModal({ card }: Props) {
   // modal open via the same closeBlocked banner as close(), or a
   // delete-specific banner when the delete API itself rejects.
   const deleteThis = async (): Promise<void> => {
-    if (deleting) return;
+    if (deletingRef.current) return;
+    deletingRef.current = true;
     const nextFocus = computeNextFocusTarget();
     try {
       await commitTitle();
       await editorRef.current?.flush();
     } catch {
       setCloseBlocked(true);
+      deletingRef.current = false;
       return;
     }
     setDeleteFailed(false);
@@ -143,6 +150,7 @@ export default function CardDetailModal({ card }: Props) {
     setDeleting(false);
     if (!ok) {
       setDeleteFailed(true);
+      deletingRef.current = false;
       return;
     }
     focusAfterDelete(nextFocus);

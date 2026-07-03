@@ -397,7 +397,7 @@ body {
   padding: 16px 24px 24px;
   overflow-x: auto;
   overflow-y: hidden;
-  align-items: flex-start;
+  align-items: stretch;
   justify-content: safe center;
   scrollbar-width: thin;
 }
@@ -463,15 +463,21 @@ body {
 .kanso-cards {
   display: flex;
   flex-direction: column;
+  flex: 1 1 0;
   gap: 6px;
   overflow-y: auto;
   padding: 2px;
-  min-height: 8px;
+  min-height: 0;
   scrollbar-width: thin;
 }
 
 .kanso-cards--empty {
   min-height: 36px;
+}
+
+.kanso-column-footer {
+  margin-top: auto;
+  flex-shrink: 0;
 }
 
 /* ---------- Card ---------- */

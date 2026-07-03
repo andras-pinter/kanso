@@ -47,7 +47,7 @@ export default function AddCardInline({ onSubmit, columnId }: Props) {
         data-column-add={columnId}
         onClick={() => setOpen(true)}
       >
-        + Add card
+        + Add task
       </button>
     );
   }

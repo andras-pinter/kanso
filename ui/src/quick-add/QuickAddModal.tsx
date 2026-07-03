@@ -35,24 +35,30 @@ export default function QuickAddModal({ onClose }: Props) {
   }, [currentBoardId, boards]);
 
   // For the current board we already have columns in the store. For a
-  // fallback board (e.g. currentBoardId cleared) we lazy-fetch once.
+  // fallback board (e.g. currentBoardId cleared) we lazy-fetch once and
+  // remember which board they were for so a subsequent target switch
+  // doesn't accidentally reuse the previous board's columns.
   const [fetchedColumns, setFetchedColumns] = useState<ColumnDto[] | null>(null);
+  const [fetchedColumnsBoardId, setFetchedColumnsBoardId] = useState<string | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   const columnsForTarget = useMemo<ColumnDto[] | null>(() => {
     if (!targetBoard) return null;
     if (targetBoard.id === currentBoardId) return storeColumns;
-    return fetchedColumns;
-  }, [targetBoard, currentBoardId, storeColumns, fetchedColumns]);
+    return fetchedColumnsBoardId === targetBoard.id ? fetchedColumns : null;
+  }, [targetBoard, currentBoardId, storeColumns, fetchedColumns, fetchedColumnsBoardId]);
 
   useEffect(() => {
     if (!targetBoard) return;
     if (targetBoard.id === currentBoardId) return;
+    if (fetchedColumnsBoardId === targetBoard.id) return;
     let alive = true;
     void columnsList(targetBoard.id)
       .then((cols) => {
         if (!alive) return;
         setFetchedColumns(cols);
+        setFetchedColumnsBoardId(targetBoard.id);
+        setFetchError(null);
       })
       .catch((e: unknown) => {
         if (!alive) return;
@@ -61,7 +67,7 @@ export default function QuickAddModal({ onClose }: Props) {
     return () => {
       alive = false;
     };
-  }, [targetBoard, currentBoardId]);
+  }, [targetBoard, currentBoardId, fetchedColumnsBoardId]);
 
   const incoming = useMemo(
     () => (columnsForTarget ? findIncoming(columnsForTarget) : null),

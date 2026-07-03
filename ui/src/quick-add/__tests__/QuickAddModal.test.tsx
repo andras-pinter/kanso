@@ -226,6 +226,42 @@ describe('QuickAddModal', () => {
     expect(calls).toContain('card_create');
   });
 
+  it('does not reuse fetched columns after target board changes', async () => {
+    seedStore({ currentBoardId: null });
+    const fetches: string[] = [];
+    let createArgs: { columnId: string; title: string } | null = null;
+    __setInvoker(async (cmd, args) => {
+      if (cmd === 'columns_list') {
+        const a = args as { boardId: string };
+        fetches.push(a.boardId);
+        if (a.boardId === 'b1') {
+          return [column('a-in', 'b1', 'Incoming')] as never;
+        }
+        return [column('b-in', 'b2', 'Incoming')] as never;
+      }
+      if (cmd === 'card_create') {
+        const a = args as { columnId: string; title: string };
+        createArgs = { columnId: a.columnId, title: a.title };
+        return card('c1', a.columnId, a.title) as never;
+      }
+      return undefined as never;
+    });
+
+    const closeSpy = vi.fn();
+    const { rerender } = render(<QuickAddModal onClose={closeSpy} />);
+    await waitFor(() => expect(fetches).toContain('b1'));
+
+    // Simulate the store switching its "first board" to b2 while modal is open.
+    useKanbanStore.setState({ boards: [board('b2', 'Work'), board('b1', 'Personal')] });
+    rerender(<QuickAddModal onClose={closeSpy} />);
+
+    await waitFor(() => expect(fetches).toContain('b2'));
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'x' } });
+    fireEvent.submit(screen.getByLabelText('Title').closest('form')!);
+    await waitFor(() => expect(closeSpy).toHaveBeenCalled());
+    expect(createArgs).toEqual({ columnId: 'b-in', title: 'x' });
+  });
+
   it('focus trap wraps from last back to first on Tab', () => {
     __setInvoker(async () => undefined as never);
     render(<QuickAddModal onClose={() => undefined} />);

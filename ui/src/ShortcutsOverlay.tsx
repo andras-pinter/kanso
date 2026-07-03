@@ -22,8 +22,8 @@ const GROUPS: Group[] = [
   {
     title: 'Global',
     items: [
-      { keys: [mod, 'K'], description: 'Search cards' },
-      { keys: [mod, 'Shift', 'K'], description: 'Quick add (works system-wide)' },
+      { keys: [mod, 'F'], description: `Search cards (also ${mod}+K)` },
+      { keys: [mod, 'N'], description: 'Quick add' },
       { keys: ['?'], description: 'Show this cheatsheet' },
       { keys: ['Esc'], description: 'Close dialog or overlay' },
     ],

@@ -31,7 +31,6 @@ sqlx = { workspace = true }
 kanso-core = { path = "../kanso-core" }
 kanso-api = { path = "../kanso-api" }
 tauri-plugin-dialog = "2"
-tauri-plugin-global-shortcut = "2"
 tauri-plugin-autostart = "2"
 fs2 = "0.4"
 wait-timeout = "0.2"

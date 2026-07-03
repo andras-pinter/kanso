@@ -22,7 +22,7 @@ import CardDetailModal from './CardDetailModal';
 import ErrorBoundary from '../ErrorBoundary';
 import { CardOverlay } from './Card';
 import { useKanbanStore } from './hooks/useKanbanStore';
-import { useCmdK } from './hooks/useCmdK';
+import { useCmdF, useCmdK, useCmdN } from './hooks/useCmdK';
 import ManageTagsDrawer from './ManageTagsDrawer';
 import SearchPalette from './SearchPalette';
 import QuickAddModal from '../quick-add/QuickAddModal';
@@ -53,6 +53,8 @@ export default function KanbanBoard() {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   useCmdK(useCallback(() => setPaletteOpen(true), []));
+  useCmdF(useCallback(() => setPaletteOpen(true), []));
+  useCmdN(useCallback(() => setQuickAddOpen(true), []));
   useShortcutsHotkey(useCallback(() => setShortcutsOpen((v) => !v), []));
   useQuickAddOpenEvent(useCallback(() => setQuickAddOpen(true), []));
 
@@ -147,11 +149,21 @@ export default function KanbanBoard() {
           type="button"
           className="kanso-btn kanso-btn--icon"
           onClick={() => setPaletteOpen(true)}
-          title="Search (⌘K)"
+          title="Search (⌘F)"
         >
           <Search size={14} aria-hidden="true" />
           <span>Search</span>
-          <kbd className="kanso-kbd">⌘K</kbd>
+          <kbd className="kanso-kbd">⌘F</kbd>
+        </button>
+        <button
+          type="button"
+          className="kanso-btn kanso-btn--icon"
+          onClick={() => setQuickAddOpen(true)}
+          title="Quick add (⌘N)"
+        >
+          <Plus size={14} aria-hidden="true" />
+          <span>Quick add</span>
+          <kbd className="kanso-kbd">⌘N</kbd>
         </button>
         <button
           type="button"

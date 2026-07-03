@@ -1,5 +1,6 @@
-// Quick-add card surface: title + board + column → cardCreate → close.
-// Mounted in KanbanBoard, opened by ⌘⇧K, tray menu, or button.
+// Quick-add card surface. Always targets the current board's Incoming
+// column. Opened by ⌘N, tray menu, or the toolbar button. Two states:
+// title + submitting + err. No board or column selectors.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { cardCreate, columnsList } from '../kanban/api/client';
@@ -13,70 +14,72 @@ interface Props {
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+const INCOMING = 'incoming';
+
+function findIncoming(cols: readonly ColumnDto[]): ColumnDto | null {
+  return cols.find((c) => c.name.trim().toLowerCase() === INCOMING) ?? null;
+}
+
 export default function QuickAddModal({ onClose }: Props) {
   const boards = useKanbanStore((s) => s.boards);
   const currentBoardId = useKanbanStore((s) => s.currentBoardId);
   const storeColumns = useKanbanStore((s) => s.columns);
   const addCard = useKanbanStore((s) => s.addCard);
 
-  const defaultBoardId = useMemo(() => {
-    if (currentBoardId && boards.some((b) => b.id === currentBoardId)) {
-      return currentBoardId;
+  const targetBoard = useMemo(() => {
+    if (currentBoardId) {
+      const hit = boards.find((b) => b.id === currentBoardId);
+      if (hit) return hit;
     }
-    return boards[0]?.id ?? '';
+    return boards[0] ?? null;
   }, [currentBoardId, boards]);
 
-  const [boardId, setBoardId] = useState(defaultBoardId);
-  // Columns fetched for a board that isn't the current store board. Empty
-  // when the current store board is selected (we derive from `storeColumns`).
-  const [fetchedColumns, setFetchedColumns] = useState<ColumnDto[]>([]);
+  // For the current board we already have columns in the store. For a
+  // fallback board (e.g. currentBoardId cleared) we lazy-fetch once and
+  // remember which board they were for so a subsequent target switch
+  // doesn't accidentally reuse the previous board's columns.
+  const [fetchedColumns, setFetchedColumns] = useState<ColumnDto[] | null>(null);
   const [fetchedColumnsBoardId, setFetchedColumnsBoardId] = useState<string | null>(null);
-  const [columnId, setColumnId] = useState<string>('');
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
+  const columnsForTarget = useMemo<ColumnDto[] | null>(() => {
+    if (!targetBoard) return null;
+    if (targetBoard.id === currentBoardId) return storeColumns;
+    return fetchedColumnsBoardId === targetBoard.id ? fetchedColumns : null;
+  }, [targetBoard, currentBoardId, storeColumns, fetchedColumns, fetchedColumnsBoardId]);
+
+  useEffect(() => {
+    if (!targetBoard) return;
+    if (targetBoard.id === currentBoardId) return;
+    if (fetchedColumnsBoardId === targetBoard.id) return;
+    let alive = true;
+    void columnsList(targetBoard.id)
+      .then((cols) => {
+        if (!alive) return;
+        setFetchedColumns(cols);
+        setFetchedColumnsBoardId(targetBoard.id);
+        setFetchError(null);
+      })
+      .catch((e: unknown) => {
+        if (!alive) return;
+        setFetchError(formatError(e));
+      });
+    return () => {
+      alive = false;
+    };
+  }, [targetBoard, currentBoardId, fetchedColumnsBoardId]);
+
+  const incoming = useMemo(
+    () => (columnsForTarget ? findIncoming(columnsForTarget) : null),
+    [columnsForTarget],
+  );
+
   const [title, setTitle] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const modalRef = useRef<HTMLDivElement | null>(null);
   const titleRef = useRef<HTMLInputElement | null>(null);
-
-  // Columns to render: store columns when the chosen board matches the
-  // current store board, otherwise whatever the fetch effect produced.
-  const columns = useMemo<ColumnDto[]>(() => {
-    if (!boardId) return [];
-    if (boardId === currentBoardId) return storeColumns;
-    return boardId === fetchedColumnsBoardId ? fetchedColumns : [];
-  }, [boardId, currentBoardId, storeColumns, fetchedColumns, fetchedColumnsBoardId]);
-
-  // Keep columnId in sync with the available columns. Selection survives if
-  // the previously-chosen column still exists in the new list. Adjusting
-  // state during render (vs. in an effect) is the recommended pattern when
-  // state depends on derived data.
-  const desiredColumnId = columns.some((c) => c.id === columnId)
-    ? columnId
-    : columns[0]?.id ?? '';
-  if (desiredColumnId !== columnId) {
-    setColumnId(desiredColumnId);
-  }
-
-  // Fetch columns for foreign boards. No-op when the chosen board matches
-  // the store's current board (derived synchronously above).
-  useEffect(() => {
-    if (!boardId || boardId === currentBoardId) return;
-    let alive = true;
-    void columnsList(boardId)
-      .then((cols) => {
-        if (!alive) return;
-        setFetchedColumns(cols);
-        setFetchedColumnsBoardId(boardId);
-      })
-      .catch((e: unknown) => {
-        if (!alive) return;
-        setErr(formatError(e));
-      });
-    return () => {
-      alive = false;
-    };
-  }, [boardId, currentBoardId]);
 
   useEffect(() => {
     titleRef.current?.focus();
@@ -109,17 +112,14 @@ export default function QuickAddModal({ onClose }: Props) {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = title.trim();
-    if (!trimmed || !columnId || submitting) return;
+    if (!trimmed || !targetBoard || !incoming || submitting) return;
     setSubmitting(true);
     setErr(null);
     try {
-      // For the current board, route through the store so the column
-      // optimistically gains the new card. For other boards, write directly —
-      // the user isn't looking at them so there's no UI to update.
-      if (boardId === currentBoardId) {
-        await addCard(columnId, trimmed);
+      if (targetBoard.id === currentBoardId) {
+        await addCard(incoming.id, trimmed);
       } else {
-        await cardCreate(columnId, trimmed);
+        await cardCreate(incoming.id, trimmed);
       }
       onClose();
     } catch (e2) {
@@ -128,8 +128,16 @@ export default function QuickAddModal({ onClose }: Props) {
     }
   };
 
+  const noBoard = !targetBoard;
+  const columnsMissing = !!targetBoard && !!columnsForTarget && !incoming;
+  const targetLabel = targetBoard ? `Adding to: ${targetBoard.name} · Incoming` : null;
+  const stateError = noBoard
+    ? 'No boards yet — create one first.'
+    : columnsMissing
+      ? 'No Incoming column found on this board.'
+      : fetchError;
   const disabled =
-    submitting || title.trim().length === 0 || columnId === '' || boardId === '';
+    submitting || title.trim().length === 0 || !incoming || !!stateError;
 
   return (
     <div className="kanso-modal-backdrop" onClick={onClose} role="presentation">
@@ -149,80 +157,46 @@ export default function QuickAddModal({ onClose }: Props) {
           </button>
         </header>
         <form className="kanso-modal-body" onSubmit={onSubmit}>
-          {boards.length === 0 ? (
-            <p className="kanso-board-state">No boards yet — create one first.</p>
-          ) : (
-            <>
-              <div className="kanso-field">
-                <label className="kanso-label" htmlFor="kanso-quick-add-title">
-                  Title
-                </label>
-                <input
-                  id="kanso-quick-add-title"
-                  ref={titleRef}
-                  className="kanso-title-input"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="What needs doing?"
-                  autoComplete="off"
-                />
-              </div>
-              <div className="kanso-field">
-                <label className="kanso-label" htmlFor="kanso-quick-add-board">
-                  Board
-                </label>
-                <select
-                  id="kanso-quick-add-board"
-                  className="kanso-select"
-                  value={boardId}
-                  onChange={(e) => setBoardId(e.target.value)}
-                >
-                  {boards.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="kanso-field">
-                <label className="kanso-label" htmlFor="kanso-quick-add-column">
-                  Column
-                </label>
-                <select
-                  id="kanso-quick-add-column"
-                  className="kanso-select"
-                  value={columnId}
-                  onChange={(e) => setColumnId(e.target.value)}
-                  disabled={columns.length === 0}
-                >
-                  {columns.length === 0 ? (
-                    <option value="">(no columns)</option>
-                  ) : (
-                    columns.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))
-                  )}
-                </select>
-              </div>
-              {err && (
-                <p className="kanso-modal-error" role="alert">
-                  {err}
-                </p>
-              )}
-              <div className="kanso-modal-footer">
-                <span />
-                <button
-                  type="submit"
-                  className="kanso-btn kanso-btn--primary"
-                  disabled={disabled}
-                >
-                  Add card
-                </button>
-              </div>
-            </>
+          {targetLabel && (
+            <p className="kanso-quick-add-target" aria-live="polite">
+              {targetLabel}
+            </p>
           )}
+          <div className="kanso-field">
+            <label className="kanso-label" htmlFor="kanso-quick-add-title">
+              Title
+            </label>
+            <input
+              id="kanso-quick-add-title"
+              ref={titleRef}
+              className="kanso-title-input"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="What needs doing?"
+              autoComplete="off"
+              disabled={!!stateError}
+            />
+          </div>
+          {stateError && (
+            <p className="kanso-modal-error" role="alert">
+              {stateError}
+            </p>
+          )}
+          {err && !stateError && (
+            <p className="kanso-modal-error" role="alert">
+              {err}
+            </p>
+          )}
+          <div className="kanso-modal-footer">
+            <span />
+            <button
+              type="submit"
+              className="kanso-btn kanso-btn--primary"
+              disabled={disabled}
+            >
+              Add card
+            </button>
+          </div>
         </form>
       </div>
     </div>

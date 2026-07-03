@@ -143,24 +143,208 @@ describe('TagPickerPopover - new tag visibility', () => {
     // The user then closes the drawer and opens a card FAST — before the
     // API round-trip resolves. The popover must still pick up the new tag
     // once the store commits it.
+    //
+    // Gate the tag_create response with a manual promise so the test
+    // exercises the real async ordering: create in flight, popover mounts,
+    // response arrives.
+    let releaseCreate!: () => void;
+    const createGate = new Promise<void>((res) => {
+      releaseCreate = res;
+    });
+    const base = buildInvoker(server);
+    __setInvoker(async (cmd, args) => {
+      if (cmd === 'tag_create') {
+        await createGate;
+      }
+      return base(cmd, args);
+    });
+
     await act(async () => {
       await useKanbanStore.getState().loadTags();
     });
 
-    // Fire without awaiting.
+    // Fire without awaiting — the response is now held by createGate.
     const creating = useKanbanStore.getState().tagCreate('async-tag');
 
     render(<TagPickerPopover cardId="card-3" />);
     fireEvent.click(screen.getByRole('button', { name: '+ Add tag' }));
 
-    // Not there yet — still in flight.
+    // Not there yet — still in flight, gated.
     expect(screen.queryByText('async-tag')).toBeNull();
 
-    // Let the create settle.
+    // Release the create; store commits.
     await act(async () => {
+      releaseCreate();
       await creating;
     });
 
     expect(screen.getByText('async-tag')).toBeTruthy();
+  });
+
+  it('survives a slow tags_list that resolves after a tagCreate', async () => {
+    // Reported race: user opens ManageTagsDrawer (fires loadTags), quickly
+    // creates a tag before loadTags settles, then opens a card's picker.
+    // If loadTags blindly commits its stale snapshot on top of the created
+    // tag, the picker's `available` list drops the just-created tag.
+    //
+    // The fake locks in a STALE tags_list payload up-front (matching real
+    // IPC: the response was serialized on the server before tag_create
+    // ran, so it cannot include the new tag). tag_create resolves
+    // immediately.
+    const staleSnapshot: TagDto[] = [{ ...tag('t1', 'existing') }];
+    let releaseList!: () => void;
+    const listGate = new Promise<void>((res) => {
+      releaseList = res;
+    });
+    __setInvoker(async (cmd, args) => {
+      const a = (args ?? {}) as Record<string, unknown>;
+      switch (cmd) {
+        case 'tags_list':
+          await listGate;
+          return staleSnapshot.map((t) => ({ ...t })) as never;
+        case 'board_card_tags_list':
+          return [] as never;
+        case 'tag_create': {
+          const body = a.body as { name: string; color?: string | null };
+          const created = tag('srv-race', body.name);
+          created.color = body.color ?? null;
+          return { ...created } as never;
+        }
+        default:
+          return undefined as never;
+      }
+    });
+
+    // Drawer starts loadTags (slow, gated).
+    const loading = useKanbanStore.getState().loadTags();
+    // Let it enter the tagsList await.
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // User creates a tag while loadTags is still pending.
+    await act(async () => {
+      await useKanbanStore.getState().tagCreate('race-tag');
+    });
+    expect(useKanbanStore.getState().tags.some((t) => t.name === 'race-tag')).toBe(true);
+
+    // Slow tags_list finally resolves with the stale pre-create snapshot.
+    await act(async () => {
+      releaseList();
+      await loading;
+    });
+
+    // race-tag must still be present — loadTags must not have clobbered it.
+    render(<TagPickerPopover cardId="card-4" />);
+    fireEvent.click(screen.getByRole('button', { name: '+ Add tag' }));
+    expect(screen.getByText('race-tag')).toBeTruthy();
+  });
+
+  it('survives a slow tags_list that resolves after a tagDelete (no resurrection)', async () => {
+    // Companion to the tagCreate race: if the user deletes a tag while
+    // a stale tags_list is in flight, the fetched snapshot still
+    // includes the deleted tag. loadTags must not resurrect it.
+    const staleSnapshot: TagDto[] = [
+      { ...tag('t1', 'existing') },
+      { ...tag('t2', 'condemned') },
+    ];
+    let releaseList!: () => void;
+    const listGate = new Promise<void>((res) => {
+      releaseList = res;
+    });
+    __setInvoker(async (cmd, args) => {
+      const a = (args ?? {}) as Record<string, unknown>;
+      switch (cmd) {
+        case 'tags_list':
+          await listGate;
+          return staleSnapshot.map((t) => ({ ...t })) as never;
+        case 'board_card_tags_list':
+          return [] as never;
+        case 'tag_delete':
+          void a;
+          return undefined as never;
+        default:
+          return undefined as never;
+      }
+    });
+
+    useKanbanStore.setState({
+      tags: [tag('t1', 'existing'), tag('t2', 'condemned')],
+      tagsLoaded: true,
+    });
+
+    const loading = useKanbanStore.getState().loadTags();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await useKanbanStore.getState().tagDelete('t2');
+    });
+    expect(useKanbanStore.getState().tags.some((t) => t.id === 't2')).toBe(false);
+
+    await act(async () => {
+      releaseList();
+      await loading;
+    });
+
+    expect(useKanbanStore.getState().tags.some((t) => t.id === 't2')).toBe(false);
+  });
+
+  it('survives a slow tags_list that resolves after a tagUpdate (no rollback)', async () => {
+    // If a stale tags_list arrives after a successful rename, the fetched
+    // entry's name is stale. loadTags must keep the fresher local copy.
+    const staleSnapshot: TagDto[] = [
+      { id: 't1', name: 'old-name', color: null, created_at: 0, updated_at: 100 },
+    ];
+    let releaseList!: () => void;
+    const listGate = new Promise<void>((res) => {
+      releaseList = res;
+    });
+    __setInvoker(async (cmd, args) => {
+      const a = (args ?? {}) as Record<string, unknown>;
+      switch (cmd) {
+        case 'tags_list':
+          await listGate;
+          return staleSnapshot.map((t) => ({ ...t })) as never;
+        case 'board_card_tags_list':
+          return [] as never;
+        case 'tag_update': {
+          const patch = a.patch as { name?: string; color?: string | null };
+          return {
+            id: 't1',
+            name: patch.name ?? 'old-name',
+            color: patch.color === undefined ? null : patch.color,
+            created_at: 0,
+            updated_at: 500,
+          } as never;
+        }
+        default:
+          return undefined as never;
+      }
+    });
+
+    useKanbanStore.setState({
+      tags: [{ id: 't1', name: 'old-name', color: null, created_at: 0, updated_at: 100 }],
+      tagsLoaded: true,
+    });
+
+    const loading = useKanbanStore.getState().loadTags();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await useKanbanStore.getState().tagUpdate('t1', { name: 'new-name' });
+    });
+    expect(useKanbanStore.getState().tags.find((t) => t.id === 't1')?.name).toBe('new-name');
+
+    await act(async () => {
+      releaseList();
+      await loading;
+    });
+
+    // The fresher local copy must win over the stale server snapshot.
+    expect(useKanbanStore.getState().tags.find((t) => t.id === 't1')?.name).toBe('new-name');
   });
 });

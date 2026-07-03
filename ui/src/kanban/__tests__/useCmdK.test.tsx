@@ -1,14 +1,15 @@
-// M1 regression: Cmd+K must not steal focus from inputs, textareas,
-// selects, or contentEditable surfaces (BlockSuite editor).
+// Keyboard shortcuts: ⌘F opens search, ⌘N opens quick-add. ⌘K stays
+// aliased to ⌘F for muscle memory. All three are suppressed inside the
+// document editor (contenteditable / `.kanso-doc-content`); ⌘N is also
+// suppressed inside plain form inputs so it doesn't clobber typing.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderHook } from '@testing-library/react';
-import { useCmdK } from '../hooks/useCmdK';
+import { useCmdF, useCmdK, useCmdN } from '../hooks/useCmdK';
 
-function dispatchCmdK(target: Element) {
-  // Pretend we're on macOS so metaKey is the active modifier.
+function dispatchMod(key: string, target: Element) {
   const ev = new KeyboardEvent('keydown', {
-    key: 'k',
+    key,
     metaKey: true,
     bubbles: true,
     cancelable: true,
@@ -18,7 +19,7 @@ function dispatchCmdK(target: Element) {
   return ev;
 }
 
-describe('useCmdK', () => {
+describe('mod-key shortcuts', () => {
   const realPlatform = navigator.platform;
 
   beforeEach(() => {
@@ -36,41 +37,109 @@ describe('useCmdK', () => {
     document.body.innerHTML = '';
   });
 
-  it('fires on Cmd+K from body', () => {
-    const trigger = vi.fn();
-    renderHook(() => useCmdK(trigger));
-    dispatchCmdK(document.body);
-    expect(trigger).toHaveBeenCalledTimes(1);
+  describe('useCmdF', () => {
+    it('fires on Cmd+F from body', () => {
+      const trigger = vi.fn();
+      renderHook(() => useCmdF(trigger));
+      const ev = dispatchMod('f', document.body);
+      expect(trigger).toHaveBeenCalledTimes(1);
+      expect(ev.defaultPrevented).toBe(true);
+    });
+
+    it('still fires when focus is in a plain INPUT (palette-search is unrelated to typing)', () => {
+      const trigger = vi.fn();
+      renderHook(() => useCmdF(trigger));
+      const input = document.createElement('input');
+      document.body.appendChild(input);
+      dispatchMod('f', input);
+      expect(trigger).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT fire inside a contentEditable surface (browser find handles it)', () => {
+      const trigger = vi.fn();
+      renderHook(() => useCmdF(trigger));
+      const wrap = document.createElement('div');
+      wrap.setAttribute('contenteditable', 'true');
+      const inner = document.createElement('span');
+      wrap.appendChild(inner);
+      document.body.appendChild(wrap);
+      const ev = dispatchMod('f', inner);
+      expect(trigger).not.toHaveBeenCalled();
+      expect(ev.defaultPrevented).toBe(false);
+    });
+
+    it('does NOT fire inside `.kanso-doc-content`', () => {
+      const trigger = vi.fn();
+      renderHook(() => useCmdF(trigger));
+      const doc = document.createElement('div');
+      doc.className = 'kanso-doc-content';
+      const inner = document.createElement('div');
+      doc.appendChild(inner);
+      document.body.appendChild(doc);
+      const ev = dispatchMod('f', inner);
+      expect(trigger).not.toHaveBeenCalled();
+      expect(ev.defaultPrevented).toBe(false);
+    });
   });
 
-  it('does not fire when focus is in an INPUT', () => {
-    const trigger = vi.fn();
-    renderHook(() => useCmdK(trigger));
-    const input = document.createElement('input');
-    document.body.appendChild(input);
-    const ev = dispatchCmdK(input);
-    expect(trigger).not.toHaveBeenCalled();
-    expect(ev.defaultPrevented).toBe(false);
+  describe('useCmdN', () => {
+    it('fires on Cmd+N from body', () => {
+      const trigger = vi.fn();
+      renderHook(() => useCmdN(trigger));
+      const ev = dispatchMod('n', document.body);
+      expect(trigger).toHaveBeenCalledTimes(1);
+      expect(ev.defaultPrevented).toBe(true);
+    });
+
+    it('does NOT fire when focus is in an INPUT', () => {
+      const trigger = vi.fn();
+      renderHook(() => useCmdN(trigger));
+      const input = document.createElement('input');
+      document.body.appendChild(input);
+      dispatchMod('n', input);
+      expect(trigger).not.toHaveBeenCalled();
+    });
+
+    it('does NOT fire when focus is in a TEXTAREA', () => {
+      const trigger = vi.fn();
+      renderHook(() => useCmdN(trigger));
+      const ta = document.createElement('textarea');
+      document.body.appendChild(ta);
+      dispatchMod('n', ta);
+      expect(trigger).not.toHaveBeenCalled();
+    });
+
+    it('does NOT fire inside a contentEditable surface', () => {
+      const trigger = vi.fn();
+      renderHook(() => useCmdN(trigger));
+      const wrap = document.createElement('div');
+      wrap.setAttribute('contenteditable', 'true');
+      const inner = document.createElement('span');
+      wrap.appendChild(inner);
+      document.body.appendChild(wrap);
+      dispatchMod('n', inner);
+      expect(trigger).not.toHaveBeenCalled();
+    });
   });
 
-  it('does not fire when focus is in a TEXTAREA', () => {
-    const trigger = vi.fn();
-    renderHook(() => useCmdK(trigger));
-    const ta = document.createElement('textarea');
-    document.body.appendChild(ta);
-    dispatchCmdK(ta);
-    expect(trigger).not.toHaveBeenCalled();
-  });
+  describe('useCmdK (alias of useCmdF)', () => {
+    it('fires on Cmd+K from body', () => {
+      const trigger = vi.fn();
+      renderHook(() => useCmdK(trigger));
+      dispatchMod('k', document.body);
+      expect(trigger).toHaveBeenCalledTimes(1);
+    });
 
-  it('does not fire inside a contentEditable surface', () => {
-    const trigger = vi.fn();
-    renderHook(() => useCmdK(trigger));
-    const wrap = document.createElement('div');
-    wrap.setAttribute('contenteditable', 'true');
-    const inner = document.createElement('span');
-    wrap.appendChild(inner);
-    document.body.appendChild(wrap);
-    dispatchCmdK(inner);
-    expect(trigger).not.toHaveBeenCalled();
+    it('does NOT fire inside `.kanso-doc-content`', () => {
+      const trigger = vi.fn();
+      renderHook(() => useCmdK(trigger));
+      const doc = document.createElement('div');
+      doc.className = 'kanso-doc-content';
+      const inner = document.createElement('div');
+      doc.appendChild(inner);
+      document.body.appendChild(doc);
+      dispatchMod('k', inner);
+      expect(trigger).not.toHaveBeenCalled();
+    });
   });
 });

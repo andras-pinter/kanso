@@ -42,17 +42,26 @@ function card(id: string, column_id: string, title: string): CardDto {
   };
 }
 
-function seedStore(opts: { currentBoardId: string | null }) {
+interface SeedOpts {
+  currentBoardId: string | null;
+  columns?: ColumnDto[];
+}
+
+function seedStore(opts: SeedOpts) {
   const b1 = board('b1', 'Personal');
   const b2 = board('b2', 'Work');
-  const cols = [column('col1', 'b1', 'To Do'), column('col2', 'b1', 'Done')];
+  const cols = opts.columns ?? [
+    column('col1', 'b1', 'Incoming'),
+    column('col2', 'b1', 'Todo'),
+    column('col3', 'b1', 'Done'),
+  ];
   useKanbanStore.setState({
     status: 'ready',
     error: null,
     boards: [b1, b2],
     currentBoardId: opts.currentBoardId,
     columns: cols,
-    cardsByColumn: { col1: [], col2: [] },
+    cardsByColumn: Object.fromEntries(cols.map((c) => [c.id, []])),
     selectedCardId: null,
     tags: [],
     tagsLoaded: true,
@@ -70,24 +79,21 @@ describe('QuickAddModal', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders title input, board selector defaulted to current, column to first', () => {
+  it('renders title input, focused, and target label for current board', () => {
     __setInvoker(async () => undefined as never);
     render(<QuickAddModal onClose={() => undefined} />);
     expect(screen.getByRole('dialog', { name: /quick add card/i })).toBeTruthy();
 
     const titleInput = screen.getByLabelText('Title') as HTMLInputElement;
     expect(titleInput).toBeTruthy();
-    // Autofocus
     expect(document.activeElement).toBe(titleInput);
 
-    const boardSelect = screen.getByLabelText('Board') as HTMLSelectElement;
-    expect(boardSelect.value).toBe('b1');
-
-    const colSelect = screen.getByLabelText('Column') as HTMLSelectElement;
-    expect(colSelect.value).toBe('col1');
+    expect(screen.getByText(/Adding to: Personal · Incoming/i)).toBeTruthy();
+    expect(screen.queryByLabelText('Board')).toBeNull();
+    expect(screen.queryByLabelText('Column')).toBeNull();
   });
 
-  it('submitting calls card_create on the chosen column then closes', async () => {
+  it('submitting calls card_create on the Incoming column then closes', async () => {
     let createArgs: { columnId: string; title: string } | null = null;
     const invoker: InvokeFn = async (cmd, args) => {
       if (cmd === 'card_create') {
@@ -106,6 +112,33 @@ describe('QuickAddModal', () => {
 
     await waitFor(() => expect(closeSpy).toHaveBeenCalled());
     expect(createArgs).toEqual({ columnId: 'col1', title: 'Buy milk' });
+  });
+
+  it('matches Incoming case-insensitively', async () => {
+    seedStore({
+      currentBoardId: 'b1',
+      columns: [
+        column('cX', 'b1', '  incoming  '),
+        column('cY', 'b1', 'Todo'),
+      ],
+    });
+    let createArgs: { columnId: string; title: string } | null = null;
+    __setInvoker(async (cmd, args) => {
+      if (cmd === 'card_create') {
+        const a = args as { columnId: string; title: string };
+        createArgs = { columnId: a.columnId, title: a.title };
+        return card('c1', a.columnId, a.title) as never;
+      }
+      return undefined as never;
+    });
+
+    const closeSpy = vi.fn();
+    render(<QuickAddModal onClose={closeSpy} />);
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'test' } });
+    fireEvent.submit(screen.getByLabelText('Title').closest('form')!);
+
+    await waitFor(() => expect(closeSpy).toHaveBeenCalled());
+    expect(createArgs).toEqual({ columnId: 'cX', title: 'test' });
   });
 
   it('Esc closes', () => {
@@ -134,26 +167,63 @@ describe('QuickAddModal', () => {
     expect(btn.disabled).toBe(false);
   });
 
-  it('switching to a non-current board fetches its columns via columns_list', async () => {
+  it('shows error and disables submit when no Incoming column exists', () => {
+    seedStore({
+      currentBoardId: 'b1',
+      columns: [column('c1', 'b1', 'Todo'), column('c2', 'b1', 'Done')],
+    });
+    __setInvoker(async () => undefined as never);
+    render(<QuickAddModal onClose={() => undefined} />);
+    expect(screen.getByText(/No Incoming column/i)).toBeTruthy();
+    const btn = screen.getByRole('button', { name: /add card/i }) as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+  });
+
+  it('shows error and disables submit when no boards exist', () => {
+    useKanbanStore.setState({
+      status: 'ready',
+      error: null,
+      boards: [],
+      currentBoardId: null,
+      columns: [],
+      cardsByColumn: {},
+      selectedCardId: null,
+      tags: [],
+      tagsLoaded: true,
+      cardTagMap: {},
+    });
+    __setInvoker(async () => undefined as never);
+    render(<QuickAddModal onClose={() => undefined} />);
+    expect(screen.getByText(/No boards yet/i)).toBeTruthy();
+    const btn = screen.getByRole('button', { name: /add card/i }) as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+  });
+
+  it('falls back to first board and lazy-fetches its columns when currentBoardId is null', async () => {
+    seedStore({ currentBoardId: null });
     const calls: string[] = [];
-    const invoker: InvokeFn = async (cmd, args) => {
+    __setInvoker(async (cmd, args) => {
       calls.push(cmd);
       if (cmd === 'columns_list') {
         const a = args as { boardId: string };
-        return [column('w1', a.boardId, 'Backlog'), column('w2', a.boardId, 'WIP')] as never;
+        return [column('bc1', a.boardId, 'Incoming'), column('bc2', a.boardId, 'Todo')] as never;
+      }
+      if (cmd === 'card_create') {
+        const a = args as { columnId: string; title: string };
+        return card('c1', a.columnId, a.title) as never;
       }
       return undefined as never;
-    };
-    __setInvoker(invoker);
-
-    render(<QuickAddModal onClose={() => undefined} />);
-    fireEvent.change(screen.getByLabelText('Board'), { target: { value: 'b2' } });
-
-    await waitFor(() => {
-      const colSelect = screen.getByLabelText('Column') as HTMLSelectElement;
-      expect(colSelect.value).toBe('w1');
     });
-    expect(calls).toContain('columns_list');
+
+    const closeSpy = vi.fn();
+    render(<QuickAddModal onClose={closeSpy} />);
+    expect(screen.getByText(/Adding to: Personal · Incoming/i)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'via api' } });
+
+    await waitFor(() => expect(calls).toContain('columns_list'));
+    fireEvent.submit(screen.getByLabelText('Title').closest('form')!);
+    await waitFor(() => expect(closeSpy).toHaveBeenCalled());
+    expect(calls).toContain('card_create');
   });
 
   it('focus trap wraps from last back to first on Tab', () => {

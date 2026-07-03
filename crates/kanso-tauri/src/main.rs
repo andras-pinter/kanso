@@ -11,7 +11,6 @@ use tauri::menu::MenuBuilder;
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
-use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 
@@ -37,17 +36,6 @@ const MENU_UNINSTALL_MCP: &str = "uninstall_mcp";
 const MENU_QUIT: &str = "quit";
 
 const QUICK_ADD_EVENT: &str = "quick-add:open";
-
-// CmdOrCtrl+Shift+K — SUPER on macOS, CONTROL elsewhere. Not a `const`
-// because `Shortcut::new` isn't `const fn` in the plugin.
-#[cfg(target_os = "macos")]
-fn quick_add_shortcut() -> Shortcut {
-    Shortcut::new(Some(Modifiers::SHIFT.union(Modifiers::SUPER)), Code::KeyK)
-}
-#[cfg(not(target_os = "macos"))]
-fn quick_add_shortcut() -> Shortcut {
-    Shortcut::new(Some(Modifiers::SHIFT.union(Modifiers::CONTROL)), Code::KeyK)
-}
 
 #[derive(Clone)]
 pub struct RuntimeState {
@@ -126,17 +114,6 @@ fn main() {
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .plugin(
-            tauri_plugin_global_shortcut::Builder::new()
-                .with_handler(|app, shortcut, event| {
-                    if event.state() == ShortcutState::Pressed
-                        && shortcut == &quick_add_shortcut()
-                    {
-                        open_quick_add(app);
-                    }
-                })
-                .build(),
-        )
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
@@ -182,12 +159,6 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             });
 
             setup_tray(&handle).map_err(|e| format!("setup tray: {e}"))?;
-            if let Err(e) = handle.global_shortcut().register(quick_add_shortcut()) {
-                tracing::warn!(
-                    error = ?e,
-                    "global shortcut registration failed; quick-add hotkey unavailable",
-                );
-            }
             if let Err(e) = ext_install::auto_upgrade_if_needed(&handle) {
                 show_error(&handle, "Copilot CLI extension", &e.user_message());
                 tracing::warn!(error = ?e, "extension auto-upgrade skipped");

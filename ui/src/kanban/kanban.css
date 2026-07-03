@@ -1183,6 +1183,12 @@ body {
   font-size: 13px;
 }
 
+.kanso-quick-add-target {
+  margin: 0 0 12px;
+  color: var(--kanso-fg-muted);
+  font-size: 13px;
+}
+
 /* ---------- Card-as-doc modal ----------
    Phase 1: the CardDetailModal is a document surface, not a form. Header
    collapses to save-pill + overflow menu + close icon; the title IS the

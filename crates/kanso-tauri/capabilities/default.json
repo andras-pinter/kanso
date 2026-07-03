@@ -9,6 +9,7 @@
     "dialog:allow-save",
     "autostart:allow-enable",
     "autostart:allow-disable",
-    "autostart:allow-is-enabled"
+    "autostart:allow-is-enabled",
+    "window-state:default"
   ]
 }

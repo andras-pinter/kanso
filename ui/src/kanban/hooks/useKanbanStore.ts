@@ -480,9 +480,44 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
   },
 
   loadTags: async () => {
+    // Snapshot the catalog before the request so we can distinguish
+    // "user mutated locally while we were in flight" from "server has
+    // fresh data we should trust".
+    const startById = new Map<string, TagDto>();
+    for (const t of get().tags) startById.set(t.id, t);
     try {
-      const tags = await tagsList();
-      set({ tags, tagsLoaded: true });
+      const fetched = await tagsList();
+      set((s) => {
+        const localById = new Map<string, TagDto>();
+        for (const t of s.tags) localById.set(t.id, t);
+        const merged: TagDto[] = [];
+        for (const remote of fetched) {
+          const local = localById.get(remote.id);
+          const wasPresentAtStart = startById.has(remote.id);
+          if (!local && wasPresentAtStart) {
+            // Existed at request start, gone locally now -> user
+            // deleted while the fetch was in flight. Don't resurrect.
+            continue;
+          }
+          if (local && local.updated_at > remote.updated_at) {
+            // Local was updated after the server snapshot was taken.
+            // Keep the fresher local copy.
+            merged.push(local);
+            continue;
+          }
+          merged.push(remote);
+        }
+        // Local-only ids that the server didn't return: preserve iff
+        // they're new since the request started (i.e. a concurrent
+        // tagCreate). Anything the server no longer knows about and
+        // that was already local at start is a server-side delete.
+        for (const local of s.tags) {
+          if (localById.has(local.id) && !merged.some((m) => m.id === local.id)) {
+            if (!startById.has(local.id)) merged.push(local);
+          }
+        }
+        return { tags: merged, tagsLoaded: true };
+      });
       const map = await fetchCardTagMap(get().currentBoardId);
       set({ cardTagMap: map });
     } catch (e) {

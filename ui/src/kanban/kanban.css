@@ -1133,9 +1133,9 @@ body {
 }
 
 .kanso-modal.kanso-modal--doc {
-  width: min(1000px, 100%);
-  height: min(88vh, 100vh - 48px);
-  max-height: min(88vh, 100vh - 48px);
+  width: min(1400px, 96vw);
+  height: min(94vh, 100vh - 24px);
+  max-height: min(94vh, 100vh - 24px);
   /* Grid so the title (header) sits top-left, the action row (saved pill,
      overflow menu, close) sits top-right on the same visual row, and the
      body spans full width underneath. DOM order is title → body →

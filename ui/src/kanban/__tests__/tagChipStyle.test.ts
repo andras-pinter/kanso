@@ -22,6 +22,25 @@ function contrast(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
+function rgb(hex: string): [number, number, number] {
+  const h = hex.replace('#', '');
+  return [
+    parseInt(h.slice(0, 2), 16),
+    parseInt(h.slice(2, 4), 16),
+    parseInt(h.slice(4, 6), 16),
+  ];
+}
+
+// Approximate chroma proxy in sRGB space: distance from the achromatic
+// axis, normalized. Cheap way to assert "tinted-neutral": backgrounds
+// must be close to neutral, foregrounds a bit further but still muted.
+function chromaProxy(hex: string): number {
+  const [r, g, b] = rgb(hex);
+  const mean = (r + g + b) / 3;
+  const dev = Math.sqrt(((r - mean) ** 2 + (g - mean) ** 2 + (b - mean) ** 2) / 3);
+  return dev / 255;
+}
+
 describe('tagChipStyle', () => {
   it('is deterministic across calls', () => {
     for (const id of ['a', 'tag-42', 'f1b3d9c0-ffff-4000-8000-000000000000']) {
@@ -69,5 +88,57 @@ describe('tagChipStyle', () => {
         `pair bg=${pair.background} fg=${pair.color} contrast=${ratio.toFixed(2)}`,
       ).toBeGreaterThanOrEqual(4.5);
     }
+  });
+
+  it('palette has at least 16 pairs (broadened from the original 10)', () => {
+    expect(__palette.length).toBeGreaterThanOrEqual(16);
+  });
+
+  it('every palette entry is a unique bg/fg pair', () => {
+    const keys = __palette.map((p) => `${p.background}|${p.color}`);
+    expect(new Set(keys).size).toBe(__palette.length);
+    // Backgrounds alone must also be distinct so two adjacent hash
+    // buckets never render the same chip color.
+    const bgs = __palette.map((p) => p.background);
+    expect(new Set(bgs).size).toBe(__palette.length);
+  });
+
+  it('backgrounds stay in the tinted-neutral register (chroma proxy <= 0.08)', () => {
+    // DESIGN.md hard constraint: chips must not compete with the accent
+    // color for attention. Anything saturated breaks that.
+    for (const pair of __palette) {
+      const c = chromaProxy(pair.background);
+      expect(c, `bg=${pair.background} chroma=${c.toFixed(3)}`).toBeLessThanOrEqual(0.08);
+    }
+  });
+
+  it('foregrounds stay muted (chroma proxy <= 0.15)', () => {
+    // Foregrounds carry more chroma than backgrounds but must still read
+    // as tinted-dark. The threshold is intentionally loose — the real
+    // constraint is authored in OKLCH (C ≤ 0.08); this sRGB proxy just
+    // catches accidental fully-saturated entries.
+    for (const pair of __palette) {
+      const c = chromaProxy(pair.color);
+      expect(c, `fg=${pair.color} chroma=${c.toFixed(3)}`).toBeLessThanOrEqual(0.15);
+    }
+  });
+
+  it('spans a broad hue range across backgrounds (not clustered)', () => {
+    // The palette used to cluster in a narrow tinted-neutral band. After
+    // the broadening pass, the maximum pairwise Euclidean RGB distance
+    // between backgrounds must be meaningfully larger than a monochrome
+    // set would produce.
+    let maxDist = 0;
+    for (let i = 0; i < __palette.length; i++) {
+      for (let j = i + 1; j < __palette.length; j++) {
+        const a = rgb(__palette[i]!.background);
+        const b = rgb(__palette[j]!.background);
+        const d = Math.sqrt(
+          (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2,
+        );
+        if (d > maxDist) maxDist = d;
+      }
+    }
+    expect(maxDist).toBeGreaterThanOrEqual(40);
   });
 });

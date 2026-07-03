@@ -393,11 +393,12 @@ body {
 .kanso-columns {
   flex: 1;
   display: flex;
-  gap: 16px;
+  gap: 24px;
   padding: 16px 24px 24px;
   overflow-x: auto;
   overflow-y: hidden;
   align-items: flex-start;
+  justify-content: safe center;
   scrollbar-width: thin;
 }
 
@@ -407,14 +408,10 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  width: 288px;
-  min-width: 288px;
-  max-width: 320px;
+  flex: 1 1 0;
+  min-width: 240px;
+  max-width: 360px;
   max-height: 100%;
-  background: var(--kanso-bg-elevated);
-  border: 1px solid var(--kanso-border);
-  border-radius: var(--kanso-radius-lg);
-  padding: 12px;
   box-sizing: border-box;
 }
 
@@ -422,19 +419,19 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 4px 0;
+  padding: 0;
 }
 
 .kanso-column-title {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 }
 
 .kanso-column-dot {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 999px;
   flex-shrink: 0;
 }

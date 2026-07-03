@@ -40,13 +40,8 @@ export default function Column({ column, cards }: Props) {
   const hiddenByFilter = filterActive && cards.length > 0 && visibleCards.length === 0;
   const trulyEmpty = cards.length === 0;
 
-  const stripeStyle = column.color
-    ? { borderTopColor: column.color, borderTopWidth: 3 }
-    : undefined;
-
   return (
     <section
-      style={stripeStyle}
       className="kanso-column"
       aria-label={column.name}
     >

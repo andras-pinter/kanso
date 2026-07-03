@@ -297,6 +297,54 @@ describe('CardDetailModal', () => {
     await waitFor(() => expect(deleted).toBe(true));
   });
 
+  it('rapid double-click on Delete does not fire two card_delete calls', async () => {
+    // Regression: `deleting` state only flips true AFTER the pre-delete
+    // commitTitle/flush awaits, so a second click during that window
+    // used to slip past the button's disabled guard and run a parallel
+    // deleteThis(). Ref-guard prevents that; two clicks -> one flush,
+    // one card_delete.
+    const def = deferred<void>();
+    editorState.flushImpl = () => def.promise;
+    let deleteCalls = 0;
+    const invoker: InvokeFn = async (cmd) => {
+      if (cmd === 'card_delete') {
+        deleteCalls += 1;
+        return undefined as never;
+      }
+      return undefined as never;
+    };
+    __setInvoker(invoker);
+    render(<CardDetailModal card={card()} />);
+    await screen.findByTestId('body-editor-mock');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Card menu' }));
+    const item = await screen.findByRole('menuitem', { name: /delete/i });
+    await act(async () => {
+      fireEvent.click(item);
+      await Promise.resolve();
+    });
+
+    // Menu closed after the first click; reopen and click Delete again
+    // while the initial flush is still pending.
+    fireEvent.click(screen.getByRole('button', { name: 'Card menu' }));
+    const itemAgain = await screen.findByRole('menuitem', { name: /delete/i });
+    await act(async () => {
+      fireEvent.click(itemAgain);
+      await Promise.resolve();
+    });
+
+    // Only the first deleteThis() acquired the ref-guard; the second
+    // returned early, so flush was only invoked once.
+    expect(editorState.flushCalls).toBe(1);
+
+    await act(async () => {
+      def.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(deleteCalls).toBe(1));
+  });
+
   it('delete keeps modal open when body flush rejects', async () => {
     editorState.flushImpl = () => Promise.reject(new Error('save failed'));
     let deleted = false;

@@ -121,8 +121,12 @@ Inventory (`ui/src/kanban/`):
 - **KanbanBoard** — top-level board with horizontal column list
 - **Column / ColumnList** — sortable columns with drag handle on header; header shows an 8px dot in `column.color` (omitted when unset) before the name, count on the right (quieter when 0)
 - **Card** — draggable card face: title + tag chips + subtle has-body dot
-- **CardDetailModal** — card-as-doc surface: autosizing title, tags row,
-  BlockSuite editor at 680px reading width, overflow menu + X close
+- **CardDetailModal** — card-as-doc surface: autosizing title in the
+  header row alongside a saved-pill / overflow menu / close, tags row +
+  BlockSuite editor filling the body. Delete lives in the overflow menu
+  on purpose — promoting it to a bare header Trash icon requires
+  undo/toast infrastructure first, otherwise a single misclick nukes a
+  card with no recovery.
 - **CardBodyEditor** — lazy-loaded BlockSuite host
 - **CardHeaderMenu** — overflow menu (`.kanso-menu`) inside the card modal
 - **AddCardInline / AddColumnTile** — inline create affordances

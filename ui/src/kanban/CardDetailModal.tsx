@@ -174,9 +174,9 @@ export default function CardDetailModal({ card }: Props) {
   };
 
   // Initial focus is the doc title, cursor at the end so users can type
-  // straight away. Not "first focusable in DOM" — Tab flow (body →
-  // header) means the natural first focusable is the title anyway, but
-  // being explicit keeps this correct if the DOM order ever shifts.
+  // straight away. Title is the first focusable in DOM order, so this
+  // matches the natural Tab entry point; being explicit keeps the intent
+  // clear if the DOM order ever shifts.
   useEffect(() => {
     const el = titleRef.current;
     if (!el) return;
@@ -243,9 +243,24 @@ export default function CardDetailModal({ card }: Props) {
         onClick={(e) => e.stopPropagation()}
         onKeyDown={onKeyDown}
       >
-        {/* Body first in DOM so Tab flows title → tags → editor → header
-            controls (overflow, close). .kanso-modal--doc flips flex order
-            visually to keep the header on top. */}
+        {/* DOM order: title (header) → body (tags, editor) → action row
+            (saved pill, overflow menu, close). CSS grid places the action
+            row visually on the top-right of the header. Natural Tab
+            traversal reads title → tags → editor → overflow → close. */}
+        <header className="kanso-modal-header">
+          <textarea
+            ref={titleRef}
+            className="kanso-doc-title"
+            aria-label="Card title"
+            placeholder="Untitled"
+            value={title}
+            rows={1}
+            spellCheck={false}
+            onChange={(e) => setTitle(e.target.value)}
+            onBlur={onTitleBlur}
+            onKeyDown={onTitleKeyDown}
+          />
+        </header>
         <div className="kanso-modal-body">
           {closeBlocked && (
             <div className="kanso-editor-banner" role="alert">
@@ -258,18 +273,6 @@ export default function CardDetailModal({ card }: Props) {
             </div>
           )}
           <div className="kanso-doc-content">
-            <textarea
-              ref={titleRef}
-              className="kanso-doc-title"
-              aria-label="Card title"
-              placeholder="Untitled"
-              value={title}
-              rows={1}
-              spellCheck={false}
-              onChange={(e) => setTitle(e.target.value)}
-              onBlur={onTitleBlur}
-              onKeyDown={onTitleKeyDown}
-            />
             <div className="kanso-doc-props">
               <TagPickerPopover cardId={card.id} />
             </div>
@@ -280,13 +283,16 @@ export default function CardDetailModal({ card }: Props) {
             />
           </div>
         </div>
-        <header className="kanso-modal-header">
+        <div className="kanso-modal-header-actions">
           <span
             className={`kanso-saved-pill${saved ? ' kanso-saved-pill--visible' : ''}`}
             aria-live="polite"
           >
             Saved
           </span>
+          {/* TODO: promote Delete to a header Trash icon when undo toasts
+              land (see DESIGN.md). Until then it stays behind the ⋯ so a
+              single misclick can't nuke a card. */}
           <CardHeaderMenu
             items={[
               { label: 'Delete', onSelect: onDelete, danger: true, disabled: deleting },
@@ -300,7 +306,7 @@ export default function CardDetailModal({ card }: Props) {
           >
             <X size={16} aria-hidden="true" />
           </button>
-        </header>
+        </div>
       </div>
     </div>
   );

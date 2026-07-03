@@ -249,7 +249,14 @@ function CardBodyEditorImpl(
           </button>
         </div>
       )}
-      {!fetchFailed && !mountFailed && <div ref={hostRef} className="kanso-editor-host" />}
+      {/* Host is unconditional so React never tears down a div that Lit-owned
+       * BlockSuite DOM lives inside. Hidden via CSS when a failure banner
+       * is showing; keeps mount/unmount coupled 1:1 with this component. */}
+      <div
+        ref={hostRef}
+        className="kanso-editor-host"
+        hidden={fetchFailed || mountFailed}
+      />
     </div>
   );
 }

@@ -31,6 +31,16 @@ export default defineConfig([
     },
   },
   {
+    files: ['src/editor/affine-editor-container.ts'],
+    rules: {
+      // Vendored upstream file (see file header). We deliberately opt out of
+      // type-checking via @ts-nocheck; the class type story is delegated to
+      // the src/blocksuite-stub.ts `any`-typed regime that already covers the
+      // rest of the BlockSuite wrapper code.
+      '@typescript-eslint/ban-ts-comment': 'off',
+    },
+  },
+  {
     files: ['**/*.test.ts', '**/*.test.tsx'],
     rules: {
       // tests sometimes need throw-aways

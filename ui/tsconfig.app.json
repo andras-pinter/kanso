@@ -17,8 +17,7 @@
     "ignoreDeprecations": "6.0",
     "paths": {
       "@blocksuite/*": ["./src/blocksuite-stub.ts"],
-      "@blocksuite/affine/*": ["./src/blocksuite-stub.ts"],
-      "@blocksuite/integration-test/*": ["./src/blocksuite-stub.ts"]
+      "@blocksuite/affine/*": ["./src/blocksuite-stub.ts"]
     },
 
     "strict": true,

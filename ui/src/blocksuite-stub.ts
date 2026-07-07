@@ -27,10 +27,11 @@ export default __any;
 export type ExtensionType = any;
 export type Store = any;
 export type Workspace = any;
+export type BlockModel = any;
+export type DocMode = any;
 // Aliases for classes that are also referenced as types in the editor code.
 export type ViewExtensionManager = any;
 export type StoreExtensionManager = any;
-export type TestAffineEditorContainer = any;
 
 // ---- @blocksuite/affine root + subpaths ----
 export const AffineSchemas: any = __any;
@@ -41,12 +42,13 @@ export const TestWorkspace: any = __any;
 export const CommunityCanvasTextFonts: any = __any;
 export const FontConfigExtension: any = __any;
 export const FeatureFlagService: any = __any;
+export const SignalWatcher: any = ((base: any) => base) as any;
+export const WithDisposable: any = ((base: any) => base) as any;
+export const ShadowlessElement: any = class ShadowlessElement {} as any;
+export const BlockStdScope: any = __any;
+export const ThemeProvider: any = __any;
 export const ViewExtensionManager: any = __any;
 export const StoreExtensionManager: any = __any;
-
-// ---- @blocksuite/integration-test ----
-export const TestAffineEditorContainer: any = __any;
-export const effects: any = (() => undefined) as any;
 
 // ---- @blocksuite/affine-foundation ----
 export const FoundationStoreExtension: any = __any;

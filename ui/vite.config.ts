@@ -102,7 +102,6 @@ export default defineConfig(({ command }) => ({
       ? {
           exclude: [
             '@blocksuite/affine',
-            '@blocksuite/integration-test',
             '@blocksuite/store',
             '@blocksuite/sync',
             '@blocksuite/std',

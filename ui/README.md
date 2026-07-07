@@ -83,23 +83,27 @@ subpath to `src/blocksuite-stub.ts`, which exports every symbol we use as
 `any`. tsc therefore types BlockSuite imports as `any` and never visits the
 unbuildable source. Vite/Rollup ignore tsconfig paths, so at build/runtime
 the real packages are bundled normally. Trade-off: editor wrapper code
-(`src/editor/extensions.ts` + `src/editor/internal.ts`) sees BlockSuite
+(`src/editor/extensions.ts` + `src/editor/internal.ts` +
+`src/editor/affine-editor-container.ts`) sees BlockSuite
 untyped. The **public surface stays strict** — `EditorHandle` /
 `EditorOptions` in `src/editor/types.ts` are hand-typed and contain no `any`.
 
 When a new BlockSuite symbol is needed in the editor wrapper, add it to
 `src/blocksuite-stub.ts`. No forks, no patches, no `resolutions`.
 
-### ⚠️ `@blocksuite/integration-test` as a production dep
+### ⚠️ Vendored `<affine-editor-container>`
 
-`@blocksuite/integration-test` is technically a test package, but its
-`TestAffineEditorContainer` (~190 lines) is the only working reference for
-wiring a full editor together, and `effects/itEffects()` performs the
-custom-element side-effect registration that nothing else triggers. We use
-both in production. Marked with a `TECH DEBT` comment in `src/editor/internal.ts`.
-
-If we ever outgrow this we'll have to recreate the container ourselves.
-Until then: stay on the upstream version, never patch it.
+`src/editor/affine-editor-container.ts` is a verbatim copy (with the class
+renamed from `TestAffineEditorContainer` to `AffineEditorContainer`) of the
+`~220`-line editor shell that BlockSuite ships in the test-scoped
+`@blocksuite/integration-test` package. `@blocksuite/affine/effects` wires up
+every block / inline / widget custom element but not the editor container
+itself, so we own that shell to avoid pulling a test package into the
+production dependency graph. `internal.ts` registers it once via
+`customElements.define('affine-editor-container', AffineEditorContainer)`.
+Upstream file: `@blocksuite/integration-test/src/editors/editor-container.ts`
+in the pinned 0.22.x release (MIT © toeverything). Keep the vendored copy in
+sync when we bump BlockSuite.
 
 ## Why Vite is pinned to `^6.0.3`
 

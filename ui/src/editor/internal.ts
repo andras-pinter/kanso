@@ -1,16 +1,9 @@
-// TECH DEBT: @blocksuite/integration-test is a test package consumed as a
-// production dep — it's the only working reference for TestAffineEditorContainer
-// and itEffects() (custom-element side-effect registration). See ui/README.md
-// for the full rationale and a pointer to the PoC RESULTS.md.
-//
 // BlockSuite ships raw .ts source that fails strict typecheck; tsconfig
 // `paths` redirects `@blocksuite/*` to a stub ambient declaration so this
 // file sees those imports as `any`. Runtime resolution (vite/rollup) is
 // unaffected. Our public surface is hand-typed in ./types.ts.
 
 import '@blocksuite/affine/effects';
-import { effects as itEffects } from '@blocksuite/integration-test/effects';
-import { TestAffineEditorContainer } from '@blocksuite/integration-test';
 import { AffineSchemas } from '@blocksuite/affine/schemas';
 import { Schema, Transformer, Text } from '@blocksuite/affine/store';
 import { TestWorkspace } from '@blocksuite/affine/store/test';
@@ -22,11 +15,21 @@ import {
 import type { ExtensionType, Store, Workspace } from '@blocksuite/affine/store';
 import * as Y from 'yjs';
 
+import { AffineEditorContainer } from './affine-editor-container';
 import { getViewManager, getStoreManager } from './extensions';
 import { extractPlaintext } from './plaintext';
 import type { EditorHandle, EditorOptions } from './types';
 
-itEffects();
+// Register the custom element once. `@blocksuite/affine/effects` wires up all
+// the block / inline / widget elements but not the editor container itself —
+// that shell used to live in `@blocksuite/integration-test`. We vendored the
+// class into ./affine-editor-container.ts and register it here.
+if (!customElements.get('affine-editor-container')) {
+  customElements.define(
+    'affine-editor-container',
+    AffineEditorContainer as unknown as CustomElementConstructor,
+  );
+}
 
 const DOC_ID = 'doc:home';
 
@@ -108,7 +111,7 @@ export async function mountEditor(
   const viewManager = getViewManager();
   const runtimeExts = buildRuntimeExtensions();
 
-  const editor = document.createElement('affine-editor-container') as TestAffineEditorContainer;
+  const editor = document.createElement('affine-editor-container');
   editor.autofocus = true;
   editor.doc = store;
   editor.pageSpecs = [...viewManager.get('page'), ...runtimeExts];
@@ -116,7 +119,7 @@ export async function mountEditor(
 
   store.get(FeatureFlagService).setFlag('enable_advanced_block_visibility', true);
 
-  container.appendChild(editor);
+  container.appendChild(editor as unknown as Node);
   await editor.updateComplete;
 
   const ydoc = getYDoc(store, workspace);

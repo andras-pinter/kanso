@@ -83,12 +83,9 @@
   --kanso-z-modal: 60;
   --kanso-z-shortcuts: 70;
 
-  /* BlockSuite declares --affine-z-index-{popover,modal} but never sets
-   * defaults, so its portalled overlays (slash menu, format bar, link
-   * popover) end up at z-index: auto and lose to our modal (z-index: 60).
-   * Pin them above the modal so they render on top of the card editor. */
-  --affine-z-index-popover: 65;
-  --affine-z-index-modal: 65;
+  /* NOTE: `--affine-z-index-{popover,modal}` and other `--affine-*` state
+   * tokens live in ui/src/editor/blocksuite-theme.css so the whole BlockSuite
+   * token bridge is in one place. */
 }
 
 /*

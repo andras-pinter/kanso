@@ -1,0 +1,43 @@
+/*
+ * BlockSuite theme bridge.
+ *
+ * BlockSuite widgets (slash menu, format bar, icon-button, tooltips, ...)
+ * read a handful of `--affine-*` CSS custom properties for state colors —
+ * hover, active, border, disabled, and so on. kanso doesn't define these,
+ * so the tokens fall back to `initial`/nothing and BlockSuite renders
+ * without an active-item highlight (issue #6).
+ *
+ * This file maps the specific tokens we actually surface today to our
+ * `--kanso-*` palette. It's imported from `internal.ts` so it ships with
+ * the editor chunk, not the main shell. Custom properties on :root inherit
+ * into shadow DOMs, so portalled popovers still resolve them.
+ *
+ * Keep this list minimal: add a token only when a BlockSuite widget we
+ * render is caught reading it. Do not port the full `--affine-*` surface.
+ */
+
+:root {
+  /* State — the active-item highlight in slash menu + icon-button hover. */
+  --affine-hover-color: var(--kanso-bg-hover);
+
+  /* Accents — active-mode icon color + brand-color borders. */
+  --affine-primary-color: var(--kanso-accent);
+  --affine-brand-color: var(--kanso-accent);
+
+  /* Iconography — slash item icon frame + glyph. */
+  --affine-border-color: var(--kanso-border);
+  --affine-icon-color: var(--kanso-fg-muted);
+
+  /* Text states. */
+  --affine-text-disable-color: var(--kanso-fg-subtle);
+  --affine-black: var(--kanso-fg);
+
+  /* Layer bg fallback for popovers that don't use the v2 token. */
+  --affine-background-tertiary-color: var(--kanso-bg-subtle);
+
+  /* Portalled overlays default to z-index: auto and lose to our modal.
+   * Pin them above the card modal (z=60) so slash menu / format bar /
+   * link popover render on top of the editor. */
+  --affine-z-index-popover: 65;
+  --affine-z-index-modal: 65;
+}

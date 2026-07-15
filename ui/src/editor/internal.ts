@@ -4,6 +4,7 @@
 // unaffected. Our public surface is hand-typed in ./types.ts.
 
 import '@blocksuite/affine/effects';
+import './blocksuite-theme.css';
 import { AffineSchemas } from '@blocksuite/affine/schemas';
 import { Schema, Transformer, Text } from '@blocksuite/affine/store';
 import { TestWorkspace } from '@blocksuite/affine/store/test';

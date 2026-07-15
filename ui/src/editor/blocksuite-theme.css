@@ -17,8 +17,16 @@
  */
 
 :root {
-  /* State — the active-item highlight in slash menu + icon-button hover. */
-  --affine-hover-color: var(--kanso-bg-hover);
+  /* State — the active-item highlight in slash menu + icon-button hover.
+   *
+   * We use `--kanso-accent-bg` (not `--kanso-bg-hover`) because BlockSuite's
+   * popover surface is `layer/background/overlayPanel` from its own v2 theme
+   * (~#252525 in dark, ~#ffffff in light) — not our `--kanso-bg-elevated`.
+   * `--kanso-bg-hover` is only ~1.04:1 against those, which reproduces the
+   * "invisible active row" symptom the fix is meant to solve. accent-bg is
+   * theme-aware (`#eff6ff` light / `rgba(91,140,255,0.14)` dark) and gives
+   * clearly visible keyboard-nav selection in both modes. */
+  --affine-hover-color: var(--kanso-accent-bg);
 
   /* Accents — active-mode icon color + brand-color borders. */
   --affine-primary-color: var(--kanso-accent);

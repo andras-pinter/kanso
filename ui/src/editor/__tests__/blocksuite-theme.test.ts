@@ -31,8 +31,8 @@ function installStyle(): HTMLStyleElement {
 function installKansoTokens(): HTMLStyleElement {
   const style = document.createElement('style');
   style.textContent = `:root {
-    --kanso-bg-hover: #f3f4f6;
     --kanso-accent: #3b82f6;
+    --kanso-accent-bg: #eff6ff;
     --kanso-border: #e5e7eb;
     --kanso-fg: #111827;
     --kanso-fg-muted: #6b7280;
@@ -78,5 +78,17 @@ describe('blocksuite-theme.css', () => {
     const cs = getComputedStyle(document.documentElement);
     expect(cs.getPropertyValue('--affine-z-index-popover').trim()).toBe('65');
     expect(cs.getPropertyValue('--affine-z-index-modal').trim()).toBe('65');
+  });
+
+  it('is imported from internal.ts so tokens ship with the editor chunk', () => {
+    // Guards the wiring, not the tokens themselves — if someone drops the
+    // side-effect import, the CSS assertions above still pass but the app
+    // regresses. Reading internal.ts directly avoids a heavy integration
+    // test while still failing loudly on the specific regression.
+    const src = fs.readFileSync(
+      path.resolve(__dirname, '../internal.ts'),
+      'utf8'
+    );
+    expect(src).toMatch(/import\s+['"]\.\/blocksuite-theme\.css['"]/);
   });
 });

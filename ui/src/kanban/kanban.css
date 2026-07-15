@@ -1103,6 +1103,33 @@ body {
   border: none;
   background: transparent;
   padding: 0;
+  /* Own the vertical space so <affine-editor-container> (a custom element,
+     otherwise inline by default) can stretch to fill it. Without this the
+     editor collapses to content height and clicks below the last block
+     never reach BlockSuite's focus routing (issue #7). */
+  display: flex;
+  flex-direction: column;
+}
+
+.kanso-editor-host > affine-editor-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+}
+
+/* BlockSuite's page-mode viewport is `display: flex; flex-direction: column`
+   with no flex-grow, so it defaults to content height even when its parent
+   (the custom element above) is stretched. Force it to fill so clicks below
+   the last block hit the viewport and BlockSuite's focus routing fires.
+   ShadowlessElement means .affine-page-viewport is in the light DOM, so
+   this selector reaches it directly. Edgeless mode already has height:100%
+   and just needs the parent to have a resolved height, which the rule above
+   provides. */
+.kanso-editor-host .affine-page-viewport {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .kanso-save-error {

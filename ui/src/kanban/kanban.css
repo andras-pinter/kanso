@@ -495,14 +495,15 @@ body {
   position: relative;
   background: var(--kanso-bg-elevated);
   border: 1px solid var(--kanso-border);
-  border-radius: var(--kanso-radius-md);
-  padding: 10px 12px;
+  border-radius: var(--kanso-radius-lg);
+  padding: 10px;
   box-shadow: var(--kanso-shadow-card);
   cursor: grab;
   user-select: none;
   transition:
     border-color 120ms ease,
-    box-shadow 120ms ease;
+    box-shadow 120ms ease,
+    transform 120ms ease;
 }
 
 .kanso-card:focus {
@@ -534,6 +535,7 @@ body {
 .kanso-card:hover {
   border-color: var(--kanso-border-strong);
   box-shadow: var(--kanso-shadow-card-hover);
+  transform: translateY(-1px);
 }
 
 .kanso-card:active {
@@ -557,7 +559,8 @@ body {
 
 .kanso-card-title {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
+  line-height: 1.375;
   color: var(--kanso-fg);
   word-wrap: break-word;
 }

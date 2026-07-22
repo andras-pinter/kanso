@@ -21,7 +21,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{anyhow, bail, Context, Result};
 use syn::{Attribute, Expr, Fields, ItemStruct, Lit, Meta, Type, TypePath, Visibility};
 
 /// (contract key, Rust struct name). Order defines output order.
@@ -48,13 +48,12 @@ fn main() -> Result<()> {
         .ok_or_else(|| anyhow!("cannot resolve repo root from {}", manifest_dir.display()))?;
 
     let dto_path = repo_root.join("crates/kanso-api/src/dto.rs");
-    let out_path =
-        repo_root.join("extensions/_shared/kanso-client/dto-contract.generated.mjs");
+    let out_path = repo_root.join("extensions/_shared/kanso-client/dto-contract.generated.mjs");
 
     let src = std::fs::read_to_string(&dto_path)
         .with_context(|| format!("reading {}", dto_path.display()))?;
-    let file: syn::File = syn::parse_file(&src)
-        .with_context(|| format!("parsing {}", dto_path.display()))?;
+    let file: syn::File =
+        syn::parse_file(&src).with_context(|| format!("parsing {}", dto_path.display()))?;
 
     let structs: BTreeMap<String, &ItemStruct> = file
         .items
@@ -70,8 +69,8 @@ fn main() -> Result<()> {
         let s = structs
             .get(*struct_name)
             .ok_or_else(|| anyhow!("struct `{struct_name}` not found in dto.rs"))?;
-        let fields = extract_fields(s)
-            .with_context(|| format!("extracting fields for `{struct_name}`"))?;
+        let fields =
+            extract_fields(s).with_context(|| format!("extracting fields for `{struct_name}`"))?;
         entries.push((contract_name, fields));
     }
 
@@ -119,9 +118,7 @@ fn serde_rename(attrs: &[Attribute]) -> Result<Option<String>> {
             continue;
         };
         let nested = list
-            .parse_args_with(
-                syn::punctuated::Punctuated::<Meta, syn::Token![,]>::parse_terminated,
-            )
+            .parse_args_with(syn::punctuated::Punctuated::<Meta, syn::Token![,]>::parse_terminated)
             .with_context(|| "parsing #[serde(...)]")?;
         for meta in nested {
             let Meta::NameValue(nv) = meta else {
@@ -204,9 +201,8 @@ mod tests {
 
     #[test]
     fn required_and_optional_are_separated() {
-        let s = parse_struct(
-            "pub struct T { pub a: String, #[serde(default)] pub b: Option<String> }",
-        );
+        let s =
+            parse_struct("pub struct T { pub a: String, #[serde(default)] pub b: Option<String> }");
         let fs = extract_fields(&s).unwrap();
         assert_eq!(fs.len(), 2);
         assert_eq!(fs[0].name, "a");
@@ -225,9 +221,8 @@ mod tests {
 
     #[test]
     fn serde_rename_wins() {
-        let s = parse_struct(
-            "pub struct T { #[serde(rename = \"wire_name\")] pub rust_name: String }",
-        );
+        let s =
+            parse_struct("pub struct T { #[serde(rename = \"wire_name\")] pub rust_name: String }");
         let fs = extract_fields(&s).unwrap();
         assert_eq!(fs[0].name, "wire_name");
     }

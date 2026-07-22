@@ -1,15 +1,13 @@
 use axum::extract::{DefaultBodyLimit, Path, Query, State};
 use axum::http::StatusCode;
 use axum::{Json, Router};
-use base64::engine::general_purpose::STANDARD as B64;
-use base64::Engine as _;
 use serde::Deserialize;
 
 use kanso_core::repo::CardRepo;
 
 use crate::dto::{
-    CardBodyDto, CardBodySetDto, CardDto, CardPatchDto, CardSearchHitDto, CreateCardBody,
-    MoveCardBody,
+    CardBodyDto, CardBodySetDto, CardDto, CardListDto, CardPatchDto, CardSearchHitDto,
+    CreateCardBody, MoveCardBody,
 };
 use crate::error::{require_non_empty, ApiError};
 use crate::handlers::resolve_page;
@@ -35,7 +33,7 @@ struct SearchCardsQuery {
 }
 
 // Cap PUT /cards/:id/body payloads at 8 MiB. Typical bodies are <100 KiB;
-// 8 MiB tolerates pathologically large pasted-image base64 without enabling abuse.
+// 8 MiB tolerates pathologically large markdown docs without enabling abuse.
 // Axum's default of 2 MiB rejects perfectly reasonable rich docs with an opaque 413.
 const BODY_PUT_LIMIT_BYTES: usize = 8 * 1024 * 1024;
 
@@ -65,29 +63,29 @@ async fn list(
     State(state): State<AppState>,
     Path(column_id): Path<String>,
     Query(q): Query<ListCardsQuery>,
-) -> Result<Json<Vec<CardDto>>, ApiError> {
+) -> Result<Json<Vec<CardListDto>>, ApiError> {
     let (limit, offset) = resolve_page(q.limit, q.offset);
     let rows = CardRepo::list_by_column_paged(&state.pool, &column_id, limit, offset).await?;
-    Ok(Json(rows.into_iter().map(CardDto::from).collect()))
+    Ok(Json(rows.into_iter().map(CardListDto::from).collect()))
 }
 
 async fn create(
     State(state): State<AppState>,
     Path(column_id): Path<String>,
     Json(body): Json<CreateCardBody>,
-) -> Result<(StatusCode, Json<CardDto>), ApiError> {
+) -> Result<(StatusCode, Json<CardListDto>), ApiError> {
     require_non_empty("title", &body.title)?;
     let card = CardRepo::create(&state.pool, &column_id, body.title.trim()).await?;
-    Ok((StatusCode::CREATED, Json(CardDto::from(card))))
+    Ok((StatusCode::CREATED, Json(CardListDto::from(card))))
 }
 
 async fn update(
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(patch): Json<CardPatchDto>,
-) -> Result<Json<CardDto>, ApiError> {
+) -> Result<Json<CardListDto>, ApiError> {
     let card = CardRepo::update(&state.pool, &id, patch.into()).await?;
-    Ok(Json(CardDto::from(card)))
+    Ok(Json(CardListDto::from(card)))
 }
 
 async fn get_one(
@@ -96,10 +94,7 @@ async fn get_one(
 ) -> Result<Json<CardDto>, ApiError> {
     match CardRepo::get(&state.pool, &id).await? {
         Some(card) => Ok(Json(CardDto::from(card))),
-        None => Err(ApiError(KansoError::NotFound {
-            entity: "card",
-            id,
-        })),
+        None => Err(ApiError(KansoError::NotFound { entity: "card", id })),
     }
 }
 
@@ -107,7 +102,7 @@ async fn move_card(
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(body): Json<MoveCardBody>,
-) -> Result<Json<CardDto>, ApiError> {
+) -> Result<Json<CardListDto>, ApiError> {
     let card = CardRepo::move_card(
         &state.pool,
         &id,
@@ -116,7 +111,7 @@ async fn move_card(
         body.after.as_deref(),
     )
     .await?;
-    Ok(Json(CardDto::from(card)))
+    Ok(Json(CardListDto::from(card)))
 }
 
 async fn hard_delete(
@@ -125,21 +120,17 @@ async fn hard_delete(
 ) -> Result<StatusCode, ApiError> {
     match CardRepo::delete(&state.pool, &id).await {
         Ok(()) => Ok(StatusCode::NO_CONTENT),
-        Err(KansoError::NotFound { .. }) => Err(ApiError(KansoError::NotFound {
-            entity: "card",
-            id,
-        })),
+        Err(KansoError::NotFound { .. }) => {
+            Err(ApiError(KansoError::NotFound { entity: "card", id }))
+        }
         Err(e) => Err(ApiError(e)),
     }
 }
 
-async fn load_card(state: &AppState, id: String) -> Result<Json<CardDto>, ApiError> {
+async fn load_card_list(state: &AppState, id: String) -> Result<Json<CardListDto>, ApiError> {
     match CardRepo::get(&state.pool, &id).await? {
-        Some(card) => Ok(Json(CardDto::from(card))),
-        None => Err(ApiError(KansoError::NotFound {
-            entity: "card",
-            id,
-        })),
+        Some(card) => Ok(Json(CardListDto::from(card))),
+        None => Err(ApiError(KansoError::NotFound { entity: "card", id })),
     }
 }
 
@@ -149,8 +140,7 @@ async fn get_body(
 ) -> Result<Json<CardBodyDto>, ApiError> {
     let body = CardRepo::get_body(&state.pool, &id).await?;
     Ok(Json(CardBodyDto {
-        body_blocksuite_b64: body.body_blocksuite.as_deref().map(|b| B64.encode(b)),
-        body_text: body.body_text,
+        body_markdown: body.body_markdown,
         updated_at: body.updated_at,
     }))
 }
@@ -159,22 +149,16 @@ async fn put_body(
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(body): Json<CardBodySetDto>,
-) -> Result<Json<CardDto>, ApiError> {
-    if body.body_blocksuite_b64.is_none() && body.body_text.is_none() {
-        return Err(ApiError(kanso_core::KansoError::InvalidInput(
-            "at least one of body_blocksuite_b64 or body_text is required".into(),
-        )));
-    }
-    let blob = match body.body_blocksuite_b64.as_deref() {
-        Some(b64) => Some(B64.decode(b64.as_bytes()).map_err(|e| {
-            ApiError(kanso_core::KansoError::InvalidInput(format!(
-                "body_blocksuite_b64 is not valid base64: {e}"
-            )))
-        })?),
-        None => None,
+) -> Result<Json<CardListDto>, ApiError> {
+    // Empty string clears the body to NULL. Any non-empty markdown is stored
+    // verbatim; FTS5's unicode61 tokenizer handles it without a pre-parse.
+    let value = if body.body_markdown.is_empty() {
+        None
+    } else {
+        Some(body.body_markdown.as_str())
     };
-    CardRepo::set_body(&state.pool, &id, blob.as_deref(), body.body_text.as_deref()).await?;
-    load_card(&state, id).await
+    CardRepo::set_body(&state.pool, &id, value).await?;
+    load_card_list(&state, id).await
 }
 
 async fn search(

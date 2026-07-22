@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { __setInvoker, type InvokeFn } from '../api/client';
 import { invoke as realInvoke } from '@tauri-apps/api/core';
 import { useKanbanStore } from '../hooks/useKanbanStore';
-import type { BoardDto, CardDto, ColumnDto } from '../types';
+import type { BoardDto, CardListDto, ColumnDto } from '../types';
 
 function board(id: string): BoardDto {
   return {
@@ -31,12 +31,12 @@ function column(id: string, boardId: string): ColumnDto {
   };
 }
 
-function card(id: string, columnId: string): CardDto {
+function card(id: string, columnId: string): CardListDto {
   return {
     id,
     column_id: columnId,
     title: id,
-    body_text: null,
+    has_body: false,
     position: id,
     due_at: null,
     created_at: 0,

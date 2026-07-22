@@ -1,21 +1,17 @@
 export interface EditorOptions {
-  /** Optional Yjs update (`Y.encodeStateAsUpdate(doc)`) used to hydrate the editor on mount. */
-  initialDoc?: Uint8Array;
-  /**
-   * Optional plaintext used to seed a fresh editor when `initialDoc` is
-   * not provided. Lets us auto-convert pre-BlockSuite cards (Wave 5
-   * textarea era) without prompting the user.
-   */
-  initialText?: string;
+  /** Initial markdown; empty string means "fresh editor". */
+  initialMarkdown?: string;
+  /** Placeholder text shown when the editor is empty. */
+  placeholder?: string;
 }
 
 export interface EditorHandle {
-  /** Tear the editor down, dispose the workspace, and detach update listeners. */
+  /** Tear the editor down and detach listeners. */
   destroy(): void;
-  /** Snapshot the doc as a Yjs binary update. */
-  serialize(): Uint8Array;
-  /** Walk the current doc and return FTS5-friendly plaintext. */
-  extractPlaintext(): string;
-  /** Subscribe to Yjs updates. Returns an unsubscribe handle. */
-  onChange(cb: (doc: Uint8Array) => void): () => void;
+  /** Current document serialized as markdown. */
+  getMarkdown(): string;
+  /** Replace the current content with the given markdown. */
+  setMarkdown(md: string): void;
+  /** Subscribe to doc mutations. Returns an unsubscribe handle. */
+  onChange(cb: () => void): () => void;
 }

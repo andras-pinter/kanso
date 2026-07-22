@@ -15,7 +15,7 @@ kanso is a personal, local-first Kanban app for a single user. It runs as a tray
 - **React + Vite** — UI
 - **Zustand** — client state
 - **dnd-kit** — card drag (columns are fixed, no column drag)
-- **BlockSuite** — rich-text editor for card bodies; eager-loaded, pinned to **Vite ^6.0.3**
+- **TipTap** — rich-text editor for card bodies; markdown-persisted, lazy-loaded
 
 ## Product rules
 
@@ -27,7 +27,7 @@ kanso is a personal, local-first Kanban app for a single user. It runs as a tray
 - **No `unwrap()` / `expect()`** outside `#[cfg(test)]`. Errors as values.
 - **No panics in library code.** Return `Result<T, E>` with crate-typed errors via `thiserror`.
 - **No `serde_json::Value` in Tauri command signatures.** Inputs and outputs must be explicit, typed structs.
-- **Vite stays pinned at `^6.0.3`** (BlockSuite's compat range).
+- **Vite stays pinned at `^6.0.3`** for now (unpinning is a follow-up).
 - **No circular crate deps.** `kanso-core` knows nothing of axum, Tauri, or React.
 - **`.sqlx/` is committed.** `node_modules/`, `target/`, `dist/`, `gen/` are not.
 

@@ -5,14 +5,14 @@
 import { useCallback } from 'react';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useDroppable } from '@dnd-kit/core';
-import type { CardDto, ColumnDto } from './types';
+import type { CardListDto, ColumnDto } from './types';
 import Card from './Card';
 import AddCardInline from './AddCardInline';
 import { useKanbanStore } from './hooks/useKanbanStore';
 
 interface Props {
   column: ColumnDto;
-  cards: CardDto[];
+  cards: CardListDto[];
 }
 
 export default function Column({ column, cards }: Props) {

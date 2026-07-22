@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { computeAnchors } from '../hooks/useKanbanStore';
-import type { CardDto } from '../types';
+import type { CardListDto } from '../types';
 
-function card(id: string): CardDto {
+function card(id: string): CardListDto {
   return {
     id,
     column_id: 'c',
     title: id,
-    body_text: null,
+    has_body: false,
     position: id,
     due_at: null,
     created_at: 0,

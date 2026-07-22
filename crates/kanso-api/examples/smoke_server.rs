@@ -22,7 +22,10 @@ async fn main() {
     let db = tmp.path().join("kanso.db");
     let pool = open(&db).await.unwrap();
     migrate(&pool).await.unwrap();
-    let app = router(AppState { pool, token: token.clone() });
+    let app = router(AppState {
+        pool,
+        token: token.clone(),
+    });
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
         .await
         .unwrap();

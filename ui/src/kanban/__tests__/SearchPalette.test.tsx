@@ -12,7 +12,7 @@ function hit(cardId: string, title: string, boardId: string): CardSearchHitDto {
       id: cardId,
       column_id: 'col1',
       title,
-      body_text: null,
+      has_body: false,
       position: cardId,
       due_at: null,
       created_at: 0,

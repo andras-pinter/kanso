@@ -14,7 +14,6 @@
     "dependencies": {
         "@kanso/client": "*",
         "@modelcontextprotocol/sdk": "1.29.0",
-        "yjs": "13.6.31",
         "zod": "3.25.76"
     },
     "devDependencies": {

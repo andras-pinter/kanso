@@ -3,18 +3,18 @@ import { render, screen } from '@testing-library/react';
 import { DndContext } from '@dnd-kit/core';
 import { useKanbanStore } from '../hooks/useKanbanStore';
 import Column from '../Column';
-import type { CardDto, ColumnDto, TagDto } from '../types';
+import type { CardListDto, ColumnDto, TagDto } from '../types';
 
 function tag(id: string, name: string): TagDto {
   return { id, name, color: null, created_at: 0, updated_at: 0 };
 }
 
-function card(id: string, title: string, columnId = 'col1'): CardDto {
+function card(id: string, title: string, columnId = 'col1'): CardListDto {
   return {
     id,
     column_id: columnId,
     title,
-    body_text: null,
+    has_body: false,
     position: id,
     due_at: null,
     created_at: 0,
@@ -49,7 +49,7 @@ function resetStore(state: Partial<ReturnType<typeof useKanbanStore.getState>>) 
   });
 }
 
-function renderColumn(cards: CardDto[]) {
+function renderColumn(cards: CardListDto[]) {
   return render(
     <DndContext>
       <Column column={column} cards={cards} />

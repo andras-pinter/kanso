@@ -1,10 +1,10 @@
 // Pure helper extracted from KanbanBoard so react-refresh stays happy
 // (component files can only export components).
 
-import type { CardDto } from './types';
+import type { CardListDto } from './types';
 
 export interface DragEndContext {
-  cardsByColumn: Record<string, CardDto[]>;
+  cardsByColumn: Record<string, CardListDto[]>;
   /**
    * Per-column list of cards currently visible in the SortableContext (live
    * + passing the active tag filter). Omit when no filter is applied — the
@@ -14,7 +14,7 @@ export interface DragEndContext {
    * translated to an absolute index in `cardsByColumn` so hidden cards keep
    * their relative order.
    */
-  visibleCardsByColumn?: Record<string, CardDto[]>;
+  visibleCardsByColumn?: Record<string, CardListDto[]>;
 }
 
 export interface DragEndResolution {
@@ -112,12 +112,12 @@ export function resolveDragEnd(
  * is active.
  */
 export function computeVisibleCardsByColumn(
-  cardsByColumn: Record<string, CardDto[]>,
+  cardsByColumn: Record<string, CardListDto[]>,
   selectedTagIds: readonly string[],
   cardTagMap: Record<string, string[]>,
-): Record<string, CardDto[]> {
+): Record<string, CardListDto[]> {
   if (selectedTagIds.length === 0) return cardsByColumn;
-  const out: Record<string, CardDto[]> = {};
+  const out: Record<string, CardListDto[]> = {};
   for (const [colId, list] of Object.entries(cardsByColumn)) {
     out[colId] = list.filter((c) => {
       const tags = cardTagMap[c.id] ?? [];

@@ -70,8 +70,7 @@ impl From<crate::snapshot::SnapshotError> for AppError {
                 kind: "unsupported_schema_version",
                 message: e.to_string(),
             },
-            crate::snapshot::SnapshotError::Json(_)
-            | crate::snapshot::SnapshotError::InvalidBase64 { .. } => Self::invalid(e.to_string()),
+            crate::snapshot::SnapshotError::Json(_) => Self::invalid(e.to_string()),
             crate::snapshot::SnapshotError::Db(_) => Self {
                 kind: "db",
                 message: e.to_string(),

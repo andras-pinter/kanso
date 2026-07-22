@@ -65,10 +65,8 @@ fn parse_pkg_version(text: &str) -> Option<String> {
 
 fn pkg_version(source_root: &Path, rel: &str) -> String {
     let path = source_root.join(rel);
-    let text = fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
-    parse_pkg_version(&text)
-        .unwrap_or_else(|| panic!("no version field in {}", path.display()))
+    let text = fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+    parse_pkg_version(&text).unwrap_or_else(|| panic!("no version field in {}", path.display()))
 }
 
 #[test]

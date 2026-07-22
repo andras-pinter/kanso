@@ -6,7 +6,7 @@ use serde::Deserialize;
 use kanso_core::repo::{CardRepo, TagRepo};
 use kanso_core::KansoError;
 
-use crate::dto::{CardDto, CreateTagBody, TagDto, TagPatchDto};
+use crate::dto::{CardListDto, CreateTagBody, TagDto, TagPatchDto};
 use crate::error::{require_non_empty, ApiError};
 use crate::handlers::resolve_page;
 use crate::AppState;
@@ -106,7 +106,7 @@ async fn tags_for_card(
 async fn link_tag(
     State(state): State<AppState>,
     Path((card_id, tag_id)): Path<(String, String)>,
-) -> Result<Json<CardDto>, ApiError> {
+) -> Result<Json<CardListDto>, ApiError> {
     CardRepo::add_tag(&state.pool, &card_id, &tag_id).await?;
     load_card(&state, card_id).await
 }
@@ -114,18 +114,15 @@ async fn link_tag(
 async fn unlink_tag(
     State(state): State<AppState>,
     Path((card_id, tag_id)): Path<(String, String)>,
-) -> Result<Json<CardDto>, ApiError> {
+) -> Result<Json<CardListDto>, ApiError> {
     CardRepo::remove_tag(&state.pool, &card_id, &tag_id).await?;
     load_card(&state, card_id).await
 }
 
-async fn load_card(state: &AppState, id: String) -> Result<Json<CardDto>, ApiError> {
+async fn load_card(state: &AppState, id: String) -> Result<Json<CardListDto>, ApiError> {
     match CardRepo::get(&state.pool, &id).await? {
-        Some(card) => Ok(Json(CardDto::from(card))),
-        None => Err(ApiError(KansoError::NotFound {
-            entity: "card",
-            id,
-        })),
+        Some(card) => Ok(Json(CardListDto::from(card))),
+        None => Err(ApiError(KansoError::NotFound { entity: "card", id })),
     }
 }
 
@@ -133,8 +130,8 @@ async fn cards_with_tag(
     State(state): State<AppState>,
     Path(id): Path<String>,
     Query(q): Query<CardsByTagQuery>,
-) -> Result<Json<Vec<CardDto>>, ApiError> {
+) -> Result<Json<Vec<CardListDto>>, ApiError> {
     let (limit, offset) = resolve_page(q.limit, q.offset);
     let rows = CardRepo::cards_with_tag_paged(&state.pool, &id, limit, offset).await?;
-    Ok(Json(rows.into_iter().map(CardDto::from).collect()))
+    Ok(Json(rows.into_iter().map(CardListDto::from).collect()))
 }

@@ -128,7 +128,8 @@ export const buildTools = (client, kansoTools) => [
     // ---------- cards ----------
     {
         name: "card_list",
-        description: "List cards in a column. Returns JSON array of CardDto.",
+        description:
+            "List cards in a column. Returns a JSON array of CardListDto (no body_markdown; use has_body to check whether the card has notes, and card_body_get for the full markdown).",
         parameters: {
             type: "object",
             properties: {
@@ -142,7 +143,8 @@ export const buildTools = (client, kansoTools) => [
     },
     {
         name: "card_get",
-        description: "Fetch one card by id. Returns JSON CardDto. Idempotent.",
+        description:
+            "Fetch one card by id. Returns the full CardDto (title, position, due_at, body_markdown, updated_at). Idempotent.",
         parameters: {
             type: "object",
             properties: { id: strId("Card id.") },
@@ -152,7 +154,8 @@ export const buildTools = (client, kansoTools) => [
     },
     {
         name: "card_create",
-        description: "Create a card in a column. Returns the new CardDto.",
+        description:
+            "Create a card in a column. Returns the new CardListDto (thin shape: no body_markdown). Fetch card_get to see the full card.",
         parameters: {
             type: "object",
             properties: {
@@ -166,7 +169,7 @@ export const buildTools = (client, kansoTools) => [
     {
         name: "card_update",
         description:
-            "Patch a card (title, due_at, body_text). Returns the updated CardDto. Idempotent per field.",
+            "Patch a card (title, due_at, body_markdown). Returns the updated CardListDto (thin shape: has_body reflects the new body, but body_markdown is not echoed — use card_body_get to read it back). Idempotent per field.",
         parameters: {
             type: "object",
             properties: {
@@ -175,9 +178,9 @@ export const buildTools = (client, kansoTools) => [
                     type: "object",
                     properties: {
                         title: strId("New title."),
-                        body_text: {
+                        body_markdown: {
                             type: ["string", "null"],
-                            description: "New plaintext body, or null to clear.",
+                            description: "New markdown body, or null to clear.",
                         },
                         due_at: {
                             type: ["integer", "null"],
@@ -193,7 +196,7 @@ export const buildTools = (client, kansoTools) => [
     {
         name: "card_move",
         description:
-            "Move a card to another column, optionally between two sibling cards. Returns the updated CardDto.",
+            "Move a card to another column, optionally between two sibling cards. Returns the updated CardListDto (thin shape: no body_markdown).",
         parameters: {
             type: "object",
             properties: {
@@ -219,7 +222,7 @@ export const buildTools = (client, kansoTools) => [
     {
         name: "card_body_get",
         description:
-            "Fetch a card's body as { body_blocksuite_b64, body_text, updated_at }. Both fields may be null on a fresh card.",
+            "Fetch a card's body as { body_markdown, updated_at }. body_markdown may be null on a fresh card. Use this after card_list / card_search to read a specific card's markdown (list responses only expose has_body).",
         parameters: {
             type: "object",
             properties: { id: strId("Card id.") },
@@ -230,19 +233,18 @@ export const buildTools = (client, kansoTools) => [
     {
         name: "card_body_set",
         description:
-            "Replace a card's body. Provide body_text and/or body_blocksuite_b64 — at least one is required. Text-only writes clear the BlockSuite blob so the UI seeds fresh content from the plaintext on next open. Returns the full CardDto.",
+            "Replace a card's body with markdown. Pass an empty string to clear the body. Returns the updated CardListDto (thin shape: has_body reflects the new body, but body_markdown is not echoed — use card_body_get to read it back).",
         parameters: {
             type: "object",
             properties: {
                 id: strId("Card id."),
-                body_text: strId(
-                    "Plaintext body (indexed by FTS). At least one of body_text or body_blocksuite_b64 is required.",
-                ),
-                body_blocksuite_b64: strId(
-                    "Base64-encoded BlockSuite Yjs blob. Agents typically pass body_text instead. At least one of body_text or body_blocksuite_b64 is required.",
-                ),
+                body_markdown: {
+                    type: "string",
+                    description:
+                        "Markdown body. Empty string clears the body to NULL. The same string is indexed by FTS.",
+                },
             },
-            required: ["id"],
+            required: ["id", "body_markdown"],
         },
         handler: wrap(client, h.cardBodySet),
     },
@@ -314,7 +316,8 @@ export const buildTools = (client, kansoTools) => [
     },
     {
         name: "tag_cards",
-        description: "List cards linked to a tag. Returns JSON array of CardDto.",
+        description:
+            "List cards linked to a tag. Returns JSON array of CardListDto (thin shape: no body_markdown; call card_body_get to read a specific card's markdown).",
         parameters: {
             type: "object",
             properties: {
@@ -342,7 +345,8 @@ export const buildTools = (client, kansoTools) => [
     },
     {
         name: "card_tag_add",
-        description: "Link a tag to a card. Returns the updated CardDto. Idempotent.",
+        description:
+            "Link a tag to a card. Returns the updated CardListDto (thin shape: no body_markdown; call card_tags for the resulting tag set). Idempotent.",
         parameters: {
             type: "object",
             properties: {
@@ -355,7 +359,8 @@ export const buildTools = (client, kansoTools) => [
     },
     {
         name: "card_tag_remove",
-        description: "Unlink a tag from a card. Returns the updated CardDto. Idempotent.",
+        description:
+            "Unlink a tag from a card. Returns the updated CardListDto (thin shape: no body_markdown; call card_tags for the resulting tag set). Idempotent.",
         parameters: {
             type: "object",
             properties: {

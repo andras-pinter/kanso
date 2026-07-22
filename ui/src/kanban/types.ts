@@ -19,11 +19,34 @@ export interface ColumnDto {
   updated_at: number;
 }
 
+/**
+ * Full card wire shape. Only the dedicated single-card endpoint
+ * (`GET /cards/:id`) returns this — every list / board / search / write
+ * response uses [`CardListDto`] to keep payloads bounded regardless of
+ * body size. Fetch the markdown via `cardBodyGet` when needed.
+ */
 export interface CardDto {
   id: string;
   column_id: string;
   title: string;
-  body_text: string | null;
+  body_markdown: string | null;
+  position: string;
+  due_at: number | null;
+  created_at: number;
+  updated_at: number;
+}
+
+/**
+ * Card metadata without the markdown body. `has_body` is `true` when the
+ * card has a non-blank body (whitespace-only counts as empty). Used by all
+ * list/board/search endpoints and every write endpoint (create/update/move/
+ * set_body responses).
+ */
+export interface CardListDto {
+  id: string;
+  column_id: string;
+  title: string;
+  has_body: boolean;
   position: string;
   due_at: number | null;
   created_at: number;
@@ -31,14 +54,12 @@ export interface CardDto {
 }
 
 export interface CardBody {
-  body_blocksuite_b64: string | null;
-  body_text: string | null;
+  body_markdown: string | null;
   updated_at: number;
 }
 
 export interface CardBodySet {
-  body_blocksuite_b64?: string | null;
-  body_text?: string | null;
+  body_markdown: string;
 }
 
 export interface SeedIds {
@@ -52,7 +73,7 @@ export interface SeedIds {
 //   field = value     -> set
 export interface CardPatch {
   title?: string;
-  body_text?: string | null;
+  body_markdown?: string | null;
   due_at?: number | null;
 }
 
@@ -75,7 +96,7 @@ export interface TagPatch {
 }
 
 export interface CardSearchHitDto {
-  card: CardDto;
+  card: CardListDto;
   column_id: string;
   column_name: string;
   board_id: string;
@@ -91,8 +112,7 @@ export interface SnapshotCardDto {
   id: string;
   column_id: string;
   title: string;
-  body_blocksuite: string | null;
-  body_text: string | null;
+  body_markdown: string | null;
   position: string;
   due_at: number | null;
   created_at: number;

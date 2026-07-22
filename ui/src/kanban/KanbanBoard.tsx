@@ -28,7 +28,7 @@ import SearchPalette from './SearchPalette';
 import QuickAddModal from '../quick-add/QuickAddModal';
 import { useQuickAddOpenEvent } from '../quick-add/useQuickAddOpenEvent';
 import { computeVisibleCardsByColumn, resolveDragEnd } from './dragEnd';
-import type { CardDto } from './types';
+import type { CardListDto } from './types';
 import { PromptDialog } from '../Dialog';
 import ShortcutsOverlay from '../ShortcutsOverlay';
 import { useShortcutsHotkey } from '../useShortcutsHotkey';
@@ -76,7 +76,7 @@ export default function KanbanBoard() {
     }),
   );
 
-  const draggingCard = useMemo<CardDto | null>(() => {
+  const draggingCard = useMemo<CardListDto | null>(() => {
     if (!draggingCardId) return null;
     for (const list of Object.values(cardsByColumn)) {
       const hit = list.find((c) => c.id === draggingCardId);
@@ -85,7 +85,7 @@ export default function KanbanBoard() {
     return null;
   }, [draggingCardId, cardsByColumn]);
 
-  const selectedCard = useMemo<CardDto | null>(() => {
+  const selectedCard = useMemo<CardListDto | null>(() => {
     if (!selectedCardId) return null;
     for (const list of Object.values(cardsByColumn)) {
       const hit = list.find((c) => c.id === selectedCardId);

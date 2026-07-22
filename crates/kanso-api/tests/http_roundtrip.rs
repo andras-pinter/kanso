@@ -8,7 +8,7 @@ use std::sync::Arc;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
-use kanso_api::{router, AppState, BoardDto, CardDto, ColumnDto};
+use kanso_api::{router, AppState, BoardDto, CardDto, CardListDto, ColumnDto};
 use kanso_core::db::{migrate, open};
 use kanso_core::repo::{BoardRepo, CardRepo, ColumnRepo};
 use serde_json::{json, Value};
@@ -247,7 +247,7 @@ async fn card_crud_via_http() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::CREATED);
-    let created: CardDto = serde_json::from_value(body_json(res).await).unwrap();
+    let created: CardListDto = serde_json::from_value(body_json(res).await).unwrap();
     assert_eq!(created.title, "from test");
 
     let from_db = CardRepo::list_by_column(&pool, &column.id).await.unwrap();
@@ -263,7 +263,7 @@ async fn card_crud_via_http() {
         ))
         .await
         .unwrap();
-    let with_due: CardDto = serde_json::from_value(body_json(res).await).unwrap();
+    let with_due: CardListDto = serde_json::from_value(body_json(res).await).unwrap();
     assert_eq!(with_due.due_at, Some(1_700_000_000_000));
 
     let res = app
@@ -275,7 +275,7 @@ async fn card_crud_via_http() {
         ))
         .await
         .unwrap();
-    let title_only: CardDto = serde_json::from_value(body_json(res).await).unwrap();
+    let title_only: CardListDto = serde_json::from_value(body_json(res).await).unwrap();
     assert_eq!(title_only.title, "renamed");
     assert_eq!(
         title_only.due_at,
@@ -292,7 +292,7 @@ async fn card_crud_via_http() {
         ))
         .await
         .unwrap();
-    let cleared: CardDto = serde_json::from_value(body_json(res).await).unwrap();
+    let cleared: CardListDto = serde_json::from_value(body_json(res).await).unwrap();
     assert!(cleared.due_at.is_none(), "null must clear due_at");
 
     let res = app
@@ -327,7 +327,7 @@ async fn card_move_via_http() {
         .oneshot(req("GET", &format!("/columns/{}/cards", col.id)))
         .await
         .unwrap();
-    let listed: Vec<CardDto> = serde_json::from_value(body_json(res).await).unwrap();
+    let listed: Vec<CardListDto> = serde_json::from_value(body_json(res).await).unwrap();
     let titles: Vec<_> = listed.iter().map(|c| c.title.clone()).collect();
     assert_eq!(titles, vec!["a", "c", "b"]);
 }
@@ -371,27 +371,41 @@ async fn move_card_non_adjacent_returns_400() {
 }
 
 #[tokio::test]
-async fn card_body_text_clear_via_http() {
+async fn card_body_markdown_clear_via_http() {
     let (app, pool, _tmp) = setup().await;
     let board = BoardRepo::create(&pool, "B").await.unwrap();
     let col = seeded_column(&pool, &board.id, 0).await;
     let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
 
-    // Set body_text via PATCH.
+    let read_body = |app: axum::Router, id: String| async move {
+        let res = app
+            .oneshot(req("GET", &format!("/cards/{}", id)))
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let full: CardDto = serde_json::from_value(body_json(res).await).unwrap();
+        full.body_markdown
+    };
+
+    // Set body_markdown via PATCH. Response is now the thin list DTO.
     let res = app
         .clone()
         .oneshot(req_json(
             "PATCH",
             &format!("/cards/{}", card.id),
-            json!({"body_text": "scratch"}),
+            json!({"body_markdown": "scratch"}),
         ))
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let after: CardDto = serde_json::from_value(body_json(res).await).unwrap();
-    assert_eq!(after.body_text.as_deref(), Some("scratch"));
+    let after: CardListDto = serde_json::from_value(body_json(res).await).unwrap();
+    assert!(after.has_body, "PATCH response should flag has_body=true");
+    assert_eq!(
+        read_body(app.clone(), card.id.clone()).await.as_deref(),
+        Some("scratch")
+    );
 
-    // Omitting body_text leaves it untouched.
+    // Omitting body_markdown leaves it untouched.
     let res = app
         .clone()
         .oneshot(req_json(
@@ -401,11 +415,12 @@ async fn card_body_text_clear_via_http() {
         ))
         .await
         .unwrap();
-    let after: CardDto = serde_json::from_value(body_json(res).await).unwrap();
+    let after: CardListDto = serde_json::from_value(body_json(res).await).unwrap();
+    assert!(after.has_body, "omit must leave body_markdown untouched");
     assert_eq!(
-        after.body_text.as_deref(),
+        read_body(app.clone(), card.id.clone()).await.as_deref(),
         Some("scratch"),
-        "omit must leave body_text untouched"
+        "omit must leave body_markdown untouched",
     );
 
     // Explicit null clears it.
@@ -414,13 +429,14 @@ async fn card_body_text_clear_via_http() {
         .oneshot(req_json(
             "PATCH",
             &format!("/cards/{}", card.id),
-            json!({"body_text": null}),
+            json!({"body_markdown": null}),
         ))
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let after: CardDto = serde_json::from_value(body_json(res).await).unwrap();
-    assert!(after.body_text.is_none(), "null must clear body_text");
+    let after: CardListDto = serde_json::from_value(body_json(res).await).unwrap();
+    assert!(!after.has_body, "null must clear body_markdown");
+    assert!(read_body(app.clone(), card.id).await.is_none());
 }
 
 #[tokio::test]
@@ -450,15 +466,12 @@ async fn get_card_via_http() {
 
 #[tokio::test]
 async fn card_body_put_get_roundtrip_via_http() {
-    use base64::engine::general_purpose::STANDARD as B64;
-    use base64::Engine as _;
-
     let (app, pool, _tmp) = setup().await;
     let board = BoardRepo::create(&pool, "B").await.unwrap();
     let col = seeded_column(&pool, &board.id, 0).await;
     let card = CardRepo::create(&pool, &col.id, "Body").await.unwrap();
 
-    // Fresh card: both blob fields null.
+    // Fresh card: markdown is null.
     let res = app
         .clone()
         .oneshot(req("GET", &format!("/cards/{}/body", card.id)))
@@ -466,26 +479,20 @@ async fn card_body_put_get_roundtrip_via_http() {
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
     let fresh: kanso_api::CardBodyDto = serde_json::from_value(body_json(res).await).unwrap();
-    assert!(fresh.body_blocksuite_b64.is_none());
-    assert!(fresh.body_text.is_none());
+    assert!(fresh.body_markdown.is_none());
 
-    // Round-trip a real-ish blob with bytes a JSON string cannot hold.
-    let blob: Vec<u8> = (0..=255u8).collect();
-    let blob_b64 = B64.encode(&blob);
+    let md = "# Answer\n\n- carrots\n- beans\n";
     let res = app
         .clone()
         .oneshot(req_json(
             "PUT",
             &format!("/cards/{}/body", card.id),
-            json!({
-                "body_blocksuite_b64": blob_b64,
-                "body_text": "the answer is carrots",
-            }),
+            json!({ "body_markdown": md }),
         ))
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let returned: kanso_api::CardDto = serde_json::from_value(body_json(res).await).unwrap();
+    let returned: CardListDto = serde_json::from_value(body_json(res).await).unwrap();
     assert_eq!(returned.id, card.id);
     assert!(returned.updated_at >= card.updated_at);
 
@@ -495,11 +502,10 @@ async fn card_body_put_get_roundtrip_via_http() {
         .await
         .unwrap();
     let got: kanso_api::CardBodyDto = serde_json::from_value(body_json(res).await).unwrap();
-    assert_eq!(got.body_blocksuite_b64.as_deref(), Some(blob_b64.as_str()));
-    assert_eq!(got.body_text.as_deref(), Some("the answer is carrots"));
+    assert_eq!(got.body_markdown.as_deref(), Some(md));
     assert!(got.updated_at >= card.updated_at);
 
-    // FTS must see the new body_text.
+    // FTS must see the new markdown (unicode61 strips '#', '-' as non-word chars).
     let hits = CardRepo::search(&pool, "carrots").await.unwrap();
     assert_eq!(hits.len(), 1);
     assert_eq!(hits[0].id, card.id);
@@ -516,21 +522,42 @@ async fn card_body_get_unknown_returns_404() {
 }
 
 #[tokio::test]
-async fn card_body_put_invalid_base64_returns_400() {
+async fn card_body_put_empty_string_clears_body() {
     let (app, pool, _tmp) = setup().await;
     let board = BoardRepo::create(&pool, "B").await.unwrap();
     let col = seeded_column(&pool, &board.id, 0).await;
     let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
 
+    // Seed a body.
     let res = app
+        .clone()
         .oneshot(req_json(
             "PUT",
             &format!("/cards/{}/body", card.id),
-            json!({"body_blocksuite_b64": "not!base64!@#$", "body_text": "x"}),
+            json!({ "body_markdown": "seed" }),
         ))
         .await
         .unwrap();
-    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(res.status(), StatusCode::OK);
+
+    // Empty string is our "clear" sentinel — PUT semantics require a value.
+    let res = app
+        .clone()
+        .oneshot(req_json(
+            "PUT",
+            &format!("/cards/{}/body", card.id),
+            json!({ "body_markdown": "" }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let res = app
+        .oneshot(req("GET", &format!("/cards/{}/body", card.id)))
+        .await
+        .unwrap();
+    let got: kanso_api::CardBodyDto = serde_json::from_value(body_json(res).await).unwrap();
+    assert!(got.body_markdown.is_none(), "empty string must clear body");
 }
 
 #[tokio::test]
@@ -540,19 +567,15 @@ async fn card_body_put_under_limit_succeeds() {
     let col = seeded_column(&pool, &board.id, 0).await;
     let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
 
-    // ~7 MiB of valid base64 ("A" decodes to a single zero byte; padded to a multiple of 4).
-    let mut b64 = "A".repeat(7 * 1024 * 1024);
-    while b64.len() % 4 != 0 {
-        b64.push('=');
-    }
-
-    let body = json!({"body_blocksuite_b64": b64, "body_text": "x"});
+    // ~7 MiB of markdown — well under the 8 MiB PUT cap.
+    let md = "a".repeat(7 * 1024 * 1024);
+    let body = json!({ "body_markdown": md });
     let res = app
         .oneshot(req_json("PUT", &format!("/cards/{}/body", card.id), body))
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let _returned: kanso_api::CardDto = serde_json::from_value(body_json(res).await).unwrap();
+    let _returned: CardListDto = serde_json::from_value(body_json(res).await).unwrap();
 }
 
 #[tokio::test]
@@ -562,12 +585,8 @@ async fn card_body_put_over_limit_returns_413() {
     let col = seeded_column(&pool, &board.id, 0).await;
     let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
 
-    let mut b64 = "A".repeat(9 * 1024 * 1024);
-    while b64.len() % 4 != 0 {
-        b64.push('=');
-    }
-
-    let body = json!({"body_blocksuite_b64": b64, "body_text": "x"});
+    let md = "a".repeat(9 * 1024 * 1024);
+    let body = json!({ "body_markdown": md });
     let res = app
         .oneshot(req_json("PUT", &format!("/cards/{}/body", card.id), body))
         .await
@@ -647,7 +666,7 @@ async fn card_tag_link_via_http() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let linked: CardDto = serde_json::from_value(body_json(res).await).unwrap();
+    let linked: CardListDto = serde_json::from_value(body_json(res).await).unwrap();
     assert_eq!(linked.id, card.id);
 
     // idempotent
@@ -657,7 +676,7 @@ async fn card_tag_link_via_http() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let _: CardDto = serde_json::from_value(body_json(res).await).unwrap();
+    let _: CardListDto = serde_json::from_value(body_json(res).await).unwrap();
 
     let res = app
         .clone()
@@ -672,7 +691,7 @@ async fn card_tag_link_via_http() {
         .oneshot(req("GET", &format!("/tags/{}/cards", tag.id)))
         .await
         .unwrap();
-    let cards: Vec<CardDto> = serde_json::from_value(body_json(res).await).unwrap();
+    let cards: Vec<CardListDto> = serde_json::from_value(body_json(res).await).unwrap();
     assert_eq!(cards.len(), 1);
     assert_eq!(cards[0].id, card.id);
 
@@ -685,7 +704,7 @@ async fn card_tag_link_via_http() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let unlinked: CardDto = serde_json::from_value(body_json(res).await).unwrap();
+    let unlinked: CardListDto = serde_json::from_value(body_json(res).await).unwrap();
     assert_eq!(unlinked.id, card.id);
 
     // idempotent unlink
@@ -698,7 +717,7 @@ async fn card_tag_link_via_http() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let _: CardDto = serde_json::from_value(body_json(res).await).unwrap();
+    let _: CardListDto = serde_json::from_value(body_json(res).await).unwrap();
 
     // missing card -> 404
     let res = app
@@ -720,7 +739,7 @@ async fn card_search_via_http() {
     let card = CardRepo::create(&pool, &col.id, "Plain Title")
         .await
         .unwrap();
-    CardRepo::set_body(&pool, &card.id, Some(b"y"), Some("ribbon ribbon ribbon"))
+    CardRepo::set_body(&pool, &card.id, Some("ribbon ribbon ribbon"))
         .await
         .unwrap();
 
@@ -877,16 +896,13 @@ async fn body_over_limit_returns_413() {
 async fn card_body_put_above_1mib_still_accepted() {
     // The /cards/:id/body PUT keeps its own 8 MiB override; verify a payload
     // bigger than the global 1 MiB cap doesn't get rejected by it.
-    use base64::Engine as _;
     let (app, pool, _tmp) = setup().await;
     let board = BoardRepo::create(&pool, "B").await.unwrap();
     let col = seeded_column(&pool, &board.id, 0).await;
     let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
 
     let payload = serde_json::json!({
-        "body_blocksuite_b64": base64::engine::general_purpose::STANDARD
-            .encode(vec![0u8; 1_500_000]),
-        "body_text": "x".repeat(1_500_000),
+        "body_markdown": "x".repeat(1_500_000),
     });
     let res = app
         .oneshot(req_json(
@@ -897,55 +913,7 @@ async fn card_body_put_above_1mib_still_accepted() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let _returned: kanso_api::CardDto = serde_json::from_value(body_json(res).await).unwrap();
-}
-
-#[tokio::test]
-async fn card_body_put_text_only_succeeds_and_clears_blob() {
-    use base64::engine::general_purpose::STANDARD as B64;
-    use base64::Engine as _;
-
-    let (app, pool, _tmp) = setup().await;
-    let board = BoardRepo::create(&pool, "B").await.unwrap();
-    let col = seeded_column(&pool, &board.id, 0).await;
-    let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
-
-    // Seed a real blob first.
-    let blob_b64 = B64.encode(vec![9u8; 32]);
-    let seed = app
-        .clone()
-        .oneshot(req_json(
-            "PUT",
-            &format!("/cards/{}/body", card.id),
-            json!({"body_blocksuite_b64": blob_b64, "body_text": "seed"}),
-        ))
-        .await
-        .unwrap();
-    assert_eq!(seed.status(), StatusCode::OK);
-
-    // Text-only write — the flagship agent call.
-    let res = app
-        .clone()
-        .oneshot(req_json(
-            "PUT",
-            &format!("/cards/{}/body", card.id),
-            json!({"body_text": "hello"}),
-        ))
-        .await
-        .unwrap();
-    assert_eq!(res.status(), StatusCode::OK);
-    let returned: kanso_api::CardDto = serde_json::from_value(body_json(res).await).unwrap();
-    assert_eq!(returned.id, card.id);
-
-    // Verify the blob is cleared and text landed.
-    let got = app
-        .clone()
-        .oneshot(req("GET", &format!("/cards/{}/body", card.id)))
-        .await
-        .unwrap();
-    let body: kanso_api::CardBodyDto = serde_json::from_value(body_json(got).await).unwrap();
-    assert!(body.body_blocksuite_b64.is_none(), "blob should be cleared");
-    assert_eq!(body.body_text.as_deref(), Some("hello"));
+    let _returned: CardListDto = serde_json::from_value(body_json(res).await).unwrap();
 }
 
 #[tokio::test]
@@ -955,6 +923,8 @@ async fn card_body_put_empty_body_returns_400() {
     let col = seeded_column(&pool, &board.id, 0).await;
     let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
 
+    // Missing the required `body_markdown` field must fail deserialization.
+    // Axum surfaces JSON deserialization errors as 422 (UNPROCESSABLE_ENTITY).
     let res = app
         .oneshot(req_json(
             "PUT",
@@ -963,7 +933,7 @@ async fn card_body_put_empty_body_returns_400() {
         ))
         .await
         .unwrap();
-    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(res.status(), StatusCode::UNPROCESSABLE_ENTITY);
 }
 
 #[tokio::test]
@@ -1169,7 +1139,7 @@ async fn cards_search_respects_limit_and_offset() {
         let c = CardRepo::create(&pool, &col.id, &format!("hit {i}"))
             .await
             .unwrap();
-        CardRepo::set_body(&pool, &c.id, Some(b"y"), Some("needle needle needle"))
+        CardRepo::set_body(&pool, &c.id, Some("needle needle needle"))
             .await
             .unwrap();
     }
@@ -1415,5 +1385,336 @@ mod singular_gets {
         let v = body_json(res).await;
         let err = v["error"].as_str().unwrap();
         assert!(err.contains("column not found"), "got: {err}");
+    }
+}
+
+/// Guardrails against `body_markdown` regressing back into list, search,
+/// board-full, or write responses. Typed deserialization silently ignores
+/// unknown JSON fields, so a regression would go undetected without raw
+/// key assertions. These tests fail loudly if body_markdown ever creeps
+/// back into a thin-DTO response.
+mod thin_dto_shape {
+    use super::*;
+
+    fn assert_thin_card(card: &Value, ctx: &str) {
+        assert!(
+            card.get("body_markdown").is_none(),
+            "{ctx}: card carries body_markdown; expected thin shape. card={card}",
+        );
+        assert!(
+            card.get("has_body").and_then(|v| v.as_bool()).is_some(),
+            "{ctx}: card missing has_body bool. card={card}",
+        );
+    }
+
+    async fn seed_body(app: &axum::Router, column_id: &str, title: &str, body: &str) -> String {
+        let res = app
+            .clone()
+            .oneshot(req_json(
+                "POST",
+                &format!("/columns/{column_id}/cards"),
+                json!({ "title": title }),
+            ))
+            .await
+            .unwrap();
+        let v = body_json(res).await;
+        let id = v["id"].as_str().unwrap().to_string();
+        let res = app
+            .clone()
+            .oneshot(req_json(
+                "PUT",
+                &format!("/cards/{id}/body"),
+                json!({ "body_markdown": body }),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        id
+    }
+
+    #[tokio::test]
+    async fn card_list_response_has_no_body_markdown() {
+        let (app, pool, _tmp) = setup().await;
+        let board = BoardRepo::create(&pool, "B").await.unwrap();
+        let column_id = seeded_column(&pool, &board.id, 0).await.id;
+        seed_body(&app, &column_id, "with body", "hello **there**").await;
+        seed_body(&app, &column_id, "empty body", "").await;
+
+        let res = app
+            .oneshot(req("GET", &format!("/columns/{column_id}/cards")))
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let v = body_json(res).await;
+        let arr = v.as_array().unwrap();
+        assert_eq!(arr.len(), 2);
+        for c in arr {
+            assert_thin_card(c, "card_list");
+        }
+    }
+
+    #[tokio::test]
+    async fn card_search_response_has_no_body_markdown() {
+        let (app, pool, _tmp) = setup().await;
+        let board = BoardRepo::create(&pool, "B").await.unwrap();
+        let column_id = seeded_column(&pool, &board.id, 0).await.id;
+        seed_body(&app, &column_id, "findme", "some *markdown* body").await;
+
+        let res = app
+            .oneshot(req("GET", "/cards/search?q=findme"))
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let v = body_json(res).await;
+        let hits = v.as_array().unwrap();
+        assert!(!hits.is_empty());
+        for hit in hits {
+            let card = hit.get("card").unwrap();
+            assert_thin_card(card, "card_search");
+        }
+    }
+
+    #[tokio::test]
+    async fn board_full_response_has_no_body_markdown() {
+        let (app, pool, _tmp) = setup().await;
+        let board = BoardRepo::create(&pool, "B").await.unwrap();
+        let column_id = seeded_column(&pool, &board.id, 0).await.id;
+        seed_body(&app, &column_id, "one", "body one").await;
+        seed_body(&app, &column_id, "two", "").await;
+
+        let res = app
+            .oneshot(req("GET", &format!("/boards/{}/_full", board.id)))
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let v = body_json(res).await;
+        for col in v["columns"].as_array().unwrap() {
+            for cwt in col["cards"].as_array().unwrap() {
+                let card = cwt.get("card").unwrap();
+                assert_thin_card(card, "board_full");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn card_write_responses_have_no_body_markdown() {
+        let (app, pool, _tmp) = setup().await;
+        let board = BoardRepo::create(&pool, "B").await.unwrap();
+        let col_a = seeded_column(&pool, &board.id, 0).await.id;
+        let col_b = seeded_column(&pool, &board.id, 1).await.id;
+
+        // POST /columns/:id/cards
+        let res = app
+            .clone()
+            .oneshot(req_json(
+                "POST",
+                &format!("/columns/{col_a}/cards"),
+                json!({ "title": "new" }),
+            ))
+            .await
+            .unwrap();
+        let created = body_json(res).await;
+        assert_thin_card(&created, "card_create");
+        let id = created["id"].as_str().unwrap().to_string();
+
+        // PATCH /cards/:id (with body_markdown in the patch — response must
+        // still be thin).
+        let res = app
+            .clone()
+            .oneshot(req_json(
+                "PATCH",
+                &format!("/cards/{id}"),
+                json!({ "body_markdown": "**patched**", "title": "renamed" }),
+            ))
+            .await
+            .unwrap();
+        let patched = body_json(res).await;
+        assert_thin_card(&patched, "card_update");
+        assert_eq!(patched["has_body"].as_bool(), Some(true));
+
+        // POST /cards/:id/move
+        let res = app
+            .clone()
+            .oneshot(req_json(
+                "POST",
+                &format!("/cards/{id}/move"),
+                json!({ "target_column_id": col_b }),
+            ))
+            .await
+            .unwrap();
+        let moved = body_json(res).await;
+        assert_thin_card(&moved, "card_move");
+
+        // PUT /cards/:id/body
+        let res = app
+            .clone()
+            .oneshot(req_json(
+                "PUT",
+                &format!("/cards/{id}/body"),
+                json!({ "body_markdown": "replaced" }),
+            ))
+            .await
+            .unwrap();
+        let put = body_json(res).await;
+        assert_thin_card(&put, "card_body_set");
+        assert_eq!(put["has_body"].as_bool(), Some(true));
+
+        // Tag link/unlink
+        let res = app
+            .clone()
+            .oneshot(req_json(
+                "POST",
+                "/tags",
+                json!({ "name": "t1", "color": "#000000" }),
+            ))
+            .await
+            .unwrap();
+        let tag_id = body_json(res).await["id"].as_str().unwrap().to_string();
+        let res = app
+            .clone()
+            .oneshot(req("POST", &format!("/cards/{id}/tags/{tag_id}")))
+            .await
+            .unwrap();
+        assert_thin_card(&body_json(res).await, "card_tag_add");
+        let res = app
+            .clone()
+            .oneshot(req("DELETE", &format!("/cards/{id}/tags/{tag_id}")))
+            .await
+            .unwrap();
+        assert_thin_card(&body_json(res).await, "card_tag_remove");
+    }
+
+    /// GET /cards/:id is the *only* endpoint that should still expose
+    /// body_markdown — this test locks in that asymmetry so we notice if
+    /// someone thins it accidentally.
+    #[tokio::test]
+    async fn card_get_single_still_exposes_body_markdown() {
+        let (app, pool, _tmp) = setup().await;
+        let board = BoardRepo::create(&pool, "B").await.unwrap();
+        let column_id = seeded_column(&pool, &board.id, 0).await.id;
+        let id = seed_body(&app, &column_id, "single", "keep me").await;
+
+        let res = app
+            .oneshot(req("GET", &format!("/cards/{id}")))
+            .await
+            .unwrap();
+        let v = body_json(res).await;
+        assert_eq!(v["body_markdown"].as_str(), Some("keep me"));
+        assert!(
+            v.get("has_body").is_none(),
+            "card_get returns CardDto, not CardListDto — has_body should NOT appear",
+        );
+    }
+}
+
+/// `has_body` derivation edges: NULL, empty string, and whitespace-only
+/// bodies must all resolve to `false` per trimmed-nonblank semantics.
+/// A single non-whitespace character flips it to `true`.
+mod has_body_edges {
+    use super::*;
+
+    async fn seed_card(app: &axum::Router, column_id: &str, title: &str) -> String {
+        let res = app
+            .clone()
+            .oneshot(req_json(
+                "POST",
+                &format!("/columns/{column_id}/cards"),
+                json!({ "title": title }),
+            ))
+            .await
+            .unwrap();
+        body_json(res).await["id"].as_str().unwrap().to_string()
+    }
+
+    async fn list_card_by_id(app: &axum::Router, column_id: &str, id: &str) -> Value {
+        let res = app
+            .clone()
+            .oneshot(req("GET", &format!("/columns/{column_id}/cards")))
+            .await
+            .unwrap();
+        let v = body_json(res).await;
+        let card = v
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|c| c["id"].as_str() == Some(id));
+        assert!(card.is_some(), "card {id} not in list");
+        card.unwrap().clone()
+    }
+
+    #[tokio::test]
+    async fn null_body_is_false() {
+        let (app, pool, _tmp) = setup().await;
+        let board = BoardRepo::create(&pool, "B").await.unwrap();
+        let column_id = seeded_column(&pool, &board.id, 0).await.id;
+        let id = seed_card(&app, &column_id, "fresh").await;
+        // Fresh card has never had a body set → NULL in DB.
+        let card = list_card_by_id(&app, &column_id, &id).await;
+        assert_eq!(
+            card["has_body"].as_bool(),
+            Some(false),
+            "NULL body should read as has_body=false; got {card}",
+        );
+    }
+
+    #[tokio::test]
+    async fn empty_string_body_is_false() {
+        let (app, pool, _tmp) = setup().await;
+        let board = BoardRepo::create(&pool, "B").await.unwrap();
+        let column_id = seeded_column(&pool, &board.id, 0).await.id;
+        let id = seed_card(&app, &column_id, "wiped").await;
+        let res = app
+            .clone()
+            .oneshot(req_json(
+                "PUT",
+                &format!("/cards/{id}/body"),
+                json!({ "body_markdown": "" }),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(body_json(res).await["has_body"].as_bool(), Some(false));
+    }
+
+    #[tokio::test]
+    async fn whitespace_only_body_is_false() {
+        let (app, pool, _tmp) = setup().await;
+        let board = BoardRepo::create(&pool, "B").await.unwrap();
+        let column_id = seeded_column(&pool, &board.id, 0).await.id;
+        let id = seed_card(&app, &column_id, "blank").await;
+        let res = app
+            .clone()
+            .oneshot(req_json(
+                "PUT",
+                &format!("/cards/{id}/body"),
+                json!({ "body_markdown": "   \n\t  \n" }),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(
+            body_json(res).await["has_body"].as_bool(),
+            Some(false),
+            "whitespace-only body should read as has_body=false",
+        );
+    }
+
+    #[tokio::test]
+    async fn single_visible_char_is_true() {
+        let (app, pool, _tmp) = setup().await;
+        let board = BoardRepo::create(&pool, "B").await.unwrap();
+        let column_id = seeded_column(&pool, &board.id, 0).await.id;
+        let id = seed_card(&app, &column_id, "written").await;
+        let res = app
+            .clone()
+            .oneshot(req_json(
+                "PUT",
+                &format!("/cards/{id}/body"),
+                json!({ "body_markdown": "x" }),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(body_json(res).await["has_body"].as_bool(), Some(true));
     }
 }

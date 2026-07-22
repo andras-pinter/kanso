@@ -26,7 +26,6 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 hex = "0.4"
 rand = "0.8"
-base64 = { workspace = true }
 sqlx = { workspace = true }
 kanso-core = { path = "../kanso-core" }
 kanso-api = { path = "../kanso-api" }

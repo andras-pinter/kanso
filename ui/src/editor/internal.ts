@@ -1,155 +1,94 @@
-// BlockSuite ships raw .ts source that fails strict typecheck; tsconfig
-// `paths` redirects `@blocksuite/*` to a stub ambient declaration so this
-// file sees those imports as `any`. Runtime resolution (vite/rollup) is
-// unaffected. Our public surface is hand-typed in ./types.ts.
+import { Editor } from '@tiptap/core';
+import StarterKit from '@tiptap/starter-kit';
+import Placeholder from '@tiptap/extension-placeholder';
+import TaskList from '@tiptap/extension-task-list';
+import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
+import { Markdown } from 'tiptap-markdown';
 
-import '@blocksuite/affine/effects';
-import './blocksuite-theme.css';
-import { AffineSchemas } from '@blocksuite/affine/schemas';
-import { Schema, Transformer, Text } from '@blocksuite/affine/store';
-import { TestWorkspace } from '@blocksuite/affine/store/test';
-import {
-  CommunityCanvasTextFonts,
-  FontConfigExtension,
-  FeatureFlagService,
-} from '@blocksuite/affine/shared/services';
-import type { ExtensionType, Store, Workspace } from '@blocksuite/affine/store';
-import * as Y from 'yjs';
-
-import { AffineEditorContainer } from './affine-editor-container';
-import { getViewManager, getStoreManager } from './extensions';
-import { extractPlaintext } from './plaintext';
+import { BracketTaskItem } from './BracketTaskItem';
+import { SlashCommand } from './SlashCommand';
+import { lowlight } from './lowlight';
 import type { EditorHandle, EditorOptions } from './types';
+import './tiptap.css';
+import 'highlight.js/styles/github.css';
 
-// Register the custom element once. `@blocksuite/affine/effects` wires up all
-// the block / inline / widget elements but not the editor container itself —
-// that shell used to live in `@blocksuite/integration-test`. We vendored the
-// class into ./affine-editor-container.ts and register it here.
-if (!customElements.get('affine-editor-container')) {
-  customElements.define(
-    'affine-editor-container',
-    AffineEditorContainer as unknown as CustomElementConstructor,
-  );
+const INDENT = '    ';
+
+/** Tab inside a code block inserts 4 spaces; Shift-Tab strips up to 4 leading
+ * spaces. Outside code blocks, Tab keeps StarterKit's default (list indent). */
+const CodeBlockWithTab = CodeBlockLowlight.extend({
+  addKeyboardShortcuts() {
+    return {
+      Tab: () => {
+        if (!this.editor.isActive('codeBlock')) return false;
+        const { state, view } = this.editor;
+        view.dispatch(state.tr.insertText(INDENT).scrollIntoView());
+        return true;
+      },
+      'Shift-Tab': () => {
+        if (!this.editor.isActive('codeBlock')) return false;
+        const { state, view } = this.editor;
+        const { $from } = state.selection;
+        const lineStart = $from.start();
+        const before = state.doc.textBetween(lineStart, $from.pos, '\n');
+        const nl = before.lastIndexOf('\n');
+        const lineFrom = lineStart + nl + 1;
+        const lineText = state.doc.textBetween(lineFrom, $from.pos, '\n');
+        const strip = /^ {1,4}/.exec(lineText)?.[0].length ?? 0;
+        if (!strip) return true;
+        view.dispatch(state.tr.delete(lineFrom, lineFrom + strip).scrollIntoView());
+        return true;
+      },
+    };
+  },
+});
+
+interface MarkdownStorage {
+  markdown?: { getMarkdown: () => string };
 }
 
-const DOC_ID = 'doc:home';
+const readMarkdown = (editor: Editor): string =>
+  (editor.storage as MarkdownStorage).markdown?.getMarkdown() ?? '';
 
-// Root title lives at model.props.title, not model.title — block models proxy
-// props but the root model needs explicit access. Same goes for prop:text on
-// content blocks. This helper avoids leaking that quirk to callers.
-type SpaceDocHost = { spaceDoc: Y.Doc };
+export function mountEditor(container: HTMLElement, opts: EditorOptions = {}): EditorHandle {
+  const mount = document.createElement('div');
+  mount.className = 'kanso-tiptap';
+  container.appendChild(mount);
 
-function buildRuntimeExtensions(): ExtensionType[] {
-  return [FontConfigExtension(CommunityCanvasTextFonts)];
-}
-
-function createWorkspace(): Workspace {
-  const schema = new Schema();
-  schema.register(AffineSchemas);
-  const storeManager = getStoreManager();
-  const ws = new TestWorkspace({
-    id: 'kanso-workspace',
-    blobSources: { main: undefined as never, shadows: [] },
-  } as never);
-  ws.storeExtensions = storeManager.get('store');
-  ws.start();
-  new Transformer({
-    schema,
-    blobCRUD: ws.blobSync,
-    docCRUD: {
-      create: (id: string) => ws.createDoc(id).getStore({ id }),
-      get: (id: string) => ws.getDoc(id)?.getStore({ id }) ?? null,
-      delete: (id: string) => ws.removeDoc(id),
-    },
+  const editor = new Editor({
+    element: mount,
+    extensions: [
+      StarterKit.configure({ codeBlock: false }),
+      CodeBlockWithTab.configure({ lowlight, defaultLanguage: null }),
+      Markdown.configure({ transformCopiedText: true, transformPastedText: true }),
+      Placeholder.configure({ placeholder: opts.placeholder ?? "Type '/' for commands…" }),
+      TaskList,
+      BracketTaskItem.configure({ nested: true }),
+      SlashCommand,
+    ],
+    content: opts.initialMarkdown ?? '',
   });
-  return ws;
-}
 
-function seedDoc(workspace: Workspace, initialText?: string): Store {
-  workspace.meta.initialize();
-  const doc = workspace.createDoc(DOC_ID);
-  const store = doc.getStore({ id: DOC_ID });
-  doc.load(() => {
-    const rootId = store.addBlock('affine:page', { title: new Text('Untitled') });
-    store.addBlock('affine:surface', {}, rootId);
-    const noteId = store.addBlock('affine:note', {}, rootId);
-    // Auto-convert legacy plaintext bodies (Wave 5 textarea era) into a
-    // single paragraph block. Single block round-trips the text verbatim
-    // through extractPlaintext — splitting on '\n\n' would lose blank-line
-    // separators on the way back out, so we keep it whole.
-    const seed = initialText && initialText.length > 0 ? initialText : '';
-    store.addBlock('affine:paragraph', { text: new Text(seed) }, noteId);
-  });
-  return store;
-}
-
-function hydrateDoc(workspace: Workspace, update: Uint8Array): Store {
-  workspace.meta.initialize();
-  const doc = workspace.createDoc(DOC_ID);
-  const store = doc.getStore({ id: DOC_ID });
-  Y.applyUpdate(doc.spaceDoc, update);
-  if (!doc.loaded) doc.load();
-  return store;
-}
-
-function getYDoc(store: Store, workspace: Workspace): Y.Doc {
-  const direct = (store as unknown as Partial<SpaceDocHost>).spaceDoc;
-  if (direct) return direct;
-  const fallback = workspace.getDoc(DOC_ID) as unknown as SpaceDocHost | undefined;
-  if (!fallback?.spaceDoc) throw new Error('failed to resolve spaceDoc for editor store');
-  return fallback.spaceDoc;
-}
-
-export async function mountEditor(
-  container: HTMLElement,
-  opts: EditorOptions = {}
-): Promise<EditorHandle> {
-  const workspace = createWorkspace();
-  const store = opts.initialDoc
-    ? hydrateDoc(workspace, opts.initialDoc)
-    : seedDoc(workspace, opts.initialText);
-
-  const viewManager = getViewManager();
-  const runtimeExts = buildRuntimeExtensions();
-
-  const editor = document.createElement('affine-editor-container');
-  editor.autofocus = true;
-  editor.doc = store;
-  editor.pageSpecs = [...viewManager.get('page'), ...runtimeExts];
-  editor.edgelessSpecs = [...viewManager.get('edgeless'), ...runtimeExts];
-
-  store.get(FeatureFlagService).setFlag('enable_advanced_block_visibility', true);
-
-  container.appendChild(editor as unknown as Node);
-  await editor.updateComplete;
-
-  const ydoc = getYDoc(store, workspace);
-  const listeners = new Set<(doc: Uint8Array) => void>();
-  const onUpdate = () => {
-    if (listeners.size === 0) return;
-    const snapshot = Y.encodeStateAsUpdate(ydoc);
-    for (const cb of listeners) cb(snapshot);
+  const listeners = new Set<() => void>();
+  const notify = () => {
+    listeners.forEach((cb) => cb());
   };
-  ydoc.on('update', onUpdate);
-
-  let disposed = false;
+  editor.on('update', notify);
 
   return {
-    destroy: () => {
-      if (disposed) return;
-      disposed = true;
-      ydoc.off('update', onUpdate);
+    destroy() {
+      editor.off('update', notify);
       listeners.clear();
-      editor.remove();
-      try {
-        workspace.dispose?.();
-      } catch {
-        // workspace dispose is best-effort
-      }
+      editor.destroy();
+      mount.remove();
     },
-    serialize: () => Y.encodeStateAsUpdate(ydoc),
-    extractPlaintext: () => extractPlaintext(ydoc),
-    onChange: (cb) => {
+    getMarkdown() {
+      return readMarkdown(editor);
+    },
+    setMarkdown(md: string) {
+      editor.commands.setContent(md, { emitUpdate: false });
+    },
+    onChange(cb) {
       listeners.add(cb);
       return () => listeners.delete(cb);
     },

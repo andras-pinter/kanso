@@ -48,7 +48,7 @@ const kansoTools = [
                 body: {
                     type: "string",
                     description:
-                        "Optional plaintext body. Stored as body_text; the BlockSuite Yjs body remains empty until edited in the app.",
+                        "Optional markdown body. Stored as body_markdown and indexed by FTS.",
                 },
             },
             required: ["column_id", "title"],

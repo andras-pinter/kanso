@@ -27,7 +27,7 @@ import {
 } from '../api/client';
 import type {
   BoardDto,
-  CardDto,
+  CardListDto,
   CardPatch,
   ColumnDto,
   TagDto,
@@ -66,7 +66,7 @@ interface KanbanState {
   boards: BoardDto[];
   currentBoardId: string | null;
   columns: ColumnDto[];
-  cardsByColumn: Record<string, CardDto[]>;
+  cardsByColumn: Record<string, CardListDto[]>;
   selectedCardId: string | null;
   tags: TagDto[];
   tagsLoaded: boolean;
@@ -131,7 +131,7 @@ function formatError(e: unknown): string {
 //
 // Either side may be absent (prepend / append / empty list).
 export function computeAnchors(
-  targetCards: readonly CardDto[],
+  targetCards: readonly CardListDto[],
   insertIndex: number,
 ): { before?: string; after?: string } {
   const clamped = Math.max(0, Math.min(insertIndex, targetCards.length));
@@ -165,10 +165,10 @@ function persistBoardId(id: string | null): void {
 
 async function fetchBoardContents(
   boardId: string,
-): Promise<{ columns: ColumnDto[]; cardsByColumn: Record<string, CardDto[]> }> {
+): Promise<{ columns: ColumnDto[]; cardsByColumn: Record<string, CardListDto[]> }> {
   const columns = await columnsList(boardId);
   const lists = await Promise.all(columns.map((c) => cardsList(c.id)));
-  const cardsByColumn: Record<string, CardDto[]> = {};
+  const cardsByColumn: Record<string, CardListDto[]> = {};
   columns.forEach((c, i) => {
     cardsByColumn[c.id] = lists[i] ?? [];
   });
@@ -373,10 +373,13 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
   updateCard: async (id, patch) => {
     const prev = findCard(get().cardsByColumn, id);
     if (!prev) return;
-    const optimistic: CardDto = {
+    const optimistic: CardListDto = {
       ...prev,
       title: patch.title ?? prev.title,
-      body_text: patch.body_text === undefined ? prev.body_text : patch.body_text,
+      has_body:
+        patch.body_markdown === undefined
+          ? prev.has_body
+          : typeof patch.body_markdown === 'string' && patch.body_markdown.trim().length > 0,
       due_at: patch.due_at === undefined ? prev.due_at : patch.due_at,
     };
     const mySeq = nextCardMutation(id);
@@ -431,7 +434,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
         ? fromAfterRemove
         : (state.cardsByColumn[targetColumnId] ?? []).slice();
     const clampedIndex = Math.max(0, Math.min(insertIndex, toBeforeInsert.length));
-    const optimisticCard: CardDto = { ...card, column_id: targetColumnId };
+    const optimisticCard: CardListDto = { ...card, column_id: targetColumnId };
     const toAfterInsert = [
       ...toBeforeInsert.slice(0, clampedIndex),
       optimisticCard,
@@ -653,7 +656,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
   clearTagFilters: () => set({ selectedTagIds: [] }),
 }));
 
-function findCard(byColumn: Record<string, CardDto[]>, id: string): CardDto | undefined {
+function findCard(byColumn: Record<string, CardListDto[]>, id: string): CardListDto | undefined {
   for (const list of Object.values(byColumn)) {
     const hit = list.find((c) => c.id === id);
     if (hit) return hit;
@@ -661,8 +664,8 @@ function findCard(byColumn: Record<string, CardDto[]>, id: string): CardDto | un
   return undefined;
 }
 
-function replaceCard(s: KanbanState, fresh: CardDto): Partial<KanbanState> {
-  const next: Record<string, CardDto[]> = {};
+function replaceCard(s: KanbanState, fresh: CardListDto): Partial<KanbanState> {
+  const next: Record<string, CardListDto[]> = {};
   let found = false;
   for (const [colId, list] of Object.entries(s.cardsByColumn)) {
     if (colId === fresh.column_id) {
@@ -687,7 +690,7 @@ function replaceCard(s: KanbanState, fresh: CardDto): Partial<KanbanState> {
 }
 
 function removeCard(s: KanbanState, id: string): Partial<KanbanState> {
-  const next: Record<string, CardDto[]> = {};
+  const next: Record<string, CardListDto[]> = {};
   for (const [colId, list] of Object.entries(s.cardsByColumn)) {
     next[colId] = list.filter((c) => c.id !== id);
   }

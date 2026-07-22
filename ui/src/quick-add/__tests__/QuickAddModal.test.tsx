@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { invoke as realInvoke } from '@tauri-apps/api/core';
 import { __setInvoker, type InvokeFn } from '../../kanban/api/client';
 import { useKanbanStore } from '../../kanban/hooks/useKanbanStore';
-import type { BoardDto, ColumnDto, CardDto } from '../../kanban/types';
+import type { BoardDto, ColumnDto, CardListDto } from '../../kanban/types';
 import QuickAddModal from '../QuickAddModal';
 
 function board(id: string, name: string): BoardDto {
@@ -29,12 +29,12 @@ function column(id: string, board_id: string, name: string): ColumnDto {
   };
 }
 
-function card(id: string, column_id: string, title: string): CardDto {
+function card(id: string, column_id: string, title: string): CardListDto {
   return {
     id,
     column_id,
     title,
-    body_text: null,
+    has_body: false,
     position: id,
     due_at: null,
     created_at: 0,

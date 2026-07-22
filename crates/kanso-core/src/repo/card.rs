@@ -12,18 +12,17 @@ pub struct CardPatch {
     pub title: Option<String>,
     /// Outer `None` = leave untouched. Inner `None` = clear to NULL.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub body_text: Option<Option<String>>,
+    pub body_markdown: Option<Option<String>>,
     /// Outer `None` = leave untouched. Inner `None` = clear to NULL.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub due_at: Option<Option<i64>>,
 }
 
-/// Snapshot of a card's body columns. `None` blobs mean the card has never
-/// had its body set; callers should mount an empty editor in that case.
+/// Snapshot of a card's body column. `None` means the card has never had its
+/// body set; callers should mount an empty editor in that case.
 #[derive(Debug, Clone)]
 pub struct CardBody {
-    pub body_blocksuite: Option<Vec<u8>>,
-    pub body_text: Option<String>,
+    pub body_markdown: Option<String>,
     pub updated_at: i64,
 }
 
@@ -44,7 +43,7 @@ struct SearchRow {
     card_id: String,
     card_column_id: String,
     title: String,
-    body_text: Option<String>,
+    body_markdown: Option<String>,
     position: String,
     due_at: Option<i64>,
     created_at: i64,
@@ -62,8 +61,7 @@ impl SearchRow {
                 id: self.card_id,
                 column_id: self.card_column_id,
                 title: self.title,
-                body_blocksuite: None,
-                body_text: self.body_text,
+                body_markdown: self.body_markdown,
                 position: self.position,
                 due_at: self.due_at,
                 created_at: self.created_at,
@@ -92,9 +90,9 @@ impl CardRepo {
         let id = new_id();
         let now = now_ms();
         sqlx::query(
-            "INSERT INTO cards (id, column_id, title, body_blocksuite, body_text, position, \
+            "INSERT INTO cards (id, column_id, title, body_markdown, position, \
              due_at, created_at, updated_at) \
-             VALUES (?1, ?2, ?3, NULL, NULL, ?4, NULL, ?5, ?5)",
+             VALUES (?1, ?2, ?3, NULL, ?4, NULL, ?5, ?5)",
         )
         .bind(&id)
         .bind(column_id)
@@ -108,8 +106,7 @@ impl CardRepo {
             id,
             column_id: column_id.to_string(),
             title: title.to_string(),
-            body_blocksuite: None,
-            body_text: None,
+            body_markdown: None,
             position,
             due_at: None,
             created_at: now,
@@ -169,8 +166,9 @@ impl CardRepo {
         if let Some(title) = &patch.title {
             qb.push(", title = ").push_bind(title);
         }
-        if let Some(body_text) = &patch.body_text {
-            qb.push(", body_text = ").push_bind(body_text.as_ref());
+        if let Some(body_markdown) = &patch.body_markdown {
+            qb.push(", body_markdown = ")
+                .push_bind(body_markdown.as_ref());
         }
         if let Some(due_at) = patch.due_at {
             qb.push(", due_at = ").push_bind(due_at);
@@ -356,27 +354,18 @@ impl CardRepo {
         })
     }
 
-    /// Atomically write both columns of a card body and bump `updated_at`.
-    /// `None` for either column clears it to NULL — this is PUT semantics, not
-    /// PATCH. Returns `NotFound` if `id` does not exist.
-    pub async fn set_body(
-        pool: &SqlitePool,
-        id: &str,
-        body_blocksuite: Option<&[u8]>,
-        body_text: Option<&str>,
-    ) -> Result<()> {
+    /// Atomically write the markdown body of a card and bump `updated_at`.
+    /// `None` clears it to NULL — this is PUT semantics, not PATCH.
+    /// Returns `NotFound` if `id` does not exist.
+    pub async fn set_body(pool: &SqlitePool, id: &str, body_markdown: Option<&str>) -> Result<()> {
         let now = now_ms();
         let mut tx = pool.begin().await?;
-        let res = sqlx::query(
-            "UPDATE cards SET body_blocksuite = ?1, body_text = ?2, updated_at = ?3 \
-             WHERE id = ?4",
-        )
-        .bind(body_blocksuite)
-        .bind(body_text)
-        .bind(now)
-        .bind(id)
-        .execute(&mut *tx)
-        .await?;
+        let res = sqlx::query("UPDATE cards SET body_markdown = ?1, updated_at = ?2 WHERE id = ?3")
+            .bind(body_markdown)
+            .bind(now)
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
 
         if res.rows_affected() == 0 {
             return Err(KansoError::NotFound {
@@ -388,20 +377,18 @@ impl CardRepo {
         Ok(())
     }
 
-    /// Read the raw Yjs blob, plaintext, and current `updated_at` for `id`.
-    /// `NotFound` if the card doesn't exist; both blob columns may be `None`
+    /// Read the markdown body and current `updated_at` for `id`.
+    /// `NotFound` if the card doesn't exist; `body_markdown` may be `None`
     /// on a card that has never had its body set.
     pub async fn get_body(pool: &SqlitePool, id: &str) -> Result<CardBody> {
-        let row: Option<(Option<Vec<u8>>, Option<String>, i64)> = sqlx::query_as(
-            "SELECT body_blocksuite, body_text, updated_at FROM cards WHERE id = ?1",
-        )
-        .bind(id)
-        .fetch_optional(pool)
-        .await?;
+        let row: Option<(Option<String>, i64)> =
+            sqlx::query_as("SELECT body_markdown, updated_at FROM cards WHERE id = ?1")
+                .bind(id)
+                .fetch_optional(pool)
+                .await?;
         match row {
-            Some((blob, text, updated_at)) => Ok(CardBody {
-                body_blocksuite: blob,
-                body_text: text,
+            Some((body_markdown, updated_at)) => Ok(CardBody {
+                body_markdown,
                 updated_at,
             }),
             None => Err(KansoError::NotFound {
@@ -432,10 +419,7 @@ impl CardRepo {
     /// FTS5 search enriched with the column + board each hit lives in so
     /// search palettes can render `board · column` subtitles and jump
     /// across boards without a second round-trip per hit.
-    pub async fn search_with_context(
-        pool: &SqlitePool,
-        query: &str,
-    ) -> Result<Vec<CardSearchHit>> {
+    pub async fn search_with_context(pool: &SqlitePool, query: &str) -> Result<Vec<CardSearchHit>> {
         let trimmed = query.trim();
         if trimmed.is_empty() {
             return Ok(Vec::new());
@@ -445,7 +429,7 @@ impl CardRepo {
             "SELECT c.id          AS card_id, \
                     c.column_id   AS card_column_id, \
                     c.title       AS title, \
-                    c.body_text   AS body_text, \
+                    c.body_markdown AS body_markdown, \
                     c.position    AS position, \
                     c.due_at      AS due_at, \
                     c.created_at  AS created_at, \
@@ -483,7 +467,7 @@ impl CardRepo {
             "SELECT c.id          AS card_id, \
                     c.column_id   AS card_column_id, \
                     c.title       AS title, \
-                    c.body_text   AS body_text, \
+                    c.body_markdown AS body_markdown, \
                     c.position    AS position, \
                     c.due_at      AS due_at, \
                     c.created_at  AS created_at, \

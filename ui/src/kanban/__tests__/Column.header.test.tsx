@@ -3,7 +3,7 @@ import { render } from '@testing-library/react';
 import { DndContext } from '@dnd-kit/core';
 import { useKanbanStore } from '../hooks/useKanbanStore';
 import Column from '../Column';
-import type { CardDto, ColumnDto } from '../types';
+import type { CardListDto, ColumnDto } from '../types';
 
 function makeColumn(color: string | null): ColumnDto {
   return {
@@ -17,7 +17,7 @@ function makeColumn(color: string | null): ColumnDto {
   };
 }
 
-function resetStore(column: ColumnDto, cards: CardDto[]) {
+function resetStore(column: ColumnDto, cards: CardListDto[]) {
   useKanbanStore.setState({
     status: 'ready',
     error: null,
@@ -33,7 +33,7 @@ function resetStore(column: ColumnDto, cards: CardDto[]) {
   });
 }
 
-function renderColumn(column: ColumnDto, cards: CardDto[]) {
+function renderColumn(column: ColumnDto, cards: CardListDto[]) {
   return render(
     <DndContext>
       <Column column={column} cards={cards} />
@@ -75,12 +75,12 @@ describe('Column count quiet-zero styling', () => {
 
   it('does not add the --empty modifier when cards are present', () => {
     const column = makeColumn(null);
-    const cards: CardDto[] = [
+    const cards: CardListDto[] = [
       {
         id: 'c1',
         column_id: 'col1',
         title: 'first',
-        body_text: null,
+        has_body: false,
         position: 'a',
         due_at: null,
         created_at: 0,

@@ -2,14 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render } from '@testing-library/react';
 import { useKanbanStore } from '../hooks/useKanbanStore';
 import DueDateEditor from '../DueDateEditor';
-import type { CardDto } from '../types';
+import type { CardListDto } from '../types';
 
-function card(due: number | null = null): CardDto {
+function card(due: number | null = null): CardListDto {
   return {
     id: 'c1',
     column_id: 'col1',
     title: 'Test',
-    body_text: null,
+    has_body: false,
     position: 'c1',
     due_at: due,
     created_at: 0,

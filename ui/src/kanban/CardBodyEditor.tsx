@@ -1,6 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { mountEditor, type EditorHandle } from '../editor';
-import { base64ToBytes, bytesToBase64 } from './base64';
 import { cardBodyGet, cardBodySet } from './api/client';
 import { useDebouncedSave } from './hooks/useDebouncedSave';
 
@@ -31,7 +30,7 @@ type Phase =
   | { kind: 'mounting' }
   | { kind: 'ready' }
   /** Body fetch rejected. Editor is NOT mounted — a stray save would
-   * overwrite the unread blob with empty. User must explicitly retry. */
+   * overwrite the unread markdown with empty. User must explicitly retry. */
   | { kind: 'fetch-failed'; message: string }
   /** Editor failed to mount after a successful fetch (rare). Same retry path. */
   | { kind: 'mount-failed'; message: string };
@@ -52,6 +51,11 @@ function CardBodyEditorImpl(
   const [fetchAttempt, setFetchAttempt] = useState(0);
   const savedTimerRef = useRef<number | null>(null);
   const lastSentRef = useRef<string | null>(null);
+  // Set to true during unmount cleanup so a detached save-in-flight (or the
+  // cleanup fire-and-forget flush) skips setState, timers, and parent
+  // callbacks — the PUT still persists, but no UI lifecycle work touches
+  // the dead component.
+  const unmountedRef = useRef(false);
   // Refs so the debounced save closure sees the latest callback without
   // re-instantiating useDebouncedSave (which would drop pending saves).
   const onSavedRef = useRef(onSaved);
@@ -61,13 +65,13 @@ function CardBodyEditorImpl(
     onSaveErrorRef.current = onSaveError;
   }, [onSaved, onSaveError]);
 
-  const saver = useDebouncedSave<{ blob: Uint8Array; text: string }>(async (value) => {
-    const b64 = bytesToBase64(value.blob);
-    if (b64 === lastSentRef.current) return;
-    setSaveState('saving');
+  const saver = useDebouncedSave<string>(async (markdown) => {
+    if (markdown === lastSentRef.current) return;
+    if (!unmountedRef.current) setSaveState('saving');
     try {
-      await cardBodySet(cardId, { body_blocksuite_b64: b64, body_text: value.text });
-      lastSentRef.current = b64;
+      await cardBodySet(cardId, { body_markdown: markdown });
+      lastSentRef.current = markdown;
+      if (unmountedRef.current) return;
       setSaveState('saved');
       if (savedTimerRef.current !== null) window.clearTimeout(savedTimerRef.current);
       savedTimerRef.current = window.setTimeout(() => setSaveState('idle'), SAVED_PILL_MS);
@@ -75,8 +79,10 @@ function CardBodyEditorImpl(
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       console.error('[kanso] card_body_set failed', e);
-      setSaveState({ kind: 'error', message });
-      onSaveErrorRef.current?.(message);
+      if (!unmountedRef.current) {
+        setSaveState({ kind: 'error', message });
+        onSaveErrorRef.current?.(message);
+      }
       // Rethrow so useDebouncedSave retains the value AND flush() rejects,
       // which lets the drawer close handler keep the drawer open.
       throw e;
@@ -86,34 +92,27 @@ function CardBodyEditorImpl(
   useImperativeHandle(ref, () => ({ flush: () => saver.flush() }), [saver]);
 
   useEffect(() => {
+    // Reset the unmount guard for this run so a prior cardId's cleanup does
+    // not stop the new editor from updating UI state.
+    unmountedRef.current = false;
     let aborted = false;
     let handle: EditorHandle | null = null;
     let unsubscribe: (() => void) | null = null;
 
     (async () => {
       setPhase({ kind: 'fetching' });
-      let initialBytes: Uint8Array | undefined;
-      let initialText = '';
-      let convertedFromLegacy = false;
+      let initialMarkdown: string;
       try {
         const body = await cardBodyGet(cardId);
         if (aborted) return;
-        if (body.body_blocksuite_b64) {
-          initialBytes = base64ToBytes(body.body_blocksuite_b64);
-          lastSentRef.current = body.body_blocksuite_b64;
-        } else if (body.body_text && body.body_text.length > 0) {
-          // Legacy textarea-era card: silently seed the editor with the
-          // existing plaintext so the user's content isn't shadowed by an
-          // empty blob on the first save.
-          initialText = body.body_text;
-          convertedFromLegacy = true;
-        }
+        initialMarkdown = body.body_markdown ?? '';
+        lastSentRef.current = initialMarkdown;
       } catch (e) {
         if (aborted) return;
         const message = e instanceof Error ? e.message : String(e);
         console.error('[kanso] card_body_get failed', e);
         // H5: do NOT mount an empty editor here — a subsequent save would
-        // overwrite the real (unread) blob with empty content. Surface the
+        // overwrite the real (unread) body with empty content. Surface the
         // error and let the user retry.
         setPhase({ kind: 'fetch-failed', message });
         return;
@@ -123,10 +122,7 @@ function CardBodyEditorImpl(
       setPhase({ kind: 'mounting' });
 
       try {
-        handle = await mountEditor(hostRef.current, {
-          initialDoc: initialBytes,
-          initialText: convertedFromLegacy ? initialText : undefined,
-        });
+        handle = await mountEditor(hostRef.current, { initialMarkdown });
       } catch (e) {
         if (aborted) return;
         const message = e instanceof Error ? e.message : String(e);
@@ -139,48 +135,48 @@ function CardBodyEditorImpl(
         return;
       }
       handleRef.current = handle;
-      // Re-derive the canonical b64 so the very next change (which may be
-      // identical bytes due to BlockSuite normalisation) doesn't trigger a save.
-      const baseline = bytesToBase64(handle.serialize());
-      if (initialBytes) lastSentRef.current = baseline;
+      // Re-derive the canonical markdown so the very next change (which may
+      // be an identical string due to Markdown serializer normalisation)
+      // doesn't trigger a save.
+      lastSentRef.current = handle.getMarkdown();
 
-      unsubscribe = handle.onChange((doc) => {
+      unsubscribe = handle.onChange(() => {
         const h = handleRef.current;
         if (!h) return;
-        saver.schedule({ blob: doc, text: h.extractPlaintext() });
+        saver.schedule(h.getMarkdown());
       });
       setPhase({ kind: 'ready' });
-
-      // H1 follow-through: persist the seeded blob even if the user makes
-      // no edits, so the legacy -> BlockSuite conversion survives
-      // open + close-without-editing.
-      if (convertedFromLegacy) {
-        saver.schedule({ blob: handle.serialize(), text: handle.extractPlaintext() });
-      }
     })();
 
     return () => {
+      // Set the unmount guard BEFORE flushing. React runs cleanup callbacks
+      // in declaration order, so this cleanup fires before the timer-clear
+      // effect below — and saver.flush() invokes the save closure's sync
+      // portion the moment it starts. If the guard isn't set here, that
+      // sync portion (and any sync-thrown catch handler underneath) leaks
+      // setSaveState / onSaveError to the dying component.
+      unmountedRef.current = true;
       aborted = true;
       unsubscribe?.();
-      // Best-effort flush before teardown. The Close button awaits flush
-      // separately and keeps the drawer open on failure; this path only
-      // runs when the unmount is unavoidable (cardId change, parent gone),
-      // so a rejected save here means we've lost the edit.
-      void saver
-        .flush()
-        .catch((e) => {
-          console.error('[kanso] cleanup flush failed; edits may be lost', e);
-        })
-        .finally(() => {
-          if (handle) {
-            try {
-              handle.destroy();
-            } catch (e) {
-              console.warn('[kanso] editor destroy threw', e);
-            }
-          }
-          handleRef.current = null;
-        });
+      // Tear down ProseMirror synchronously so listeners, observers and the
+      // slash-menu portal go away immediately — a hung save must not keep
+      // them alive. The Close button awaits flush separately and keeps the
+      // drawer open on failure; this path runs when unmount is unavoidable
+      // (cardId change, parent gone), so a rejected save here means we've
+      // lost the edit.
+      const localHandle = handle;
+      handle = null;
+      handleRef.current = null;
+      if (localHandle) {
+        try {
+          localHandle.destroy();
+        } catch (e) {
+          console.warn('[kanso] editor destroy threw', e);
+        }
+      }
+      void saver.flush().catch((e) => {
+        console.error('[kanso] cleanup flush failed; edits may be lost', e);
+      });
     };
     // cardId is the identity; saver is stable across renders; fetchAttempt
     // is intentionally a dep so retry can re-run the effect from scratch.
@@ -188,8 +184,15 @@ function CardBodyEditorImpl(
   }, [cardId, fetchAttempt]);
 
   useEffect(() => {
+    // savedTimerRef is only relevant across the component's whole lifetime
+    // (not per cardId), so it lives in its own mount-only effect. The
+    // unmount guard is managed by the main effect above — setting it there
+    // ensures it lands BEFORE saver.flush() runs during cleanup.
     return () => {
-      if (savedTimerRef.current !== null) window.clearTimeout(savedTimerRef.current);
+      if (savedTimerRef.current !== null) {
+        window.clearTimeout(savedTimerRef.current);
+        savedTimerRef.current = null;
+      }
     };
   }, []);
 
@@ -198,7 +201,7 @@ function CardBodyEditorImpl(
   const retrySave = (): void => {
     const handle = handleRef.current;
     if (!handle) return;
-    saver.schedule({ blob: handle.serialize(), text: handle.extractPlaintext() });
+    saver.schedule(handle.getMarkdown());
   };
 
   const retryFetch = (): void => {
@@ -249,9 +252,10 @@ function CardBodyEditorImpl(
           </button>
         </div>
       )}
-      {/* Host is unconditional so React never tears down a div that Lit-owned
-       * BlockSuite DOM lives inside. Hidden via CSS when a failure banner
-       * is showing; keeps mount/unmount coupled 1:1 with this component. */}
+      {/* Host is unconditional so React never tears down a div that TipTap-
+       * owned ProseMirror DOM lives inside. Hidden via CSS when a failure
+       * banner is showing; keeps mount/unmount coupled 1:1 with this
+       * component. */}
       <div
         ref={hostRef}
         className="kanso-editor-host"
@@ -261,6 +265,23 @@ function CardBodyEditorImpl(
   );
 }
 
+/**
+ * Rich-text body editor for a single card.
+ *
+ * **Caller invariant:** callers MUST render this component with
+ * `key={cardId}` (see `KanbanBoard.tsx` — the drawer keys the selected card
+ * that way). Effect A keeps `cardId` in its dep list to support the
+ * fetch-retry case (same `cardId`, bumped `fetchAttempt`), but it does NOT
+ * isolate the `useDebouncedSave` closure across genuine `cardId` changes: a
+ * save in flight when `cardId` flips would resolve into the new run's state
+ * and potentially write the previous card's body into the new one. The
+ * `key={cardId}` remount makes that unreachable in production.
+ *
+ * If a future caller ever swaps `cardId` without a keyed remount, the saver
+ * needs per-cardId isolation — either an inner component keyed by `cardId`
+ * that owns the saver, or a lifecycle generation counter threaded into each
+ * save closure so stale saves can no-op on landing.
+ */
 const CardBodyEditor = forwardRef<CardBodyEditorHandle, Props>(CardBodyEditorImpl);
 CardBodyEditor.displayName = 'CardBodyEditor';
 export default CardBodyEditor;

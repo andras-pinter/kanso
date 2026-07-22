@@ -73,7 +73,7 @@ describe('kanban api client', () => {
   it('serializes card commands', async () => {
     await cardsList('c1');
     await cardCreate('c1', 'Hi');
-    await cardUpdate('k1', { title: 'Renamed', body_text: null });
+    await cardUpdate('k1', { title: 'Renamed', body_markdown: null });
     await cardDelete('k1');
 
     expect(calls).toEqual([
@@ -81,7 +81,7 @@ describe('kanban api client', () => {
       { cmd: 'card_create', args: { columnId: 'c1', title: 'Hi' } },
       {
         cmd: 'card_update',
-        args: { id: 'k1', patch: { title: 'Renamed', body_text: null } },
+        args: { id: 'k1', patch: { title: 'Renamed', body_markdown: null } },
       },
       { cmd: 'card_delete', args: { id: 'k1' } },
     ]);
@@ -110,23 +110,23 @@ describe('kanban api client', () => {
 
   it('forwards card body get / set with the canonical arg shape', async () => {
     await cardBodyGet('k1');
-    await cardBodySet('k1', { body_blocksuite_b64: 'AAA=', body_text: 'hi' });
+    await cardBodySet('k1', { body_markdown: '# hi' });
 
     expect(calls).toEqual([
       { cmd: 'card_body_get', args: { id: 'k1' } },
       {
         cmd: 'card_body_set',
-        args: { id: 'k1', body: { body_blocksuite_b64: 'AAA=', body_text: 'hi' } },
+        args: { id: 'k1', body: { body_markdown: '# hi' } },
       },
     ]);
   });
 
-  it('supports text-only card body writes', async () => {
-    await cardBodySet('k2', { body_text: 'plain' });
+  it('supports clearing the body with an empty markdown string', async () => {
+    await cardBodySet('k2', { body_markdown: '' });
     expect(calls).toEqual([
       {
         cmd: 'card_body_set',
-        args: { id: 'k2', body: { body_text: 'plain' } },
+        args: { id: 'k2', body: { body_markdown: '' } },
       },
     ]);
   });

@@ -110,7 +110,7 @@ describe("MCP tool schemas ↔ Rust DTO contract", () => {
         });
     });
 
-    it("card_update patch matches CardPatchDto (body_text — not description)", () => {
+    it("card_update patch matches CardPatchDto (body_markdown — not description)", () => {
         expect(diffFields(patchFields("card_update"), DTO_CONTRACT.card_update_patch)).toEqual({
             ok: true,
             extra: [],

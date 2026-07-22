@@ -3,10 +3,10 @@
 // (date-only semantics; see DueBadge for the matching overdue check).
 
 import { useKanbanStore } from './hooks/useKanbanStore';
-import type { CardDto } from './types';
+import type { CardListDto } from './types';
 
 interface Props {
-  card: CardDto;
+  card: CardListDto;
 }
 
 function millisToInputValue(ms: number | null | undefined): string {

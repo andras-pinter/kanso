@@ -1,20 +1,17 @@
 import { GripVertical } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { CardDto } from './types';
+import type { CardListDto } from './types';
 import { useKanbanStore } from './hooks/useKanbanStore';
 import TagChips from './TagChips';
 
 interface Props {
-  card: CardDto;
+  card: CardListDto;
 }
 
 // Phase 1: the card face carries content only — title, tag chips, and a
 // subtle "has notes" dot. The body text and any due-date affordance live
 // inside the card modal, not on the face.
-const hasBodyText = (card: CardDto): boolean =>
-  (card.body_text?.trim().length ?? 0) > 0;
-
 export default function Card({ card }: Props) {
   const selectCard = useKanbanStore((s) => s.selectCard);
   const selected = useKanbanStore((s) => s.selectedCardId === card.id);
@@ -23,7 +20,7 @@ export default function Card({ card }: Props) {
     data: { type: 'card', columnId: card.column_id },
   });
 
-  const hasBody = hasBodyText(card);
+  const hasBody = card.has_body;
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -92,7 +89,7 @@ export default function Card({ card }: Props) {
 // Visual-only twin used inside <DragOverlay>. Doesn't subscribe to
 // useSortable — overlay manages its own transform/positioning.
 export function CardOverlay({ card }: Props) {
-  const hasBody = hasBodyText(card);
+  const hasBody = card.has_body;
   return (
     <div className="kanso-card kanso-card--overlay">
       <div className="kanso-card-title">

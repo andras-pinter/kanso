@@ -6,14 +6,14 @@
 import { describe, expect, it } from 'vitest';
 import { resolveDragEnd } from '../dragEnd';
 import { computeAnchors } from '../hooks/useKanbanStore';
-import type { CardDto } from '../types';
+import type { CardListDto } from '../types';
 
-function card(id: string, columnId: string): CardDto {
+function card(id: string, columnId: string): CardListDto {
   return {
     id,
     column_id: columnId,
     title: id,
-    body_text: null,
+    has_body: false,
     position: id,
     due_at: null,
     created_at: 0,
@@ -26,7 +26,7 @@ function anchorsFor(activeId: string, overId: string | null) {
     cardsByColumn: {
       todo: [card('a', 'todo'), card('b', 'todo'), card('c', 'todo')],
       doing: [card('x', 'doing'), card('y', 'doing'), card('z', 'doing')],
-      done: [] as CardDto[],
+      done: [] as CardListDto[],
     },
   };
   const r = resolveDragEnd(activeId, overId, layout);

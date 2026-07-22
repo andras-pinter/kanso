@@ -1903,7 +1903,6 @@ name = "kanso-api"
 version = "0.1.0"
 dependencies = [
  "axum",
- "base64 0.22.1",
  "http-body-util",
  "kanso-core",
  "serde",
@@ -1937,7 +1936,6 @@ name = "kanso-tauri"
 version = "0.1.0"
 dependencies = [
  "axum",
- "base64 0.22.1",
  "fs2",
  "hex",
  "kanso-api",

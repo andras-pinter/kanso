@@ -19,9 +19,9 @@ notes.
 kanso is a personal, local-first Kanban app. It exists because every existing
 Kanban tool is either too heavy (Jira/Asana — meant for teams) or too shallow
 (Trello — no rich notes). kanso pairs columns/cards with a real editor
-(BlockSuite) and a local API, so the same data is reachable from the UI, from
-scripts, and from a Copilot CLI extension. Success looks like: the app
-disappears — opens fast, captures fast, never gets in the way.
+(TipTap, markdown-persisted) and a local API, so the same data is reachable
+from the UI, from scripts, and from a Copilot CLI extension. Success looks
+like: the app disappears — opens fast, captures fast, never gets in the way.
 
 ## Brand Personality
 

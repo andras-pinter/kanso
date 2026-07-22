@@ -2,11 +2,9 @@
  * Pure markdown renderers for kanso MCP resources. Kept separate from the
  * server wiring so they're trivially unit-testable.
  *
- * All renderers return a single markdown string. Yjs body excerpts are
- * extracted via the lazy `extractBodyExcerpt` helper and capped at 500 chars.
+ * Body excerpts are extracted from the card's `body_markdown` field and
+ * capped at 500 chars after whitespace collapse.
  */
-
-import * as Y from "yjs";
 
 const EXCERPT_MAX_CHARS = 500;
 
@@ -111,9 +109,8 @@ const renderCardLine = (card, tagIds, tagById) => {
                   .join(" ")
             : "";
     const duePart = formatDue(card.due_at);
-    const head = `- **${title}**${tagPart}${duePart}`;
-    const excerpt = excerptFromBodyText(card.body_text);
-    return excerpt ? `${head}\n  ${excerpt}` : head;
+    const notesPart = card.has_body ? " _(has notes)_" : "";
+    return `- **${title}**${tagPart}${duePart}${notesPart}`;
 };
 
 /**
@@ -141,7 +138,7 @@ export const renderCard = ({ card, column, board, tags = [] }) => {
     }
 
     lines.push("", "## Body");
-    const excerpt = excerptFromBodyText(card.body_text);
+    const excerpt = excerptFromBodyMarkdown(card.body_markdown);
     if (excerpt) {
         lines.push(excerpt);
     } else {
@@ -177,106 +174,19 @@ const formatIsoFromMs = (ms) => {
 };
 
 /**
- * Take a `body_text` plaintext string and return a normalized excerpt.
- * The API already maintains `body_text` as the Yjs doc's plaintext mirror —
- * we don't need to parse the Yjs blob ourselves for the v1 renderer.
+ * Take a `body_markdown` string and return a normalized excerpt suitable for
+ * a card list row. Markdown punctuation is left intact — the excerpt is meant
+ * for human reading, not FTS.
  *
- * @param {string | null | undefined} text
+ * @param {string | null | undefined} md
  * @returns {string}
  */
-const excerptFromBodyText = (text) => {
-    if (typeof text !== "string") return "";
-    const trimmed = text.replace(/\s+/g, " ").trim();
+const excerptFromBodyMarkdown = (md) => {
+    if (typeof md !== "string") return "";
+    const trimmed = md.replace(/\s+/g, " ").trim();
     if (trimmed === "") return "";
     if (trimmed.length <= EXCERPT_MAX_CHARS) return trimmed;
     return trimmed.slice(0, EXCERPT_MAX_CHARS - 1) + "…";
-};
-
-/**
- * Decode a base64 Yjs document update and extract its plaintext. The body
- * blob is a Yjs YDoc state vector encoding; we apply it to a fresh doc and
- * walk its top-level shared types pulling any YText content out. Failures
- * (corrupt blob, unknown shape) return `""`.
- *
- * Walks are bounded: as soon as the accumulator hits `EXCERPT_MAX_CHARS`
- * we stop traversing and append `…`. This protects us from large CRDTs
- * (a 10k-char body shouldn't walk every Item just to slice the first 500).
- *
- * Exposed for tests and for callers that want to render from a raw blob
- * instead of relying on the API's `body_text` mirror.
- *
- * @param {string | null | undefined} base64
- * @returns {string}
- */
-export const extractTextFromYjsBlob = (base64) => {
-    if (typeof base64 !== "string" || base64 === "") return "";
-    try {
-        const buf = Buffer.from(base64, "base64");
-        const doc = new Y.Doc();
-        Y.applyUpdate(doc, new Uint8Array(buf));
-        const parts = [];
-        const ctx = { length: 0, capped: false };
-        doc.share.forEach((value) => {
-            collectText(value, parts, ctx);
-        });
-        const joined = parts.join(" ").replace(/\s+/g, " ").trim();
-        if (ctx.capped) {
-            return joined.slice(0, EXCERPT_MAX_CHARS) + "…";
-        }
-        return joined;
-    } catch {
-        return "";
-    }
-};
-
-/**
- * Walk a Y.AbstractType subtree, pushing every text item into `out` until
- * `ctx.length` reaches `EXCERPT_MAX_CHARS`; on cap, sets `ctx.capped` and
- * stops descending. Yjs applies updates lazily, so the share entry may be
- * a generic `AbstractType` whose runtime class is *not* `Y.Text`; we
- * traverse the underlying `_start` linked list of CRDT items directly and
- * recurse into `ContentType` items for nested structures.
- *
- * @param {any} node
- * @param {string[]} out
- * @param {{ length: number, capped: boolean }} ctx
- */
-const collectText = (node, out, ctx) => {
-    if (!node || typeof node !== "object") return;
-    if (ctx.capped) return;
-    const push = (s) => {
-        if (ctx.capped) return;
-        out.push(s);
-        ctx.length += s.length;
-        if (ctx.length >= EXCERPT_MAX_CHARS) ctx.capped = true;
-    };
-    let item = node._start;
-    while (item && !ctx.capped) {
-        const content = item.content;
-        if (content?.str !== undefined) {
-            push(String(content.str));
-        } else if (typeof content?.getContent === "function") {
-            try {
-                const arr = content.getContent();
-                if (Array.isArray(arr) && arr.every((c) => typeof c === "string")) {
-                    push(arr.join(""));
-                }
-            } catch {
-                /* skip */
-            }
-        }
-        if (content?.type) collectText(content.type, out, ctx);
-        item = item.right;
-    }
-    if (!ctx.capped && node._map && typeof node._map.forEach === "function") {
-        node._map.forEach((mapItem) => {
-            if (ctx.capped) return;
-            if (!mapItem || mapItem.deleted) return;
-            const c = mapItem.content;
-            if (c?.str !== undefined) push(String(c.str));
-            if (c?.type) collectText(c.type, out, ctx);
-        });
-    }
 };
 
 /**
@@ -284,3 +194,9 @@ const collectText = (node, out, ctx) => {
  * @internal
  */
 export const _EXCERPT_MAX_CHARS = EXCERPT_MAX_CHARS;
+
+/**
+ * Exported for tests that want to exercise the excerpt helper directly.
+ * @internal
+ */
+export const _excerptFromBodyMarkdown = excerptFromBodyMarkdown;

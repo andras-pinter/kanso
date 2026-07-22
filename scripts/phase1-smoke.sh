@@ -55,8 +55,8 @@ expect "$(c -XPOST "$BASE/columns/${COLUMN_ID}/cards" -H 'content-type: applicat
 CARD_ID=$(python3 -c 'import json;print(json.load(open("/tmp/kanso-smoke.body"))["id"])')
 expect "$(c -XPATCH "$BASE/cards/${CARD_ID}" -H 'content-type: application/json' -d '{"title":"Smoke Card v2","due_at":1700000000000}')" 200 "PATCH /cards/:id (set due_at)"
 expect "$(c -XPATCH "$BASE/cards/${CARD_ID}" -H 'content-type: application/json' -d '{"due_at":null}')" 200 "PATCH /cards/:id (clear due_at)"
-expect "$(c -XPATCH "$BASE/cards/${CARD_ID}" -H 'content-type: application/json' -d '{"body_text":"scratch"}')" 200 "PATCH /cards/:id (set body_text)"
-expect "$(c -XPATCH "$BASE/cards/${CARD_ID}" -H 'content-type: application/json' -d '{"body_text":null}')" 200 "PATCH /cards/:id (clear body_text)"
+expect "$(c -XPATCH "$BASE/cards/${CARD_ID}" -H 'content-type: application/json' -d '{"body_markdown":"scratch"}')" 200 "PATCH /cards/:id (set body_markdown)"
+expect "$(c -XPATCH "$BASE/cards/${CARD_ID}" -H 'content-type: application/json' -d '{"body_markdown":null}')" 200 "PATCH /cards/:id (clear body_markdown)"
 expect "$(c -XPOST "$BASE/cards/${CARD_ID}/move" -H 'content-type: application/json' -d "{\"target_column_id\":\"${COLUMN_B}\"}")" 200 "POST /cards/:id/move (append)"
 expect "$(c -XPOST "$BASE/cards/${CARD_ID}/archive")" 200 "POST /cards/:id/archive"
 expect "$(c -XPOST "$BASE/cards/${CARD_ID}/unarchive")" 200 "POST /cards/:id/unarchive"

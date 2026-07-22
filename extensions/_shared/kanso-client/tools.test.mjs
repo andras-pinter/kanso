@@ -55,13 +55,13 @@ describe("kansoList", () => {
 
     it("lists cards when column_id given", async () => {
         const get = vi.fn(async () => [
-            { id: "k1", title: "Hello", body_text: "world" },
+            { id: "k1", title: "Hello", has_body: true },
         ]);
         const out = await kansoList(fakeClient({ get }), { column_id: "c1" });
         expect(get).toHaveBeenCalledWith("/columns/c1/cards");
         expect(out).toContain("k1");
         expect(out).toContain("Hello");
-        expect(out).toContain("world");
+        expect(out).toContain("(has notes)");
     });
 
     it("propagates errors from the client", async () => {
@@ -85,7 +85,7 @@ describe("kansoAdd", () => {
         expect(out).toContain("card-1");
     });
 
-    it("patches body_text when body provided", async () => {
+    it("patches body_markdown when body provided", async () => {
         const post = vi.fn(async () => ({ id: "card-2", title: "t" }));
         const patch = vi.fn(async () => ({}));
         await kansoAdd(fakeClient({ post, patch }), {
@@ -93,7 +93,7 @@ describe("kansoAdd", () => {
             title: "t",
             body: "details here",
         });
-        expect(patch).toHaveBeenCalledWith("/cards/card-2", { body_text: "details here" });
+        expect(patch).toHaveBeenCalledWith("/cards/card-2", { body_markdown: "details here" });
     });
 
     it("rejects empty title", async () => {
@@ -150,7 +150,7 @@ describe("kansoSearch", () => {
     it("queries FTS with default limit", async () => {
         const get = vi.fn(async () => [
             {
-                card: { id: "c1", title: "Bug fix", body_text: "Something" },
+                card: { id: "c1", title: "Bug fix", has_body: true },
                 column_id: "col1",
                 column_name: "Doing",
                 board_id: "b1",

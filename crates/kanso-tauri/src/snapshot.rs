@@ -1,7 +1,5 @@
 use std::path::PathBuf;
 
-use base64::engine::general_purpose::STANDARD as B64;
-use base64::Engine as _;
 use kanso_core::domain::{Board, Card, Column, Tag};
 use kanso_core::repo::{BoardRepo, CardRepo, ColumnRepo, TagRepo};
 use serde::{Deserialize, Serialize};
@@ -12,7 +10,10 @@ use thiserror::Error;
 use crate::error::AppError;
 use crate::RuntimeState;
 
-const SCHEMA_VERSION: u32 = 1;
+/// v1 (BlockSuite era) → v2 (markdown): the card body columns collapsed
+/// into a single `body_markdown` field. Old exports fail at the version
+/// gate; there is no in-place migration path.
+const SCHEMA_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SnapshotEnvelope {
@@ -35,8 +36,7 @@ pub struct CardSnapshot {
     pub id: String,
     pub column_id: String,
     pub title: String,
-    pub body_blocksuite: Option<String>,
-    pub body_text: Option<String>,
+    pub body_markdown: Option<String>,
     pub position: String,
     pub due_at: Option<i64>,
     pub created_at: i64,
@@ -57,29 +57,11 @@ pub enum SnapshotError {
     #[error("unsupported export schema_version {actual}; expected {expected}")]
     UnsupportedSchemaVersion { actual: u32, expected: u32 },
 
-    #[error("card {card_id} body_blocksuite is not valid base64: {source}")]
-    InvalidBase64 {
-        card_id: String,
-        source: base64::DecodeError,
-    },
-
     #[error("snapshot database error: {0}")]
     Db(#[from] sqlx::Error),
 
     #[error("snapshot data error: {0}")]
     Core(#[from] kanso_core::KansoError),
-}
-
-struct DecodedCard {
-    id: String,
-    column_id: String,
-    title: String,
-    body_blocksuite: Option<Vec<u8>>,
-    body_text: Option<String>,
-    position: String,
-    due_at: Option<i64>,
-    created_at: i64,
-    updated_at: i64,
 }
 
 #[tauri::command]
@@ -148,7 +130,7 @@ pub async fn import_snapshot_json(pool: &SqlitePool, json: &str) -> Result<(), S
         });
     }
 
-    let cards = decode_cards(snapshot.data.cards)?;
+    let cards = snapshot.data.cards;
     let mut tx = pool.begin().await?;
 
     sqlx::query("DELETE FROM card_tags")
@@ -208,15 +190,14 @@ pub async fn import_snapshot_json(pool: &SqlitePool, json: &str) -> Result<(), S
     for card in cards {
         sqlx::query(
             "INSERT INTO cards \
-             (id, column_id, title, body_blocksuite, body_text, position, due_at, created_at, \
+             (id, column_id, title, body_markdown, position, due_at, created_at, \
               updated_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         )
         .bind(card.id)
         .bind(card.column_id)
         .bind(card.title)
-        .bind(card.body_blocksuite)
-        .bind(card.body_text)
+        .bind(card.body_markdown)
         .bind(card.position)
         .bind(card.due_at)
         .bind(card.created_at)
@@ -237,43 +218,13 @@ pub async fn import_snapshot_json(pool: &SqlitePool, json: &str) -> Result<(), S
     Ok(())
 }
 
-fn decode_cards(cards: Vec<CardSnapshot>) -> Result<Vec<DecodedCard>, SnapshotError> {
-    cards
-        .into_iter()
-        .map(|card| {
-            let body_blocksuite = card
-                .body_blocksuite
-                .map(|blob| {
-                    B64.decode(blob.as_bytes())
-                        .map_err(|source| SnapshotError::InvalidBase64 {
-                            card_id: card.id.clone(),
-                            source,
-                        })
-                })
-                .transpose()?;
-            Ok(DecodedCard {
-                id: card.id,
-                column_id: card.column_id,
-                title: card.title,
-                body_blocksuite,
-                body_text: card.body_text,
-                position: card.position,
-                due_at: card.due_at,
-                created_at: card.created_at,
-                updated_at: card.updated_at,
-            })
-        })
-        .collect()
-}
-
 impl From<Card> for CardSnapshot {
     fn from(card: Card) -> Self {
         Self {
             id: card.id,
             column_id: card.column_id,
             title: card.title,
-            body_blocksuite: card.body_blocksuite.map(|b| B64.encode(b)),
-            body_text: card.body_text,
+            body_markdown: card.body_markdown,
             position: card.position,
             due_at: card.due_at,
             created_at: card.created_at,
@@ -306,7 +257,7 @@ mod tests {
         let card = CardRepo::create(&pool, &column.id, "Backup launch DB")
             .await
             .expect("card");
-        CardRepo::set_body(&pool, &card.id, Some(b"yjs bytes"), Some("body text"))
+        CardRepo::set_body(&pool, &card.id, Some("carrots and beans"))
             .await
             .expect("body");
         let tag = TagRepo::create(&pool, "safe", Some("#9ece6a"))
@@ -344,7 +295,7 @@ mod tests {
             err,
             SnapshotError::UnsupportedSchemaVersion {
                 actual: 999,
-                expected: 1
+                expected: 2
             }
         ));
     }

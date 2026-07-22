@@ -1,13 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { useKanbanStore } from './hooks/useKanbanStore';
-import type { CardDto } from './types';
+import type { CardListDto } from './types';
 import CardBodyEditor, { type CardBodyEditorHandle } from './CardBodyEditor';
 import TagPickerPopover from './TagPickerPopover';
 import CardHeaderMenu from './CardHeaderMenu';
 
 interface Props {
-  card: CardDto;
+  card: CardListDto;
 }
 
 const FOCUSABLE =

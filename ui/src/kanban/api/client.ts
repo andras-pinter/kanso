@@ -7,7 +7,7 @@ import type {
   BoardPatch,
   CardBody,
   CardBodySet,
-  CardDto,
+  CardListDto,
   CardPatch,
   CardSearchHitDto,
   ColumnDto,
@@ -103,16 +103,16 @@ export const tagUpdate = (id: string, patch: TagPatch): Promise<TagDto> =>
 
 export const tagDelete = (id: string): Promise<void> => invoker('tag_delete', { id });
 
-export const tagCardsList = (tagId: string): Promise<CardDto[]> =>
+export const tagCardsList = (tagId: string): Promise<CardListDto[]> =>
   invoker('tag_cards_list', { tagId });
 
 export const cardTagsList = (cardId: string): Promise<TagDto[]> =>
   invoker('card_tags_list', { cardId });
 
-export const cardTagAdd = (cardId: string, tagId: string): Promise<CardDto> =>
+export const cardTagAdd = (cardId: string, tagId: string): Promise<CardListDto> =>
   invoker('card_tag_add', { cardId, tagId });
 
-export const cardTagRemove = (cardId: string, tagId: string): Promise<CardDto> =>
+export const cardTagRemove = (cardId: string, tagId: string): Promise<CardListDto> =>
   invoker('card_tag_remove', { cardId, tagId });
 
 export const boardCardTagsList = (
@@ -121,13 +121,13 @@ export const boardCardTagsList = (
 
 // ---------- cards ----------
 
-export const cardsList = (columnId: string): Promise<CardDto[]> =>
+export const cardsList = (columnId: string): Promise<CardListDto[]> =>
   invoker('cards_list', { columnId });
 
-export const cardCreate = (columnId: string, title: string): Promise<CardDto> =>
+export const cardCreate = (columnId: string, title: string): Promise<CardListDto> =>
   invoker('card_create', { columnId, title });
 
-export const cardUpdate = (id: string, patch: CardPatch): Promise<CardDto> =>
+export const cardUpdate = (id: string, patch: CardPatch): Promise<CardListDto> =>
   invoker('card_update', { id, patch });
 
 export interface CardMoveArgs {
@@ -136,7 +136,7 @@ export interface CardMoveArgs {
   after?: string;
 }
 
-export const cardMove = (id: string, args: CardMoveArgs): Promise<CardDto> =>
+export const cardMove = (id: string, args: CardMoveArgs): Promise<CardListDto> =>
   invoker('card_move', {
     id,
     targetColumnId: args.targetColumnId,
@@ -148,7 +148,7 @@ export const cardDelete = (id: string): Promise<void> => invoker('card_delete', 
 
 export const cardBodyGet = (id: string): Promise<CardBody> => invoker('card_body_get', { id });
 
-export const cardBodySet = (id: string, body: CardBodySet): Promise<CardDto> =>
+export const cardBodySet = (id: string, body: CardBodySet): Promise<CardListDto> =>
   invoker('card_body_set', { id, body });
 
 // ---------- search ----------

@@ -90,9 +90,21 @@ pub fn reveal_in_file_manager(path: &Path) -> Result<(), McpHostError> {
 
 pub fn detect_hosts(home: &Path) -> Vec<HostInfo> {
     let mut hosts = vec![
-        host(home, "claude", "Claude Desktop", claude_dirs(), Some("claude_desktop_config.json")),
+        host(
+            home,
+            "claude",
+            "Claude Desktop",
+            claude_dirs(),
+            Some("claude_desktop_config.json"),
+        ),
         host(home, "cursor", "Cursor", cursor_dirs(), Some("mcp.json")),
-        host(home, "vscode", "VS Code Copilot Chat", vscode_dirs(), Some("settings.json")),
+        host(
+            home,
+            "vscode",
+            "VS Code Copilot Chat",
+            vscode_dirs(),
+            Some("settings.json"),
+        ),
     ];
 
     if let Some(dirs) = zed_dirs() {

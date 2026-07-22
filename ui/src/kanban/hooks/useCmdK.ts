@@ -1,9 +1,9 @@
 // Global keyboard shortcuts for the kanban surface.
 //
 // `useCmdF` — ⌘F on macOS / Ctrl+F elsewhere. Opens the SearchPalette,
-// EXCEPT when focus is inside the BlockSuite editor (`.kanso-doc-content`
+// EXCEPT when focus is inside the TipTap editor (`.kanso-doc-content`
 // subtree or any contenteditable), in which case we do NOT preventDefault
-// and let BlockSuite / the browser handle in-document find.
+// and let the browser handle in-document find.
 //
 // `useCmdN` — ⌘N / Ctrl+N. Opens the quick-add modal. Suppressed when
 // the user is typing into an input, textarea, select, or contenteditable.

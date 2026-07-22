@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { resolveDragEnd } from '../dragEnd';
-import type { CardDto } from '../types';
+import type { CardListDto } from '../types';
 
-function card(id: string, columnId: string, position = id): CardDto {
+function card(id: string, columnId: string, position = id): CardListDto {
   return {
     id,
     column_id: columnId,
     title: id,
-    body_text: null,
+    has_body: false,
     position,
     due_at: null,
     created_at: 0,
@@ -101,12 +101,12 @@ describe('resolveDragEnd with a tag filter (visibleCardsByColumn)', () => {
     cardsByColumn: {
       todo: [card('A', 'todo'), card('B', 'todo'), card('C', 'todo'), card('D', 'todo')],
       doing: [card('E', 'doing'), card('F', 'doing'), card('G', 'doing')],
-      done: [] as CardDto[],
+      done: [] as CardListDto[],
     },
     visibleCardsByColumn: {
       todo: [card('B', 'todo'), card('D', 'todo')],
       doing: [card('F', 'doing')],
-      done: [] as CardDto[],
+      done: [] as CardListDto[],
     },
   };
 

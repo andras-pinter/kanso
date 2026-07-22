@@ -1,4 +1,4 @@
-use kanso_api::{CardDto, CreateTagBody, TagDto, TagPatchDto};
+use kanso_api::{CardListDto, CreateTagBody, TagDto, TagPatchDto};
 use kanso_core::repo::{CardRepo, TagRepo};
 use tauri::State;
 
@@ -61,7 +61,7 @@ pub async fn card_tag_add(
     state: State<'_, RuntimeState>,
     card_id: String,
     tag_id: String,
-) -> Result<CardDto, AppError> {
+) -> Result<CardListDto, AppError> {
     CardRepo::add_tag(&state.pool, &card_id, &tag_id).await?;
     load_card(&state, card_id).await
 }
@@ -71,19 +71,15 @@ pub async fn card_tag_remove(
     state: State<'_, RuntimeState>,
     card_id: String,
     tag_id: String,
-) -> Result<CardDto, AppError> {
+) -> Result<CardListDto, AppError> {
     CardRepo::remove_tag(&state.pool, &card_id, &tag_id).await?;
     load_card(&state, card_id).await
 }
 
-async fn load_card(state: &RuntimeState, id: String) -> Result<CardDto, AppError> {
+async fn load_card(state: &RuntimeState, id: String) -> Result<CardListDto, AppError> {
     match CardRepo::get(&state.pool, &id).await? {
-        Some(card) => Ok(CardDto::from(card)),
-        None => Err(kanso_core::KansoError::NotFound {
-            entity: "card",
-            id,
-        }
-        .into()),
+        Some(card) => Ok(CardListDto::from(card)),
+        None => Err(kanso_core::KansoError::NotFound { entity: "card", id }.into()),
     }
 }
 
@@ -91,7 +87,7 @@ async fn load_card(state: &RuntimeState, id: String) -> Result<CardDto, AppError
 pub async fn tag_cards_list(
     state: State<'_, RuntimeState>,
     tag_id: String,
-) -> Result<Vec<CardDto>, AppError> {
+) -> Result<Vec<CardListDto>, AppError> {
     let rows = CardRepo::cards_with_tag(&state.pool, &tag_id).await?;
-    Ok(rows.into_iter().map(CardDto::from).collect())
+    Ok(rows.into_iter().map(CardListDto::from).collect())
 }

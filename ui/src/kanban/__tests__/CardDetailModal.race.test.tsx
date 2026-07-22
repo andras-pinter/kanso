@@ -9,7 +9,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { invoke as realInvoke } from '@tauri-apps/api/core';
 import { __setInvoker, type InvokeFn } from '../api/client';
 import { useKanbanStore } from '../hooks/useKanbanStore';
-import type { CardDto } from '../types';
+import type { CardListDto } from '../types';
 
 vi.mock('../CardBodyEditor', () => {
   const Editor = forwardRef<{ flush: () => Promise<void> }>((_props, ref) => {
@@ -26,12 +26,12 @@ vi.mock('../TagPickerPopover', () => ({
 
 import CardDetailModal from '../CardDetailModal';
 
-function card(id = 'c1', title = 'orig'): CardDto {
+function card(id = 'c1', title = 'orig'): CardListDto {
   return {
     id,
     column_id: 'col1',
     title,
-    body_text: null,
+    has_body: false,
     position: id,
     due_at: null,
     created_at: 0,
@@ -39,7 +39,7 @@ function card(id = 'c1', title = 'orig'): CardDto {
   };
 }
 
-function seedStore(c: CardDto) {
+function seedStore(c: CardListDto) {
   useKanbanStore.setState({
     status: 'ready',
     error: null,
@@ -86,8 +86,8 @@ describe('CardDetailModal title-save race', () => {
   });
 
   it('blur → type → close with out-of-order responses commits the newer title', async () => {
-    const aGate = deferred<CardDto>();
-    const bGate = deferred<CardDto>();
+    const aGate = deferred<CardListDto>();
+    const bGate = deferred<CardListDto>();
     const seen: string[] = [];
 
     const invoker: InvokeFn = async (cmd, args) => {

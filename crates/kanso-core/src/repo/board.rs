@@ -94,20 +94,15 @@ impl BoardRepo {
     }
 
     pub async fn list_all(pool: &SqlitePool) -> Result<Vec<Board>> {
-        let rows =
-            sqlx::query_as::<_, Board>("SELECT * FROM boards ORDER BY position ASC, id ASC")
-                .fetch_all(pool)
-                .await?;
+        let rows = sqlx::query_as::<_, Board>("SELECT * FROM boards ORDER BY position ASC, id ASC")
+            .fetch_all(pool)
+            .await?;
         Ok(rows)
     }
 
     /// Paginated form of [`list_all`]. The HTTP layer clamps `limit` upstream;
     /// repos take whatever they're given and trust the caller to bound it.
-    pub async fn list_all_paged(
-        pool: &SqlitePool,
-        limit: u32,
-        offset: u32,
-    ) -> Result<Vec<Board>> {
+    pub async fn list_all_paged(pool: &SqlitePool, limit: u32, offset: u32) -> Result<Vec<Board>> {
         let rows = sqlx::query_as::<_, Board>(
             "SELECT * FROM boards ORDER BY position ASC, id ASC LIMIT ?1 OFFSET ?2",
         )

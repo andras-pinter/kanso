@@ -386,10 +386,6 @@ fn validate_bundle(ctx: &InstallContext, target: InstallTarget) -> Result<(), Ex
             )?;
             ensure_bundle_file(
                 &ctx.bundle_root
-                    .join("kanso-mcp/node_modules/yjs/package.json"),
-            )?;
-            ensure_bundle_file(
-                &ctx.bundle_root
                     .join("kanso-mcp/node_modules/zod/package.json"),
             )?;
         }
@@ -409,9 +405,9 @@ fn is_semverish(version: &str) -> bool {
     if version.is_empty() {
         return false;
     }
-    version.chars().all(|c| {
-        c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | '+' | '=')
-    })
+    version
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | '+' | '='))
 }
 
 fn recover_installs(ctx: &InstallContext) -> Result<(), ExtInstallError> {
@@ -840,7 +836,6 @@ mod tests {
             &root.join("kanso-mcp/node_modules/@modelcontextprotocol/sdk/package.json"),
             "{}",
         )?;
-        write_text(&root.join("kanso-mcp/node_modules/yjs/package.json"), "{}")?;
         write_text(&root.join("kanso-mcp/node_modules/zod/package.json"), "{}")?;
         write_text(&root.join("_shared/kanso-client/package.json"), "{}")?;
         write_text(&root.join("_shared/kanso-client/index.mjs"), marker)
@@ -868,10 +863,6 @@ mod tests {
         assert!(ctx
             .mcp_target
             .join("node_modules/@modelcontextprotocol/sdk/package.json")
-            .is_file());
-        assert!(ctx
-            .mcp_target
-            .join("node_modules/yjs/package.json")
             .is_file());
         assert!(ctx
             .mcp_target

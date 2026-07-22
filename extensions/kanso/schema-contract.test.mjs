@@ -63,7 +63,7 @@ describe("CLI tool schemas ↔ Rust DTO contract", () => {
         });
     });
 
-    it("card_update patch matches CardPatchDto (body_text — not description)", () => {
+    it("card_update patch matches CardPatchDto (body_markdown — not description)", () => {
         const advertised = patchProps(byName.get("card_update"));
         expect(diffFields(advertised, DTO_CONTRACT.card_update_patch)).toEqual({
             ok: true,

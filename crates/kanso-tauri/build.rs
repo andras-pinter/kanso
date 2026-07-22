@@ -178,12 +178,8 @@ fn bundle_stamp(source: &Path) -> io::Result<String> {
 
 fn read_pkg_version(path: &Path) -> io::Result<String> {
     let text = fs::read_to_string(path)?;
-    parse_pkg_version(&text).ok_or_else(|| {
-        io::Error::other(format!(
-            "no `version` field found in {}",
-            path.display()
-        ))
-    })
+    parse_pkg_version(&text)
+        .ok_or_else(|| io::Error::other(format!("no `version` field found in {}", path.display())))
 }
 
 fn parse_pkg_version(text: &str) -> Option<String> {

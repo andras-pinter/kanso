@@ -249,7 +249,7 @@ export const createKansoMcpServer = ({ client, name = "kanso-mcp", version = "0.
                     .string()
                     .optional()
                     .describe(
-                        "Optional plaintext body. Stored as body_text; the BlockSuite Yjs body remains empty until edited in the app.",
+                        "Optional markdown body. Stored as body_markdown and indexed by FTS.",
                     ),
             },
         },
@@ -341,12 +341,12 @@ export const createKansoMcpServer = ({ client, name = "kanso-mcp", version = "0.
     reg("column_list", "List columns on a board.", { board_id: S.board_id, ...S.page }, crud.columnList);
 
     // Cards
-    reg("card_list", "List cards in a column.", { column_id: S.column_id, ...S.page }, crud.cardList);
-    reg("card_get", "Fetch one card by id. Returns CardDto with tags.", { id: S.id }, (c, { id }) => c.get(`/cards/${encodeURIComponent(id)}`));
-    reg("card_create", "Create a card in a column. Returns the created CardDto.", { column_id: S.column_id, title: z.string() }, crud.cardCreate);
+    reg("card_list", "List cards in a column. Returns CardListDto[] (thin shape — has_body is a bool, body_markdown is not included; use card_body_get to read a specific card's markdown).", { column_id: S.column_id, ...S.page }, crud.cardList);
+    reg("card_get", "Fetch one card by id. Returns the full CardDto (title, position, due_at, body_markdown, updated_at — no tags; call card_tags for the tag set). Use this after card_list when you need the actual body.", { id: S.id }, (c, { id }) => c.get(`/cards/${encodeURIComponent(id)}`));
+    reg("card_create", "Create a card in a column. Returns the created CardListDto (thin shape: no body_markdown, has_body is a bool).", { column_id: S.column_id, title: z.string() }, crud.cardCreate);
     reg(
         "card_update",
-        "Patch a card (title, due_at, body_text). Returns the updated CardDto.",
+        "Patch a card (title, due_at, body_markdown). Returns the updated CardListDto (thin shape: has_body reflects the new body, body_markdown is not echoed — call card_body_get to read it back).",
         {
             id: S.id,
             patch: z.object({
@@ -357,18 +357,18 @@ export const createKansoMcpServer = ({ client, name = "kanso-mcp", version = "0.
                     .nullable()
                     .optional()
                     .describe("Due date as Unix epoch milliseconds, or null to clear."),
-                body_text: z
+                body_markdown: z
                     .string()
                     .nullable()
                     .optional()
-                    .describe("Plaintext body, or null to clear."),
+                    .describe("Markdown body, or null to clear."),
             }),
         },
         crud.cardUpdate,
     );
     reg(
         "card_move",
-        "Move a card. Provide target_column_id plus optional before/after card ids for exact placement.",
+        "Move a card. Provide target_column_id plus optional before/after card ids for exact placement. Returns the updated CardListDto (thin shape: no body_markdown).",
         {
             id: S.id,
             target_column_id: S.column_id,
@@ -378,30 +378,23 @@ export const createKansoMcpServer = ({ client, name = "kanso-mcp", version = "0.
         crud.cardMove,
     );
     reg("card_delete", "Delete a card permanently and cascade its tag links. Returns null (204).", { id: S.id }, crud.cardDelete);
-    reg("card_body_get", "Fetch a card's body (BlockSuite Yjs blob + plaintext).", { id: S.id }, crud.cardBodyGet);
+    reg("card_body_get", "Fetch a card's body as { body_markdown, updated_at }. body_markdown may be null on a fresh card. card_get also returns body_markdown (as part of the full CardDto); this endpoint is the lighter option when you only need the markdown, and list/search/write endpoints only surface has_body.", { id: S.id }, crud.cardBodyGet);
     reg(
         "card_body_set",
-        "Replace a card's body. At least one of body_text or body_blocksuite_b64 must be provided; text-only writes clear the BlockSuite blob so the UI seeds fresh content from the plaintext on next open. Returns the full CardDto.",
+        "Replace a card's body with markdown. Pass an empty string to clear the body. Returns the updated CardListDto (thin shape: has_body reflects the new body, body_markdown is not echoed — call card_body_get to read it back).",
         {
             id: S.id,
-            body_blocksuite_b64: z
+            body_markdown: z
                 .string()
-                .optional()
                 .describe(
-                    "Base64-encoded BlockSuite Yjs update. Agents typically pass body_text instead. At least one of body_text or body_blocksuite_b64 is required.",
-                ),
-            body_text: z
-                .string()
-                .optional()
-                .describe(
-                    "Plaintext body (indexed by FTS). At least one of body_text or body_blocksuite_b64 is required.",
+                    "Markdown body. Empty string clears the body to NULL. The same string is indexed by FTS.",
                 ),
         },
         crud.cardBodySet,
     );
     reg(
         "card_search",
-        "Full-text search across cards. Supports limit + offset.",
+        "Full-text search across cards. Returns CardSearchHitDto[] with a CardListDto embed (has_body flag, no body_markdown). Supports limit + offset.",
         {
             q: z.string(),
             limit: z.number().int().optional(),
@@ -430,13 +423,13 @@ export const createKansoMcpServer = ({ client, name = "kanso-mcp", version = "0.
     reg("card_tags", "List tags on a card.", { card_id: S.card_id, ...S.page }, crud.cardTags);
     reg(
         "card_tag_add",
-        "Link a tag to a card. Returns the updated CardDto (with fresh tag list). Idempotent.",
+        "Link a tag to a card. Returns the updated CardListDto (thin shape: no body_markdown; call card_tags to see the resulting tag set). Idempotent.",
         { card_id: S.card_id, tag_id: S.tag_id },
         crud.cardTagAdd,
     );
     reg(
         "card_tag_remove",
-        "Unlink a tag from a card. Returns the updated CardDto. Idempotent.",
+        "Unlink a tag from a card. Returns the updated CardListDto (thin shape: no body_markdown). Idempotent.",
         { card_id: S.card_id, tag_id: S.tag_id },
         crud.cardTagRemove,
     );

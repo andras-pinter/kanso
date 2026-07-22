@@ -127,22 +127,19 @@ export const cardBodyGet = (c, { id }) => {
 };
 
 /**
- * Set a card body. At least one of `body_blocksuite_b64` or `body_text` must
- * be provided; the other clears to NULL. Text-only calls let agents write
- * plaintext without synthesizing a BlockSuite Yjs blob — the UI seeds a
- * fresh editor from the plaintext on next open. Returns the full CardDto.
+ * Set a card body. `body_markdown` is required; pass an empty string to clear
+ * the body to NULL. Markdown is stored verbatim and is also the FTS payload.
+ * Returns the updated CardListDto (thin shape: has_body reflects the new
+ * body, but body_markdown is not echoed — call cardBodyGet to read it back).
  *
  * @param {Client} c
  */
-export const cardBodySet = (c, { id, body_blocksuite_b64, body_text }) => {
+export const cardBodySet = (c, { id, body_markdown }) => {
     requireId(id);
-    if (body_blocksuite_b64 === undefined && body_text === undefined) {
-        throw new Error("kanso: at least one of body_blocksuite_b64 or body_text is required");
+    if (typeof body_markdown !== "string") {
+        throw new Error("kanso: body_markdown must be a string");
     }
-    const body = {};
-    if (body_blocksuite_b64 !== undefined) body.body_blocksuite_b64 = body_blocksuite_b64;
-    if (body_text !== undefined) body.body_text = body_text;
-    return c.put(`/cards/${enc(id)}/body`, body);
+    return c.put(`/cards/${enc(id)}/body`, { body_markdown });
 };
 
 // ---------- tags ----------

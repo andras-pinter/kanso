@@ -98,14 +98,16 @@ impl From<Column> for ColumnDto {
 
 // ---------- Card ----------
 
-/// Card wire format. `body_blocksuite` (binary YDoc state) is intentionally
-/// omitted; Wave 5 will add a dedicated body get/set when wiring BlockSuite.
+/// Full card wire format. Only used by the dedicated single-card endpoint
+/// (`GET /cards/:id`) — everything else (list/search/board snapshot, plus
+/// create/update/move/put_body responses) returns [`CardListDto`] to keep
+/// wire size independent of body length.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CardDto {
     pub id: String,
     pub column_id: String,
     pub title: String,
-    pub body_text: Option<String>,
+    pub body_markdown: Option<String>,
     pub position: String,
     pub due_at: Option<i64>,
     pub created_at: i64,
@@ -118,7 +120,43 @@ impl From<Card> for CardDto {
             id: c.id,
             column_id: c.column_id,
             title: c.title,
-            body_text: c.body_text,
+            body_markdown: c.body_markdown,
+            position: c.position,
+            due_at: c.due_at,
+            created_at: c.created_at,
+            updated_at: c.updated_at,
+        }
+    }
+}
+
+/// Card metadata without the markdown body. `has_body` is `true` when the
+/// card has a non-blank body (whitespace-only counts as empty). Fetch the
+/// full markdown via `GET /cards/:id/body` when needed. All list/board/
+/// search endpoints and every write endpoint return this shape so payload
+/// size stays bounded regardless of how large individual card bodies grow.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CardListDto {
+    pub id: String,
+    pub column_id: String,
+    pub title: String,
+    pub has_body: bool,
+    pub position: String,
+    pub due_at: Option<i64>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+impl From<Card> for CardListDto {
+    fn from(c: Card) -> Self {
+        let has_body = c
+            .body_markdown
+            .as_deref()
+            .is_some_and(|s| !s.trim().is_empty());
+        Self {
+            id: c.id,
+            column_id: c.column_id,
+            title: c.title,
+            has_body,
             position: c.position,
             due_at: c.due_at,
             created_at: c.created_at,
@@ -142,7 +180,7 @@ pub struct CardPatchDto {
         skip_serializing_if = "Option::is_none",
         deserialize_with = "double_option"
     )]
-    pub body_text: Option<Option<String>>,
+    pub body_markdown: Option<Option<String>>,
     /// Outer absent => leave untouched. Present `null` => clear. Present value => set.
     #[serde(
         default,
@@ -156,7 +194,7 @@ impl From<CardPatchDto> for CardPatch {
     fn from(d: CardPatchDto) -> Self {
         Self {
             title: d.title,
-            body_text: d.body_text,
+            body_markdown: d.body_markdown,
             due_at: d.due_at,
         }
     }
@@ -173,10 +211,11 @@ pub struct MoveCardBody {
 
 /// FTS5 hit enriched with the board + column the card lives in.
 /// Powers the Cmd+K palette so a click can jump across boards without
-/// a follow-up lookup per result.
+/// a follow-up lookup per result. The embedded card is [`CardListDto`] —
+/// call the body endpoint if you need the markdown for a specific hit.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CardSearchHitDto {
-    pub card: CardDto,
+    pub card: CardListDto,
     pub column_id: String,
     pub column_name: String,
     pub board_id: String,
@@ -186,7 +225,7 @@ pub struct CardSearchHitDto {
 impl From<kanso_core::repo::CardSearchHit> for CardSearchHitDto {
     fn from(h: kanso_core::repo::CardSearchHit) -> Self {
         Self {
-            card: CardDto::from(h.card),
+            card: CardListDto::from(h.card),
             column_id: h.column_id,
             column_name: h.column_name,
             board_id: h.board_id,
@@ -195,30 +234,25 @@ impl From<kanso_core::repo::CardSearchHit> for CardSearchHitDto {
     }
 }
 
-// ---------- Card body (BlockSuite blob) ----------
+// ---------- Card body (markdown) ----------
 
 /// Response shape for `GET /cards/:id/body`. Mirrors the Tauri command
-/// `card_body_get`. Both blob fields are `None` until the card has been
+/// `card_body_get`. `body_markdown` is `None` until the card has been
 /// edited for the first time.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CardBodyDto {
-    /// Yjs `encodeStateAsUpdate` snapshot, base64 (STANDARD, padded).
-    pub body_blocksuite_b64: Option<String>,
-    /// Plaintext mirror used by FTS5.
-    pub body_text: Option<String>,
+    /// Card body as CommonMark markdown. Also serves as the FTS payload —
+    /// FTS5's `unicode61` tokenizer strips `#`, `-`, `*`, `` ` `` etc. as
+    /// non-word chars, so search "just works" on raw markdown.
+    pub body_markdown: Option<String>,
     pub updated_at: i64,
 }
 
-/// Request shape for `PUT /cards/:id/body`. At least one field must be
-/// present; a missing field clears that column to NULL. This lets agents
-/// write plaintext-only bodies without synthesizing a BlockSuite Yjs blob;
-/// the UI seeds a fresh editor from `body_text` on the next open.
+/// Request shape for `PUT /cards/:id/body`. `body_markdown` is required;
+/// pass an empty string to clear the body to NULL.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CardBodySetDto {
-    #[serde(default)]
-    pub body_blocksuite_b64: Option<String>,
-    #[serde(default)]
-    pub body_text: Option<String>,
+    pub body_markdown: String,
 }
 
 // ---------- Tag ----------
@@ -285,9 +319,11 @@ pub struct CardTagLinkDto {
 
 /// Card payload inside [`ColumnWithCardsDto`]. `tag_ids` references
 /// [`BoardFullDto::tags`] so the wire format avoids duplicating tag rows.
+/// The embedded card is [`CardListDto`] — call `GET /cards/:id/body` for
+/// the markdown of a specific card in the snapshot.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CardWithTagIdsDto {
-    pub card: CardDto,
+    pub card: CardListDto,
     pub tag_ids: Vec<String>,
 }
 
@@ -319,7 +355,7 @@ impl From<BoardFull> for BoardFullDto {
                         .cards
                         .into_iter()
                         .map(|cwt| CardWithTagIdsDto {
-                            card: CardDto::from(cwt.card),
+                            card: CardListDto::from(cwt.card),
                             tag_ids: cwt.tag_ids,
                         })
                         .collect(),

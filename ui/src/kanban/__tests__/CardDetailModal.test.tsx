@@ -4,7 +4,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { invoke as realInvoke } from '@tauri-apps/api/core';
 import { __setInvoker, type InvokeFn } from '../api/client';
 import { useKanbanStore } from '../hooks/useKanbanStore';
-import type { CardDto } from '../types';
+import type { CardListDto } from '../types';
 
 // Module-level controls for the mocked CardBodyEditor. Each test sets a
 // `flushImpl` that returns a deferred / rejection so we can drive the
@@ -45,12 +45,12 @@ vi.mock('../TagPickerPopover', () => ({
 
 import CardDetailModal from '../CardDetailModal';
 
-function card(id = 'c1', title = 'Hello'): CardDto {
+function card(id = 'c1', title = 'Hello'): CardListDto {
   return {
     id,
     column_id: 'col1',
     title,
-    body_text: null,
+    has_body: false,
     position: id,
     due_at: null,
     created_at: 0,
@@ -58,7 +58,7 @@ function card(id = 'c1', title = 'Hello'): CardDto {
   };
 }
 
-function resetStore(seed: CardDto | CardDto[]) {
+function resetStore(seed: CardListDto | CardListDto[]) {
   const cards = Array.isArray(seed) ? seed : [seed];
   const firstId = cards[0]?.id ?? null;
   useKanbanStore.setState({

@@ -19,7 +19,10 @@ export interface DebouncedSaver<T> {
  * Saves are strictly serialized: a new `save` never starts while a previous
  * one is in flight, so a slow earlier save cannot overwrite a later one. If
  * `save` rejects, the failed value is retained so the next `flush()` retries
- * it. On unmount any pending save is flushed best-effort.
+ * it. Callers are responsible for invoking `flush()` on unmount if they
+ * want pending edits to persist — the hook itself does NOT auto-flush,
+ * because doubling up on an explicit cleanup flush causes a wasteful retry
+ * of a value that just failed to persist.
  */
 export function useDebouncedSave<T>(
   save: (value: T) => Promise<void>,
@@ -96,13 +99,9 @@ export function useDebouncedSave<T>(
     pendingRef.current = null;
   }, []);
 
-  // Flush on unmount so a parent unmount doesn't drop edits. Best-effort:
-  // if it rejects we can't keep the component mounted from here.
-  useEffect(() => {
-    return () => {
-      void runNow().catch(() => {});
-    };
-  }, [runNow]);
+  // Callers own unmount flush semantics: our sole consumer (CardBodyEditor)
+  // does its own fire-and-forget flush during cleanup, and doubling up here
+  // caused an immediate wasted retry after a failing cleanup flush.
 
   return { schedule, cancel, flush: runNow };
 }

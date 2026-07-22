@@ -35,7 +35,7 @@ async fn test_card_create_and_fetch() {
     assert_eq!(fetched.id, card.id);
     assert_eq!(fetched.title, "Write tests");
     assert_eq!(fetched.column_id, col.id);
-    assert!(fetched.body_text.is_none());
+    assert!(fetched.body_markdown.is_none());
 
     let listed = CardRepo::list_by_column(&pool, &col.id).await.unwrap();
     assert_eq!(listed.len(), 1);
@@ -49,20 +49,14 @@ async fn test_card_body_fts_roundtrip() {
     let col = seeded_column(&pool, &board.id, 0).await;
     let card = CardRepo::create(&pool, &col.id, "Hello").await.unwrap();
 
-    CardRepo::set_body(
-        &pool,
-        &card.id,
-        Some(b"\x00\x01\x02"),
-        Some("hello world rust"),
-    )
-    .await
-    .unwrap();
+    CardRepo::set_body(&pool, &card.id, Some("hello world rust"))
+        .await
+        .unwrap();
 
     let hits = CardRepo::search(&pool, "rust").await.unwrap();
     assert_eq!(hits.len(), 1);
     assert_eq!(hits[0].id, card.id);
-    assert_eq!(hits[0].body_text.as_deref(), Some("hello world rust"));
-    assert_eq!(hits[0].body_blocksuite.as_deref(), Some(&[0u8, 1, 2][..]));
+    assert_eq!(hits[0].body_markdown.as_deref(), Some("hello world rust"));
 
     let miss = CardRepo::search(&pool, "python").await.unwrap();
     assert!(miss.is_empty());
@@ -101,10 +95,10 @@ async fn test_card_delete_removes_from_list_and_search() {
     let a = CardRepo::create(&pool, &col.id, "A").await.unwrap();
     let b = CardRepo::create(&pool, &col.id, "B").await.unwrap();
 
-    CardRepo::set_body(&pool, &a.id, Some(b""), Some("needle in haystack"))
+    CardRepo::set_body(&pool, &a.id, Some("needle in haystack"))
         .await
         .unwrap();
-    CardRepo::set_body(&pool, &b.id, Some(b""), Some("another needle here"))
+    CardRepo::set_body(&pool, &b.id, Some("another needle here"))
         .await
         .unwrap();
 
@@ -189,7 +183,7 @@ async fn test_board_cascade_delete_wipes_columns_and_cards() {
     let board = BoardRepo::create(&pool, "B").await.unwrap();
     let col = seeded_column(&pool, &board.id, 0).await;
     let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
-    CardRepo::set_body(&pool, &card.id, Some(b""), Some("needle text"))
+    CardRepo::set_body(&pool, &card.id, Some("needle text"))
         .await
         .unwrap();
 
@@ -335,7 +329,7 @@ async fn test_card_move_cross_column() {
 }
 
 #[tokio::test]
-async fn test_card_patch_body_text_clear() {
+async fn test_card_patch_body_markdown_clear() {
     use kanso_core::repo::CardPatch;
     let pool = fixture_pool().await;
     let board = BoardRepo::create(&pool, "B").await.unwrap();
@@ -346,13 +340,13 @@ async fn test_card_patch_body_text_clear() {
         &pool,
         &card.id,
         CardPatch {
-            body_text: Some(Some("notes go here".into())),
+            body_markdown: Some(Some("notes go here".into())),
             ..Default::default()
         },
     )
     .await
     .unwrap();
-    assert_eq!(with_body.body_text.as_deref(), Some("notes go here"));
+    assert_eq!(with_body.body_markdown.as_deref(), Some("notes go here"));
 
     let untouched = CardRepo::update(
         &pool,
@@ -364,19 +358,19 @@ async fn test_card_patch_body_text_clear() {
     )
     .await
     .unwrap();
-    assert_eq!(untouched.body_text.as_deref(), Some("notes go here"));
+    assert_eq!(untouched.body_markdown.as_deref(), Some("notes go here"));
 
     let cleared = CardRepo::update(
         &pool,
         &card.id,
         CardPatch {
-            body_text: Some(None),
+            body_markdown: Some(None),
             ..Default::default()
         },
     )
     .await
     .unwrap();
-    assert!(cleared.body_text.is_none());
+    assert!(cleared.body_markdown.is_none());
 }
 
 // ---------- Phase 2: body get/set + FTS keep-in-sync ----------
@@ -389,26 +383,22 @@ async fn test_card_body_get_returns_none_on_fresh_card() {
     let card = CardRepo::create(&pool, &col.id, "Fresh").await.unwrap();
 
     let body = CardRepo::get_body(&pool, &card.id).await.unwrap();
-    assert!(body.body_blocksuite.is_none());
-    assert!(body.body_text.is_none());
+    assert!(body.body_markdown.is_none());
     assert_eq!(body.updated_at, card.updated_at);
 }
 
 #[tokio::test]
-async fn test_card_body_set_roundtrips_bytes() {
+async fn test_card_body_set_roundtrips_markdown() {
     let pool = fixture_pool().await;
     let board = BoardRepo::create(&pool, "B").await.unwrap();
     let col = seeded_column(&pool, &board.id, 0).await;
     let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
 
-    let blob: Vec<u8> = (0..=255u8).chain([0u8, 0, 0, 0xff, 0xfe]).collect();
-    CardRepo::set_body(&pool, &card.id, Some(&blob), Some("carrots and beans"))
-        .await
-        .unwrap();
+    let md = "# Lunch\n\n- carrots\n- beans";
+    CardRepo::set_body(&pool, &card.id, Some(md)).await.unwrap();
 
     let body = CardRepo::get_body(&pool, &card.id).await.unwrap();
-    assert_eq!(body.body_blocksuite.as_deref(), Some(&blob[..]));
-    assert_eq!(body.body_text.as_deref(), Some("carrots and beans"));
+    assert_eq!(body.body_markdown.as_deref(), Some(md));
     assert!(
         body.updated_at >= card.updated_at,
         "updated_at must advance: was {}, became {}",
@@ -418,24 +408,19 @@ async fn test_card_body_set_roundtrips_bytes() {
 }
 
 #[tokio::test]
-async fn test_card_body_set_text_only_clears_blob() {
+async fn test_card_body_set_none_clears_body() {
     let pool = fixture_pool().await;
     let board = BoardRepo::create(&pool, "B").await.unwrap();
     let col = seeded_column(&pool, &board.id, 0).await;
     let card = CardRepo::create(&pool, &col.id, "T").await.unwrap();
 
-    // Seed with blob + text.
-    CardRepo::set_body(&pool, &card.id, Some(b"rich-blob"), Some("hi"))
+    CardRepo::set_body(&pool, &card.id, Some("hi"))
         .await
         .unwrap();
-    // Text-only write must NULL out the blob.
-    CardRepo::set_body(&pool, &card.id, None, Some("just plaintext"))
-        .await
-        .unwrap();
+    CardRepo::set_body(&pool, &card.id, None).await.unwrap();
 
     let body = CardRepo::get_body(&pool, &card.id).await.unwrap();
-    assert!(body.body_blocksuite.is_none(), "blob should be cleared");
-    assert_eq!(body.body_text.as_deref(), Some("just plaintext"));
+    assert!(body.body_markdown.is_none(), "body should be cleared");
 }
 
 #[tokio::test]
@@ -445,28 +430,18 @@ async fn test_card_body_set_updates_fts() {
     let col = seeded_column(&pool, &board.id, 0).await;
     let card = CardRepo::create(&pool, &col.id, "Lunch").await.unwrap();
 
-    CardRepo::set_body(
-        &pool,
-        &card.id,
-        Some(b"binary-doesnt-matter"),
-        Some("find me with carrots"),
-    )
-    .await
-    .unwrap();
+    CardRepo::set_body(&pool, &card.id, Some("find me with carrots"))
+        .await
+        .unwrap();
 
     let hits = CardRepo::search(&pool, "carrots").await.unwrap();
     assert_eq!(hits.len(), 1);
     assert_eq!(hits[0].id, card.id);
 
     // Overwriting body with a string that lacks the keyword must drop the hit.
-    CardRepo::set_body(
-        &pool,
-        &card.id,
-        Some(b"new-blob"),
-        Some("now it talks about beans"),
-    )
-    .await
-    .unwrap();
+    CardRepo::set_body(&pool, &card.id, Some("now it talks about beans"))
+        .await
+        .unwrap();
     let still_carrots = CardRepo::search(&pool, "carrots").await.unwrap();
     assert!(
         still_carrots.is_empty(),
@@ -482,7 +457,7 @@ async fn test_card_body_set_returns_not_found_for_unknown_id() {
     use kanso_core::KansoError;
     let pool = fixture_pool().await;
     assert!(matches!(
-        CardRepo::set_body(&pool, "00000000000000000000000000", Some(b"x"), Some("y")).await,
+        CardRepo::set_body(&pool, "00000000000000000000000000", Some("y")).await,
         Err(KansoError::NotFound { entity: "card", .. })
     ));
 }
@@ -720,14 +695,9 @@ async fn test_search_roundtrips_via_card_body() {
         .await
         .unwrap();
 
-    CardRepo::set_body(
-        &pool,
-        &card.id,
-        Some(b"y"),
-        Some("deeply buried tangerine word"),
-    )
-    .await
-    .unwrap();
+    CardRepo::set_body(&pool, &card.id, Some("deeply buried tangerine word"))
+        .await
+        .unwrap();
     let hits = CardRepo::search(&pool, "tangerine").await.unwrap();
     assert_eq!(hits.len(), 1);
     assert_eq!(hits[0].id, card.id);

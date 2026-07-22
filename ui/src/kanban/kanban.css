@@ -82,10 +82,6 @@
   --kanso-z-palette: 55;
   --kanso-z-modal: 60;
   --kanso-z-shortcuts: 70;
-
-  /* NOTE: `--affine-z-index-{popover,modal}` and other `--affine-*` state
-   * tokens live in ui/src/editor/blocksuite-theme.css so the whole BlockSuite
-   * token bridge is in one place. */
 }
 
 /*
@@ -1100,33 +1096,25 @@ body {
   border: none;
   background: transparent;
   padding: 0;
-  /* Own the vertical space so <affine-editor-container> (a custom element,
-     otherwise inline by default) can stretch to fill it. Without this the
-     editor collapses to content height and clicks below the last block
-     never reach BlockSuite's focus routing (issue #7). */
+  /* Own the vertical space so the TipTap ProseMirror surface can stretch
+     to fill it. Without this the editor collapses to content height and
+     clicks below the last block never reach ProseMirror's focus routing. */
   display: flex;
   flex-direction: column;
 }
 
-.kanso-editor-host > affine-editor-container {
-  display: flex;
-  flex-direction: column;
+.kanso-editor-host > .kanso-tiptap {
   flex: 1 1 auto;
   min-height: 0;
   width: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
-/* BlockSuite's page-mode viewport is `display: flex; flex-direction: column`
-   with no flex-grow, so it defaults to content height even when its parent
-   (the custom element above) is stretched. Force it to fill so clicks below
-   the last block hit the viewport and BlockSuite's focus routing fires.
-   ShadowlessElement means .affine-page-viewport is in the light DOM, so
-   this selector reaches it directly. Edgeless mode already has height:100%
-   and just needs the parent to have a resolved height, which the rule above
-   provides. */
-.kanso-editor-host .affine-page-viewport {
+.kanso-editor-host > .kanso-tiptap > .ProseMirror {
   flex: 1 1 auto;
   min-height: 0;
+  width: 100%;
 }
 
 .kanso-save-error {
@@ -1234,7 +1222,7 @@ body {
 /* ---------- Card-as-doc modal ----------
    Phase 1: the CardDetailModal is a document surface, not a form. Title
    sits in the header row alongside a saved-pill, overflow menu, and
-   close icon; body below is tags + BlockSuite editor. Motion is
+   close icon; body below is tags + TipTap editor. Motion is
    intentionally NOT added in this phase — modal enters/exits instantly.
    prefers-reduced-motion is already respected globally. */
 

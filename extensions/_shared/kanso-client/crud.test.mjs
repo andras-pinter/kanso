@@ -130,36 +130,29 @@ describe("cards", () => {
         expect(() => cardGet(c, { id: "" })).toThrow(/id is required/);
     });
 
-    it("cardBodySet PUTs only the fields that were provided", async () => {
+    it("cardBodySet PUTs the body_markdown string verbatim", async () => {
         const c = fakeClient();
-        // text-only — flagship agent call, must not send body_blocksuite_b64
-        await cardBodySet(c, { id: "k1", body_text: "hi" });
-        // blob-only
-        await cardBodySet(c, { id: "k2", body_blocksuite_b64: "AAA=" });
-        // both
-        await cardBodySet(c, { id: "k3", body_blocksuite_b64: "BBB=", body_text: "yo" });
+        await cardBodySet(c, { id: "k1", body_markdown: "# hi" });
+        // Empty string is the "clear body" sentinel; must still hit the API.
+        await cardBodySet(c, { id: "k2", body_markdown: "" });
         expect(c.calls).toEqual([
             {
                 method: "PUT",
                 path: "/cards/k1/body",
-                body: { body_text: "hi" },
+                body: { body_markdown: "# hi" },
             },
             {
                 method: "PUT",
                 path: "/cards/k2/body",
-                body: { body_blocksuite_b64: "AAA=" },
-            },
-            {
-                method: "PUT",
-                path: "/cards/k3/body",
-                body: { body_blocksuite_b64: "BBB=", body_text: "yo" },
+                body: { body_markdown: "" },
             },
         ]);
     });
 
-    it("cardBodySet rejects calls with neither field", () => {
+    it("cardBodySet rejects non-string body_markdown", () => {
         const c = fakeClient();
-        expect(() => cardBodySet(c, { id: "k1" })).toThrow(/at least one/i);
+        expect(() => cardBodySet(c, { id: "k1" })).toThrow(/body_markdown/);
+        expect(() => cardBodySet(c, { id: "k1", body_markdown: null })).toThrow(/body_markdown/);
     });
 });
 

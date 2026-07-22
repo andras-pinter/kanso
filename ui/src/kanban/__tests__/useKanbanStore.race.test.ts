@@ -9,14 +9,14 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { __setInvoker, type InvokeFn } from '../api/client';
 import { invoke as realInvoke } from '@tauri-apps/api/core';
 import { useKanbanStore } from '../hooks/useKanbanStore';
-import type { CardDto } from '../types';
+import type { CardListDto } from '../types';
 
-function card(id: string, title: string): CardDto {
+function card(id: string, title: string): CardListDto {
   return {
     id,
     column_id: 'col1',
     title,
-    body_text: null,
+    has_body: false,
     position: id,
     due_at: null,
     created_at: 0,
@@ -24,7 +24,7 @@ function card(id: string, title: string): CardDto {
   };
 }
 
-function seed(cards: CardDto[]) {
+function seed(cards: CardListDto[]) {
   useKanbanStore.setState({
     status: 'ready',
     error: null,
@@ -70,8 +70,8 @@ describe('useKanbanStore card mutation race gating', () => {
   });
 
   it('slow updateCard(A) then fast updateCard(B): store ends as B', async () => {
-    const aGate = deferred<CardDto>();
-    const bGate = deferred<CardDto>();
+    const aGate = deferred<CardListDto>();
+    const bGate = deferred<CardListDto>();
 
     const invoker: InvokeFn = async (cmd, args) => {
       if (cmd === 'card_update') {
@@ -102,8 +102,8 @@ describe('useKanbanStore card mutation race gating', () => {
   });
 
   it('older updateCard error after newer success does not rollback', async () => {
-    const aGate = deferred<CardDto>();
-    const bGate = deferred<CardDto>();
+    const aGate = deferred<CardListDto>();
+    const bGate = deferred<CardListDto>();
 
     const invoker: InvokeFn = async (cmd, args) => {
       if (cmd === 'card_update') {
@@ -137,8 +137,8 @@ describe('useKanbanStore card mutation race gating', () => {
     // after it, the delete should bump the sequence so the older
     // update's response is discarded. Practically the modal's delete
     // path (commitTitle → deleteCard) relies on this ordering.
-    const updateGate = deferred<CardDto>();
-    const deleteGate = deferred<CardDto>();
+    const updateGate = deferred<CardListDto>();
+    const deleteGate = deferred<CardListDto>();
 
     const invoker: InvokeFn = async (cmd, args) => {
       if (cmd === 'card_update') {

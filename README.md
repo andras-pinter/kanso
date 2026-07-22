@@ -7,7 +7,7 @@ A personal Kanban app — local-first, keyboard-driven, AFFiNE-inspired. Built a
 - **Shell:** Tauri 2
 - **Backend:** Rust (axum in-process, sqlx + SQLite, `thiserror` for error types)
 - **Frontend:** React + Vite, Zustand, dnd-kit
-- **Editor:** BlockSuite (eager-loaded; pinned to Vite ^6.0.3)
+- **Editor:** TipTap (lazy-loaded; markdown stored in `cards.body_markdown`)
 
 ## Repo layout
 

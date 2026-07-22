@@ -25,7 +25,7 @@ pub use dto::*;
 pub use error::ApiError;
 
 /// Default cap on incoming request bodies (1 MiB). Lower than axum's 2 MiB default
-/// — BlockSuite Yjs snapshots and every other DTO are kilobytes at worst. Card
+/// — markdown card bodies and every other DTO are kilobytes at worst. Card
 /// body PUT overrides this to 8 MiB on its own route to tolerate pasted images.
 const DEFAULT_BODY_LIMIT_BYTES: usize = 1024 * 1024;
 

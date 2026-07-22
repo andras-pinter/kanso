@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { __setInvoker, type InvokeFn } from '../api/client';
 import { invoke as realInvoke } from '@tauri-apps/api/core';
 import { useKanbanStore } from '../hooks/useKanbanStore';
-import type { BoardDto, CardDto, ColumnDto } from '../types';
+import type { BoardDto, CardListDto, ColumnDto } from '../types';
 
 const makeBoard = (id: string): BoardDto => ({
   id,
@@ -23,11 +23,11 @@ const makeColumn = (id: string, boardId: string): ColumnDto => ({
   updated_at: 0,
 });
 
-const makeCard = (id: string, columnId: string): CardDto => ({
+const makeCard = (id: string, columnId: string): CardListDto => ({
   id,
   column_id: columnId,
   title: id,
-  body_text: null,
+  has_body: false,
   position: id,
   due_at: null,
   created_at: 0,
@@ -65,7 +65,7 @@ const installLocalStorageShim = () => {
 interface FakeServer {
   boards: BoardDto[];
   columns: ColumnDto[];
-  cards: CardDto[];
+  cards: CardListDto[];
 }
 
 const buildInvoker = (server: FakeServer): InvokeFn => {

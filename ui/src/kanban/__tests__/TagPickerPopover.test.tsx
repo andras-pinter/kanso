@@ -38,7 +38,7 @@ function buildInvoker(opts: { tags: TagDto[]; cardTagLinks: Record<string, strin
             id: cid,
             column_id: 'c',
             title: cid,
-            body_text: null,
+            has_body: false,
             position: cid,
             due_at: null,
             created_at: 0,

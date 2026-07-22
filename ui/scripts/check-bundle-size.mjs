@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // Bundle guard: fail the build if the largest JS chunk exceeds the gzipped
-// budget. The PoC's editor chunk is ~1.68 MB gz; we leave a 16% headroom and
-// cap at 2 MB. Bump this only after profiling — don't paper over regressions.
+// budget. The TipTap editor chunk is a fraction of the old ~1.68 MB gz;
+// cap at 512 KB and bump only after profiling.
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 
-const LIMIT_BYTES = 2 * 1024 * 1024;
+const LIMIT_BYTES = 512 * 1024;
 const ASSETS_DIR = 'dist/assets';
 
 let entries;
@@ -43,11 +43,11 @@ for (const { name, raw, gz } of measured.slice(0, 10)) {
 const largest = measured[0];
 const pct = ((largest.gz / LIMIT_BYTES) * 100).toFixed(1);
 console.log(`\nLargest chunk: ${largest.name}`);
-console.log(`  ${(largest.gz / 1024).toFixed(1)} KB gz / 2048 KB budget (${pct}%)`);
+console.log(`  ${(largest.gz / 1024).toFixed(1)} KB gz / 512 KB budget (${pct}%)`);
 
 if (largest.gz > LIMIT_BYTES) {
-  console.error(`\nFAIL: largest chunk exceeds 2 MB gz limit by ${largest.gz - LIMIT_BYTES} bytes`);
+  console.error(`\nFAIL: largest chunk exceeds 512 KB gz limit by ${largest.gz - LIMIT_BYTES} bytes`);
   process.exit(1);
 }
 
-console.log('PASS: under 2 MB gz limit\n');
+console.log('PASS: under 512 KB gz limit\n');

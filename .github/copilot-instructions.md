@@ -11,14 +11,14 @@
 - **axum** in-process on loopback
 - **sqlx** + SQLite, `.sqlx/` committed for offline build
 - **React + Vite + Zustand + dnd-kit**
-- **BlockSuite** for card editor — **lazy-loaded**, **Vite pinned to `^6.0.3`**
+- **TipTap** for card editor — **lazy-loaded**, markdown persisted in `cards.body_markdown`
 
 ## Hard rules
 
 - No `unwrap()` / `expect()` outside `#[cfg(test)]`.
 - No panics in library code — return `Result<T, E>` with `thiserror`-typed errors.
 - No `serde_json::Value` in Tauri command signatures — use explicit typed structs.
-- Don't bump Vite past BlockSuite's `^6.0.3` range.
+- Don't bump Vite past `^6.0.3` in this PR (unpinning is a follow-up).
 - Don't introduce circular crate deps. `kanso-core` stays app-agnostic.
 - Don't commit `node_modules/`, `target/`, `dist/`, Tauri `gen/`. **Do** commit `.sqlx/`.
 

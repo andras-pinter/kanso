@@ -51,11 +51,9 @@ impl TagRepo {
     }
 
     pub async fn list(pool: &SqlitePool) -> Result<Vec<Tag>> {
-        let rows = sqlx::query_as::<_, Tag>(
-            "SELECT * FROM tags ORDER BY name COLLATE NOCASE ASC",
-        )
-        .fetch_all(pool)
-        .await?;
+        let rows = sqlx::query_as::<_, Tag>("SELECT * FROM tags ORDER BY name COLLATE NOCASE ASC")
+            .fetch_all(pool)
+            .await?;
         Ok(rows)
     }
 

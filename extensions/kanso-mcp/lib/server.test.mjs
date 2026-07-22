@@ -163,7 +163,7 @@ describe("tool dispatch", () => {
         const client = fakeClient({
             "/cards/search": [
                 {
-                    card: { id: "c1", title: "Buy milk", body_text: null },
+                    card: { id: "c1", title: "Buy milk", has_body: false },
                     board_name: "Work",
                     column_name: "To Do",
                 },
@@ -306,7 +306,7 @@ describe("resources/read", () => {
                             card: {
                                 id: "card1",
                                 title: "Buy milk",
-                                body_text: "from the corner shop",
+                                has_body: true,
                                 due_at: null,
                             },
                             tag_ids: [],
@@ -322,7 +322,7 @@ describe("resources/read", () => {
         expect(text).toContain("# Board: Work");
         expect(text).toContain("## To Do (1 card)");
         expect(text).toContain("- **Buy milk**");
-        expect(text).toContain("  from the corner shop");
+        expect(text).toContain("_(has notes)_");
     });
 
     it("renders a friendly message on 404 board", async () => {
@@ -356,7 +356,7 @@ describe("resources/read", () => {
                 id: "c1",
                 column_id: "col1",
                 title: "Buy milk",
-                body_text: "from the corner shop on the way home",
+                body_markdown: "from the corner shop on the way home",
                 due_at: Date.UTC(2026, 5, 23),
             },
             "/columns/col1": { id: "col1", board_id: "b1", name: "To Do" },
@@ -381,7 +381,7 @@ describe("resources/read", () => {
                 id: "c1",
                 column_id: "col-x",
                 title: "Orphan",
-                body_text: null,
+                body_markdown: null,
                 due_at: null,
             },
             "/columns/col-x": new Error("boom"),
@@ -411,7 +411,7 @@ describe("resources/read", () => {
                 id: "c1",
                 column_id: "col1",
                 title: "Empty",
-                body_text: null,
+                body_markdown: null,
                 due_at: null,
             },
             "/cards/c1/tags": [],
@@ -445,10 +445,18 @@ describe("expanded CRUD tools", () => {
         expect(client.calls).toContainEqual({ method: "DELETE", path: "/cards/c1" });
     });
 
-    it("card_tag_add posts and returns the updated card DTO", async () => {
-        const client = fakeClient({
-            "/cards/c1/tags/t1": { id: "c1", title: "Ship", tags: [{ id: "t1", name: "urgent" }] },
-        });
+    it("card_tag_add posts and returns the updated CardListDto", async () => {
+        const cardListDto = {
+            id: "c1",
+            column_id: "col1",
+            title: "Ship",
+            has_body: false,
+            position: "a",
+            due_at: null,
+            created_at: 1,
+            updated_at: 2,
+        };
+        const client = fakeClient({ "/cards/c1/tags/t1": cardListDto });
         const { mcpClient } = await harness(client);
         const res = await mcpClient.callTool({
             name: "card_tag_add",
@@ -456,32 +464,31 @@ describe("expanded CRUD tools", () => {
         });
         expect(res.isError).not.toBe(true);
         const dto = JSON.parse(res.content[0].text);
-        expect(dto.tags).toHaveLength(1);
+        expect(dto).toEqual(cardListDto);
     });
 
-    it("card_body_set puts text-only and returns the full CardDto", async () => {
-        const cardDto = {
+    it("card_body_set puts text-only and returns the updated CardListDto", async () => {
+        const cardListDto = {
             id: "c1",
             column_id: "col1",
             title: "T",
+            has_body: true,
             position: "a",
             due_at: null,
             created_at: 1,
             updated_at: 2,
-            tags: [],
         };
-        const client = fakeClient({ "/cards/c1/body": cardDto });
+        const client = fakeClient({ "/cards/c1/body": cardListDto });
         const { mcpClient } = await harness(client);
         const res = await mcpClient.callTool({
             name: "card_body_set",
-            arguments: { id: "c1", body_text: "hello" },
+            arguments: { id: "c1", body_markdown: "hello" },
         });
         expect(res.isError).not.toBe(true);
         const dto = JSON.parse(res.content[0].text);
-        expect(dto).toEqual(cardDto);
-        // Text-only call must not send body_blocksuite_b64.
+        expect(dto).toEqual(cardListDto);
         expect(client.calls).toEqual([
-            { method: "PUT", path: "/cards/c1/body", body: { body_text: "hello" } },
+            { method: "PUT", path: "/cards/c1/body", body: { body_markdown: "hello" } },
         ]);
     });
 });

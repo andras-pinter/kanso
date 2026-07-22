@@ -17,8 +17,8 @@ export const kansoList = async (client, args) => {
         const cards = await client.get(`/columns/${encodeURIComponent(args.column_id)}/cards`);
         if (!Array.isArray(cards) || cards.length === 0) return "kanso: no cards in column";
         const lines = cards.map((c) => {
-            const preview = bodyPreview(c.body_text);
-            return `- ${c.id}  ${c.title}${preview}`;
+            const notes = c.has_body ? "  (has notes)" : "";
+            return `- ${c.id}  ${c.title}${notes}`;
         });
         return lines.join("\n");
     }
@@ -49,7 +49,7 @@ export const kansoList = async (client, args) => {
 
 /**
  * Create a card. If `body` is provided this is two API calls: POST to create
- * the card, then PATCH to set `body_text`. If the PATCH fails (transient
+ * the card, then PATCH to set `body_markdown`. If the PATCH fails (transient
  * network blip), the titled card persists — there is no atomic create-with-body
  * endpoint yet. The body-size preflight below short-circuits the 413 case so
  * we don't strand a card on the most common partial-failure path.
@@ -64,7 +64,7 @@ export const kansoAdd = async (client, args) => {
     if (args.body !== undefined && args.body !== "") {
         // 900 KiB leaves headroom for the JSON envelope under the API's 1 MiB
         // outer body limit; reject locally so we don't POST-then-PATCH-then-fail.
-        const bytes = Buffer.byteLength(JSON.stringify({ body_text: args.body }), "utf8");
+        const bytes = Buffer.byteLength(JSON.stringify({ body_markdown: args.body }), "utf8");
         const MAX = 900 * 1024;
         if (bytes > MAX) {
             throw new Error(`kanso: body is ${bytes} bytes, exceeds ${MAX} byte limit`);
@@ -77,7 +77,7 @@ export const kansoAdd = async (client, args) => {
     );
 
     if (args.body !== undefined && args.body !== "") {
-        await client.patch(`/cards/${encodeURIComponent(card.id)}`, { body_text: args.body });
+        await client.patch(`/cards/${encodeURIComponent(card.id)}`, { body_markdown: args.body });
     }
     return `kanso: created card ${card.id} "${card.title}"`;
 };
@@ -126,23 +126,13 @@ export const kansoSearch = async (client, args) => {
     if (!Array.isArray(hits) || hits.length === 0) return `kanso: no hits for "${q}"`;
     return hits
         .map((h) => {
-            const snippet = bodyPreview(h.card?.body_text) || " (no body)";
-            return `- ${h.card.id}  ${h.card.title}\n    board: ${h.board_name}  ·  column: ${h.column_name}${snippet}`;
+            const notes = h.card?.has_body ? "  (has notes)" : " (no body)";
+            return `- ${h.card.id}  ${h.card.title}\n    board: ${h.board_name}  ·  column: ${h.column_name}${notes}`;
         })
         .join("\n");
 };
 
-/**
- * @param {string | null | undefined} text
- * @returns {string}
- */
-const bodyPreview = (text) => {
-    if (typeof text !== "string") return "";
-    const trimmed = text.replace(/\s+/g, " ").trim();
-    if (trimmed === "") return "";
-    const clipped = trimmed.length > 80 ? `${trimmed.slice(0, 77)}...` : trimmed;
-    return `\n    ${clipped}`;
-};
+
 
 /**
  * @param {unknown} raw

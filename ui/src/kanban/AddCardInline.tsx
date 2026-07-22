@@ -1,59 +1,49 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface Props {
+  open: boolean;
+  onClose: () => void;
   onSubmit: (title: string) => void | Promise<void>;
-  /** Column ID used as a focus-target hook for post-archive focus
-   * placement in CardDetailModal. */
-  columnId?: string;
 }
 
-export default function AddCardInline({ onSubmit, columnId }: Props) {
-  const [open, setOpen] = useState(false);
+export default function AddCardInline({ open, onClose, onSubmit }: Props) {
   const [value, setValue] = useState('');
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const ref = useRef<HTMLTextAreaElement | null>(null);
-  // Block onBlur from firing right after user submits via Enter — Submit
-  // path already closes the editor, and a follow-up blur would re-submit.
+  // Suppress the blur→commit path once submit or cancel is already in
+  // flight, so button clicks and Enter don't double-fire commit.
   const submittingRef = useRef(false);
 
   useEffect(() => {
     if (open && ref.current) ref.current.focus();
   }, [open]);
 
-  const reset = useCallback(() => {
+  const cancel = useCallback(() => {
+    submittingRef.current = true;
     setValue('');
-    setOpen(false);
-    submittingRef.current = false;
-  }, []);
+    onClose();
+  }, [onClose]);
 
   const commit = useCallback(async () => {
+    if (submittingRef.current) return;
     const trimmed = value.trim();
     if (!trimmed) {
-      reset();
+      cancel();
       return;
     }
     submittingRef.current = true;
     try {
       await onSubmit(trimmed);
     } finally {
-      reset();
+      setValue('');
+      onClose();
     }
-  }, [value, onSubmit, reset]);
+  }, [value, onSubmit, onClose, cancel]);
 
-  if (!open) {
-    return (
-      <button
-        type="button"
-        className="kanso-add-btn"
-        data-column-add={columnId}
-        onClick={() => setOpen(true)}
-      >
-        + Add task
-      </button>
-    );
-  }
+  if (!open) return null;
 
   return (
-    <div className="kanso-add-form">
+    <div ref={rootRef} className="kanso-card kanso-card--draft">
       <textarea
         ref={ref}
         className="kanso-add-textarea"
@@ -65,17 +55,22 @@ export default function AddCardInline({ onSubmit, columnId }: Props) {
             void commit();
           } else if (e.key === 'Escape') {
             e.preventDefault();
-            reset();
+            cancel();
           }
         }}
-        onBlur={() => {
+        onBlur={(e) => {
+          // Ignore blurs into our own Cancel/Add buttons — they own
+          // the resulting action and would otherwise race with commit.
+          const next = e.relatedTarget as Node | null;
+          if (next && rootRef.current?.contains(next)) return;
           if (submittingRef.current) return;
           void commit();
         }}
-        placeholder="Card title (Enter to add, Esc to cancel)"
+        rows={1}
+        placeholder="New card title…"
       />
       <div className="kanso-add-actions">
-        <button type="button" className="kanso-btn" onClick={reset}>
+        <button type="button" className="kanso-btn" onClick={cancel}>
           Cancel
         </button>
         <button type="button" className="kanso-btn kanso-btn--primary" onClick={() => void commit()}>

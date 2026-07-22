@@ -18,6 +18,7 @@ import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { isTauri } from './api/client';
 import ColumnList from './ColumnList';
 import BoardFilterBar from './BoardFilterBar';
+import BoardMetaStrip from './BoardMetaStrip';
 import CardDetailModal from './CardDetailModal';
 import ErrorBoundary from '../ErrorBoundary';
 import { CardOverlay } from './Card';
@@ -205,6 +206,7 @@ export default function KanbanBoard() {
         )}
         {status === 'ready' && currentBoardId !== null && (
           <>
+            <BoardMetaStrip />
             <BoardFilterBar />
             <ColumnList />
           </>

@@ -218,53 +218,58 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 24px;
-  background: var(--kanso-bg-elevated);
+  padding: 8px 16px;
+  background: transparent;
   border-bottom: 1px solid var(--kanso-border);
 }
 
 .kanso-header-main {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 12px;
   min-width: 0;
 }
 
 .kanso-top-nav {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px;
-  border: 1px solid var(--kanso-border);
-  border-radius: var(--kanso-radius-md);
-  background: var(--kanso-bg-subtle);
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  border-radius: 0;
 }
 
 .kanso-nav-btn {
   border: 0;
   border-radius: var(--kanso-radius-sm);
   background: transparent;
-  color: var(--kanso-fg-muted);
+  color: var(--kanso-fg-subtle);
   cursor: pointer;
   font: inherit;
-  font-size: 12px;
-  padding: 5px 10px;
+  font-size: 12.5px;
+  padding: 4px 8px;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
 }
 
 .kanso-nav-btn:hover {
   color: var(--kanso-fg);
+  background: var(--kanso-bg-hover);
 }
 
 .kanso-nav-btn--active {
-  background: var(--kanso-bg-elevated);
+  background: var(--kanso-bg-hover);
   color: var(--kanso-fg);
-  box-shadow: var(--kanso-shadow-card);
+  box-shadow: none;
 }
 
 .kanso-wordmark {
   margin: 0;
-  font-size: 16px;
-  font-weight: 600;
+  font-family: var(--kanso-font-display);
+  font-size: 15px;
+  font-weight: 500;
   letter-spacing: -0.01em;
   color: var(--kanso-fg);
 }

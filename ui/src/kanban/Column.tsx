@@ -2,7 +2,7 @@
 // a color dot, the name, and a card count. The body is a droppable so
 // cards can be moved between columns.
 
-import { useCallback } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useDroppable } from '@dnd-kit/core';
 import type { CardListDto, ColumnDto } from './types';
@@ -19,6 +19,15 @@ export default function Column({ column, cards }: Props) {
   const addCard = useKanbanStore((s) => s.addCard);
   const selectedTagIds = useKanbanStore((s) => s.selectedTagIds);
   const cardTagMap = useKanbanStore((s) => s.cardTagMap);
+  const [adding, setAdding] = useState(false);
+
+  const addBtnRef = useRef<HTMLButtonElement | null>(null);
+
+  const closeAdd = useCallback(() => {
+    setAdding(false);
+    // Return focus to the trigger so keyboard flow doesn't fall to <body>.
+    queueMicrotask(() => addBtnRef.current?.focus());
+  }, []);
 
   const onSubmitCard = useCallback(
     (title: string) => addCard(column.id, title),
@@ -55,15 +64,35 @@ export default function Column({ column, cards }: Props) {
             />
           )}
           <h2 className="kanso-column-name">{column.name}</h2>
+          <span
+            className={`kanso-column-count${
+              visibleCards.length === 0 ? ' kanso-column-count--empty' : ''
+            }`}
+          >
+            {visibleCards.length}
+          </span>
         </div>
-        <span
-          className={`kanso-column-count${
-            visibleCards.length === 0 ? ' kanso-column-count--empty' : ''
-          }`}
+        <button
+          ref={addBtnRef}
+          type="button"
+          className="kanso-column-add-btn"
+          data-column-add={column.id}
+          aria-label={`Add task to ${column.name}`}
+          title="Add task"
+          onClick={() => setAdding(true)}
         >
-          {visibleCards.length}
-        </span>
+          +
+        </button>
       </header>
+      {adding && (
+        <div className="kanso-column-add-slot">
+          <AddCardInline
+            open={adding}
+            onClose={closeAdd}
+            onSubmit={onSubmitCard}
+          />
+        </div>
+      )}
       <SortableContext
         items={visibleCards.map((c) => c.id)}
         strategy={verticalListSortingStrategy}
@@ -75,15 +104,12 @@ export default function Column({ column, cards }: Props) {
           {visibleCards.map((c) => (
             <Card key={c.id} card={c} />
           ))}
-          {trulyEmpty && <p className="kanso-column-empty">No cards yet</p>}
+          {trulyEmpty && !adding && <p className="kanso-column-empty">No cards yet</p>}
           {hiddenByFilter && (
             <p className="kanso-column-empty-filter">No cards match this filter</p>
           )}
         </div>
       </SortableContext>
-      <footer className="kanso-column-footer">
-        <AddCardInline onSubmit={onSubmitCard} columnId={column.id} />
-      </footer>
     </section>
   );
 }

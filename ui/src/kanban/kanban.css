@@ -475,11 +475,6 @@ body {
   min-height: 36px;
 }
 
-.kanso-column-footer {
-  margin-top: auto;
-  flex-shrink: 0;
-}
-
 /* ---------- Card ---------- */
 
 .kanso-card {
@@ -567,46 +562,77 @@ body {
 
 /* ---------- Add card ---------- */
 
-.kanso-add-btn {
-  width: 100%;
+.kanso-column-add-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
   background: transparent;
   border: none;
+  border-radius: var(--kanso-radius-sm, 4px);
   color: var(--kanso-fg-muted);
-  padding: 8px 10px;
-  border-radius: var(--kanso-radius-md);
   font: inherit;
-  font-size: 13px;
-  text-align: left;
+  font-size: 16px;
+  line-height: 1;
   cursor: pointer;
+  flex-shrink: 0;
   transition:
     background 120ms ease,
     color 120ms ease;
 }
 
-.kanso-add-btn:hover {
+.kanso-column-add-btn:hover {
   background: var(--kanso-bg-hover);
   color: var(--kanso-fg);
 }
 
-.kanso-add-form {
+.kanso-column-add-btn:focus-visible {
+  outline: 2px solid var(--kanso-focus, var(--kanso-fg));
+  outline-offset: 1px;
+}
+
+.kanso-column-add-slot {
+  flex-shrink: 0;
+}
+
+.kanso-card--draft {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  cursor: default;
+  user-select: auto;
+  border-color: var(--kanso-accent);
+  box-shadow: 0 0 0 1px var(--kanso-accent);
+}
+
+.kanso-card--draft:hover {
+  border-color: var(--kanso-accent);
+  box-shadow: 0 0 0 1px var(--kanso-accent);
 }
 
 .kanso-add-textarea {
   width: 100%;
-  resize: vertical;
-  min-height: 64px;
-  padding: 8px 10px;
-  border: 1px solid var(--kanso-border);
-  border-radius: var(--kanso-radius-md);
+  resize: none;
+  min-height: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--kanso-fg);
   font: inherit;
   font-size: 13px;
-  color: var(--kanso-fg);
-  background: var(--kanso-bg-elevated);
+  font-weight: 500;
+  line-height: 1.35;
   box-sizing: border-box;
-  transition: border-color 120ms ease;
+  overflow: hidden;
+  field-sizing: content;
+}
+
+.kanso-add-textarea::placeholder {
+  color: var(--kanso-fg-subtle);
+  font-weight: 400;
 }
 
 .kanso-add-actions {

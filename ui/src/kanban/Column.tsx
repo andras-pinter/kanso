@@ -104,7 +104,20 @@ export default function Column({ column, cards }: Props) {
           {visibleCards.map((c) => (
             <Card key={c.id} card={c} />
           ))}
-          {trulyEmpty && !adding && <p className="kanso-column-empty">No cards yet</p>}
+          {trulyEmpty && !adding && (
+            column.name === 'Done' ? (
+              <p className="kanso-column-empty kanso-column-empty--done">nothing done yet</p>
+            ) : (
+              <button
+                type="button"
+                className="kanso-column-empty-slot"
+                onClick={() => setAdding(true)}
+                aria-label={`Add task to ${column.name}`}
+              >
+                <span className="kanso-column-empty-slot-plus">＋</span> add card
+              </button>
+            )
+          )}
           {hiddenByFilter && (
             <p className="kanso-column-empty-filter">No cards match this filter</p>
           )}

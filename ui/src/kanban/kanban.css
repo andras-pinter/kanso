@@ -35,13 +35,13 @@
   --kanso-accent-ring: rgba(27, 26, 23, 0.25);
 
   /* Status: danger / warning / success */
-  --kanso-danger: #dc2626;
-  --kanso-danger-fg: #b91c1c;
-  --kanso-danger-bg: #fef2f2;
-  --kanso-danger-border: #fecaca;
-  --kanso-warning-fg: #b45309;
-  --kanso-warning-bg: rgba(245, 158, 11, 0.12);
-  --kanso-warning-border: rgba(245, 158, 11, 0.35);
+  --kanso-danger: #b13a3a;
+  --kanso-danger-fg: #b13a3a;
+  --kanso-danger-bg: rgba(177, 58, 58, 0.08);
+  --kanso-danger-border: rgba(177, 58, 58, 0.25);
+  --kanso-warning-fg: #a24a2b;
+  --kanso-warning-bg: rgba(162, 74, 43, 0.1);
+  --kanso-warning-border: rgba(162, 74, 43, 0.28);
   --kanso-success-fg: #047857;
   --kanso-success-bg: #ecfdf5;
 
@@ -49,9 +49,9 @@
   --kanso-code-fg: #f9fafb;
   --kanso-code-bg: #111827;
 
-  /* Overlays */
-  --kanso-overlay: rgba(17, 24, 39, 0.5);
-  --kanso-overlay-soft: rgba(17, 24, 39, 0.18);
+  /* Overlays: ink-tinted so the wash reads warm on paper. */
+  --kanso-overlay: rgba(27, 26, 23, 0.42);
+  --kanso-overlay-soft: rgba(27, 26, 23, 0.16);
 
   /* Shape */
   --kanso-radius-sm: 4px;
@@ -118,13 +118,13 @@
   --kanso-accent-bg: rgba(232, 230, 224, 0.08);
   --kanso-accent-ring: rgba(232, 230, 224, 0.22);
 
-  --kanso-danger: #f87171;
-  --kanso-danger-fg: #fca5a5;
-  --kanso-danger-bg: rgba(248, 113, 113, 0.12);
-  --kanso-danger-border: rgba(248, 113, 113, 0.32);
-  --kanso-warning-fg: #fbbf24;
-  --kanso-warning-bg: rgba(245, 158, 11, 0.14);
-  --kanso-warning-border: rgba(245, 158, 11, 0.32);
+  --kanso-danger: #d97070;
+  --kanso-danger-fg: #d97070;
+  --kanso-danger-bg: rgba(217, 112, 112, 0.12);
+  --kanso-danger-border: rgba(217, 112, 112, 0.32);
+  --kanso-warning-fg: #d99367;
+  --kanso-warning-bg: rgba(217, 147, 103, 0.14);
+  --kanso-warning-border: rgba(217, 147, 103, 0.32);
   --kanso-success-fg: #34d399;
   --kanso-success-bg: rgba(52, 211, 153, 0.12);
 
@@ -164,13 +164,13 @@
     --kanso-accent-bg: rgba(232, 230, 224, 0.08);
     --kanso-accent-ring: rgba(232, 230, 224, 0.22);
 
-    --kanso-danger: #f87171;
-    --kanso-danger-fg: #fca5a5;
-    --kanso-danger-bg: rgba(248, 113, 113, 0.12);
-    --kanso-danger-border: rgba(248, 113, 113, 0.32);
-    --kanso-warning-fg: #fbbf24;
-    --kanso-warning-bg: rgba(245, 158, 11, 0.14);
-    --kanso-warning-border: rgba(245, 158, 11, 0.32);
+    --kanso-danger: #d97070;
+    --kanso-danger-fg: #d97070;
+    --kanso-danger-bg: rgba(217, 112, 112, 0.12);
+    --kanso-danger-border: rgba(217, 112, 112, 0.32);
+    --kanso-warning-fg: #d99367;
+    --kanso-warning-bg: rgba(217, 147, 103, 0.14);
+    --kanso-warning-border: rgba(217, 147, 103, 0.32);
     --kanso-success-fg: #34d399;
     --kanso-success-bg: rgba(52, 211, 153, 0.12);
 
@@ -1034,8 +1034,10 @@ body {
 
 .kanso-drawer-title {
   margin: 0;
-  font-size: 15px;
-  font-weight: 600;
+  font-family: var(--kanso-font-display);
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
   color: var(--kanso-fg);
 }
 
@@ -1233,8 +1235,10 @@ body {
 
 .kanso-modal-title {
   margin: 0;
-  font-size: 15px;
-  font-weight: 600;
+  font-family: var(--kanso-font-display);
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
   color: var(--kanso-fg);
 }
 
@@ -1574,9 +1578,11 @@ body {
 
 .kanso-empty h2 {
   margin: 0;
-  font-size: 18px;
+  font-family: var(--kanso-font-display);
+  font-size: 20px;
   color: var(--kanso-fg);
-  font-weight: 600;
+  font-weight: 500;
+  letter-spacing: -0.01em;
 }
 
 .kanso-empty p {
@@ -1726,9 +1732,42 @@ body {
 .kanso-column-empty {
   margin: 4px 6px;
   padding: 24px 0;
-  color: var(--kanso-fg-muted);
+  color: var(--kanso-fg-subtle);
   font-size: 12px;
   text-align: center;
+}
+
+.kanso-column-empty--done {
+  font-family: var(--kanso-font-display);
+  font-style: italic;
+  font-size: 13px;
+}
+
+.kanso-column-empty-slot {
+  margin: 4px 6px;
+  padding: 14px 10px;
+  border: 1.5px dashed var(--kanso-border);
+  border-radius: var(--kanso-radius-lg);
+  background: transparent;
+  color: var(--kanso-fg-subtle);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    color 150ms ease;
+}
+
+.kanso-column-empty-slot:hover,
+.kanso-column-empty-slot:focus-visible {
+  border-color: var(--kanso-border-strong);
+  color: var(--kanso-fg-muted);
+  outline: none;
+}
+
+.kanso-column-empty-slot-plus {
+  font-family: var(--kanso-font-mono);
+  font-size: 10.5px;
 }
 
 .kanso-column-empty-filter {

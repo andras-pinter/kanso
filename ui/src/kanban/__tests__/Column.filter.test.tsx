@@ -110,13 +110,13 @@ describe('Column tag filter', () => {
     });
     renderColumn([]);
     expect(screen.queryByText(/no cards match this filter/i)).toBeNull();
-    expect(screen.getByText(/no cards yet/i)).toBeTruthy();
+    expect(screen.getByText(/add card/i)).toBeTruthy();
   });
 
   it('renders "No cards yet" for an unfiltered empty column', () => {
     resetStore({ cardsByColumn: { col1: [] } });
     renderColumn([]);
-    expect(screen.getByText(/no cards yet/i)).toBeTruthy();
+    expect(screen.getByText(/add card/i)).toBeTruthy();
     expect(screen.queryByText(/no cards match this filter/i)).toBeNull();
   });
 
@@ -129,7 +129,7 @@ describe('Column tag filter', () => {
       selectedTagIds: ['t1'],
     });
     renderColumn(cards);
-    expect(screen.queryByText(/no cards yet/i)).toBeNull();
+    expect(screen.queryByText(/add card/i)).toBeNull();
     expect(screen.getByText(/no cards match this filter/i)).toBeTruthy();
   });
 

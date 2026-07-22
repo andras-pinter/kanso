@@ -1,22 +1,29 @@
 // Slim board-level meta strip: open + overdue counts.
-// "Open" = cards not in the Done column. "Overdue" = open cards with
-// a due_at strictly in the past. Uses only data already in the store.
+// "Open" = cards not in the Done column. "Overdue" = open cards whose
+// due_at is strictly before UTC midnight today (matches DueBadge date-
+// only semantics: a card due today is NOT overdue). Uses only data
+// already in the store.
 //
-// `now` ticks once a minute so cards flip to "overdue" without needing
-// a manual reload. Kept as state so the memo below stays pure.
+// `today` refreshes every minute so cards flip to "overdue" the moment
+// the local date rolls over, without a manual reload.
 
 import { useEffect, useMemo, useState } from 'react';
 import { useKanbanStore } from './hooks/useKanbanStore';
 
 const MINUTE_MS = 60_000;
 
+function startOfTodayUtc(): number {
+  const now = new Date();
+  return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+}
+
 export default function BoardMetaStrip() {
   const columns = useKanbanStore((s) => s.columns);
   const cardsByColumn = useKanbanStore((s) => s.cardsByColumn);
-  const [now, setNow] = useState(() => Date.now());
+  const [today, setToday] = useState(() => startOfTodayUtc());
 
   useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), MINUTE_MS);
+    const id = window.setInterval(() => setToday(startOfTodayUtc()), MINUTE_MS);
     return () => window.clearInterval(id);
   }, []);
 
@@ -29,11 +36,12 @@ export default function BoardMetaStrip() {
           (acc, card) => ({
             open: acc.open + 1,
             overdue:
-              acc.overdue + (card.due_at !== null && card.due_at < now ? 1 : 0),
+              acc.overdue +
+              (card.due_at !== null && card.due_at < today ? 1 : 0),
           }),
           { open: 0, overdue: 0 },
         ),
-    [columns, cardsByColumn, now],
+    [columns, cardsByColumn, today],
   );
 
   if (columns.length === 0) return null;
@@ -51,4 +59,5 @@ export default function BoardMetaStrip() {
     </div>
   );
 }
+
 

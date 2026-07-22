@@ -22,11 +22,21 @@ export default function Column({ column, cards }: Props) {
   const [adding, setAdding] = useState(false);
 
   const addBtnRef = useRef<HTMLButtonElement | null>(null);
+  const emptySlotRef = useRef<HTMLButtonElement | null>(null);
+  const addSourceRef = useRef<'header' | 'slot'>('header');
+
+  const openAdd = useCallback((source: 'header' | 'slot') => {
+    addSourceRef.current = source;
+    setAdding(true);
+  }, []);
 
   const closeAdd = useCallback(() => {
     setAdding(false);
-    // Return focus to the trigger so keyboard flow doesn't fall to <body>.
-    queueMicrotask(() => addBtnRef.current?.focus());
+    // Return focus to whichever trigger opened the form so keyboard flow
+    // doesn't fall to <body>.
+    const target =
+      addSourceRef.current === 'slot' ? emptySlotRef.current : addBtnRef.current;
+    queueMicrotask(() => target?.focus());
   }, []);
 
   const onSubmitCard = useCallback(
@@ -79,7 +89,7 @@ export default function Column({ column, cards }: Props) {
           data-column-add={column.id}
           aria-label={`Add task to ${column.name}`}
           title="Add task"
-          onClick={() => setAdding(true)}
+          onClick={() => openAdd('header')}
         >
           ＋
         </button>
@@ -109,9 +119,10 @@ export default function Column({ column, cards }: Props) {
               <p className="kanso-column-empty kanso-column-empty--done">nothing done yet</p>
             ) : (
               <button
+                ref={emptySlotRef}
                 type="button"
                 className="kanso-column-empty-slot"
-                onClick={() => setAdding(true)}
+                onClick={() => openAdd('slot')}
                 aria-label={`Add task to ${column.name}`}
               >
                 <span className="kanso-column-empty-slot-plus">＋</span> add card

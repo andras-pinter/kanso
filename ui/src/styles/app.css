@@ -2,15 +2,13 @@
  * Tailwind v4 foundation for kanso.
  *
  * Preflight is intentionally NOT imported — the existing kanban.css owns
- * the base cascade for now. This file exposes theme tokens + utility
- * classes so new components can adopt Tailwind incrementally without
- * disturbing anything already rendered.
+ * the base cascade and the theme-aware --kanso-* tokens. This file
+ * exposes those tokens to Tailwind so new components can use utilities
+ * like bg-paper, text-ink, font-display without disturbing anything
+ * already rendered.
  *
- * Later phases will:
- *   1. Repaint --kanso-* tokens to Ember values.
- *   2. Migrate components class-by-class.
- *   3. Delete kanban.css chunks as they get replaced.
- *   4. Eventually re-enable preflight.
+ * @theme aliases reference --kanso-* rather than duplicating raw hex —
+ * one source of truth in kanban.css :root, one theme swap per mode.
  */
 
 @layer theme, base, components, utilities;
@@ -19,29 +17,29 @@
 @import 'tailwindcss/utilities.css' layer(utilities);
 
 @theme {
-  /* Ember palette — light mode. Dark mirror lives under [data-theme='dark']
-     and prefers-color-scheme in a later phase; keeping foundation minimal. */
-  --color-paper: #f6f5f2;
-  --color-paper-2: #fcfbf9;
-  --color-ink: #1b1a17;
-  --color-ink-soft: #5a5751;
-  --color-ink-mute: #8a857c;
-  --color-line: #e8e6e0;
-  --color-line-strong: #d7d4cd;
-  --color-accent: #1b1a17;
+  /* Ember palette — resolved at runtime from kanban.css :root so light,
+     dark manual, and prefers-color-scheme all flow through here. */
+  --color-paper: var(--kanso-bg);
+  --color-paper-2: var(--kanso-bg-elevated);
+  --color-paper-hover: var(--kanso-bg-hover);
+  --color-ink: var(--kanso-fg);
+  --color-ink-soft: var(--kanso-fg-muted);
+  --color-ink-mute: var(--kanso-fg-subtle);
+  --color-line: var(--kanso-border);
+  --color-line-strong: var(--kanso-border-strong);
+  --color-accent: var(--kanso-accent);
+  --color-on-accent: var(--kanso-fg-on-accent);
 
-  /* Column semantics — same across themes, dot indicator only. */
+  /* Column semantics — fixed dot colors, theme-agnostic. */
   --color-col-incoming: #9c9084;
   --color-col-todo: #4d6ea9;
   --color-col-progress: #c47a2f;
   --color-col-done: #5c8f6a;
 
-  /* Typography — loaded via @font-face in a later phase; fallbacks
-     mean this file is safe to ship before the fonts land. */
-  --font-display: 'Newsreader', ui-serif, Georgia, serif;
-  --font-sans:
-    'Public Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Typography — shared with kanban.css --kanso-font*. */
+  --font-display: var(--kanso-font-display);
+  --font-sans: var(--kanso-font);
+  --font-mono: var(--kanso-font-mono);
 
   /* Radii — Ember is tight and paper-like. */
   --radius-card: 8px;

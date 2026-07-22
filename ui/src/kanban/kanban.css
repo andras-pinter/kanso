@@ -12,27 +12,27 @@
 :root {
   color-scheme: light;
 
-  /* Surfaces */
-  --kanso-bg: #f7f7f5;
-  --kanso-bg-elevated: #ffffff;
-  --kanso-bg-subtle: #fafaf9;
-  --kanso-bg-hover: #f3f4f6;
+  /* Surfaces — Ember cream paper. */
+  --kanso-bg: #f6f5f2;
+  --kanso-bg-elevated: #fcfbf9;
+  --kanso-bg-subtle: #f2f0ea;
+  --kanso-bg-hover: #eeece5;
 
-  /* Borders */
-  --kanso-border: #e5e7eb;
-  --kanso-border-strong: #d1d5db;
+  /* Borders — warm neutrals matched to paper. */
+  --kanso-border: #e8e6e0;
+  --kanso-border-strong: #d7d4cd;
 
-  /* Text */
-  --kanso-fg: #111827;
-  --kanso-fg-muted: #6b7280;
-  --kanso-fg-subtle: #9ca3af;
-  --kanso-fg-on-accent: #ffffff;
+  /* Text — Ink primary, soft/mute for muted/subtle. */
+  --kanso-fg: #1b1a17;
+  --kanso-fg-muted: #5a5751;
+  --kanso-fg-subtle: #8a857c;
+  --kanso-fg-on-accent: #fcfbf9;
 
-  /* Accent (primary action) */
-  --kanso-accent: #3b82f6;
-  --kanso-accent-strong: #2563eb;
-  --kanso-accent-bg: #eff6ff;
-  --kanso-accent-ring: rgba(59, 130, 246, 0.18);
+  /* Accent — Ink (monochrome, no color). */
+  --kanso-accent: #1b1a17;
+  --kanso-accent-strong: #000000;
+  --kanso-accent-bg: rgba(27, 26, 23, 0.06);
+  --kanso-accent-ring: rgba(27, 26, 23, 0.25);
 
   /* Status: danger / warning / success */
   --kanso-danger: #dc2626;
@@ -65,8 +65,13 @@
   --kanso-shadow-drawer: -2px 0 16px rgba(0, 0, 0, 0.08);
   --kanso-shadow-modal: 0 16px 40px rgba(0, 0, 0, 0.2);
 
-  /* Type */
-  --kanso-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  /* Type — Ember: Public Sans body, Newsreader display, IBM Plex Mono meta.
+     Fonts are loaded via @fontsource in main.tsx; system fallbacks are
+     stylistically close enough that a missing font never breaks layout. */
+  --kanso-font:
+    'Public Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --kanso-font-display: 'Newsreader', ui-serif, Georgia, serif;
+  --kanso-font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* Doc-title (card modal). 22px semibold + tight tracking; used ONLY by
      the card-as-doc modal title. Form inputs keep .kanso-title-input. */
@@ -85,34 +90,33 @@
 }
 
 /*
- * Dark theme.
+ * Dark theme — Ember cocoa-neutral near-black.
  *
- * Backgrounds sit in the #0e0f12 → #1c1f26 range — true dark, not inverted.
- * Accent (#5b8cff) is lifted from the light-mode blue to keep AA contrast
- * on dark surfaces: ratio ≈ 5.0 against --kanso-bg-elevated (#16181d) and
- * ≈ 9.0 against --kanso-fg (#e4e6ea). Primary text contrast on bg-elevated
- * is ≈ 13.3 (AAA).
+ * Paper #131315 → #1a1a1c, ink #e8e6e0. Accent is the ink itself
+ * (#e8e6e0) — pure monochrome, matching the light theme's philosophy
+ * of "no accent" accent. Contrast: ink on paper-2 ≈ 15.0 (AAA);
+ * ink-soft on paper-2 ≈ 6.6 (AA).
  */
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  --kanso-bg: #0e0f12;
-  --kanso-bg-elevated: #16181d;
-  --kanso-bg-subtle: #1a1c22;
-  --kanso-bg-hover: #1f2229;
+  --kanso-bg: #131315;
+  --kanso-bg-elevated: #1a1a1c;
+  --kanso-bg-subtle: #17171a;
+  --kanso-bg-hover: #202024;
 
-  --kanso-border: #2a2d35;
-  --kanso-border-strong: #3a3e48;
+  --kanso-border: #26262a;
+  --kanso-border-strong: #333338;
 
-  --kanso-fg: #e4e6ea;
-  --kanso-fg-muted: #9ba0a8;
-  --kanso-fg-subtle: #6f747d;
-  --kanso-fg-on-accent: #0e0f12;
+  --kanso-fg: #e8e6e0;
+  --kanso-fg-muted: #9e9a90;
+  --kanso-fg-subtle: #6d6a63;
+  --kanso-fg-on-accent: #131315;
 
-  --kanso-accent: #5b8cff;
-  --kanso-accent-strong: #7ba3ff;
-  --kanso-accent-bg: rgba(91, 140, 255, 0.14);
-  --kanso-accent-ring: rgba(91, 140, 255, 0.28);
+  --kanso-accent: #e8e6e0;
+  --kanso-accent-strong: #ffffff;
+  --kanso-accent-bg: rgba(232, 230, 224, 0.08);
+  --kanso-accent-ring: rgba(232, 230, 224, 0.22);
 
   --kanso-danger: #f87171;
   --kanso-danger-fg: #fca5a5;
@@ -124,8 +128,8 @@
   --kanso-success-fg: #34d399;
   --kanso-success-bg: rgba(52, 211, 153, 0.12);
 
-  --kanso-code-fg: #e4e6ea;
-  --kanso-code-bg: #0a0b0e;
+  --kanso-code-fg: #e8e6e0;
+  --kanso-code-bg: #0d0d0f;
 
   --kanso-overlay: rgba(0, 0, 0, 0.6);
   --kanso-overlay-soft: rgba(0, 0, 0, 0.4);
@@ -142,23 +146,23 @@
   :root:not([data-theme='light']):not([data-theme='dark']) {
     color-scheme: dark;
 
-    --kanso-bg: #0e0f12;
-    --kanso-bg-elevated: #16181d;
-    --kanso-bg-subtle: #1a1c22;
-    --kanso-bg-hover: #1f2229;
+    --kanso-bg: #131315;
+    --kanso-bg-elevated: #1a1a1c;
+    --kanso-bg-subtle: #17171a;
+    --kanso-bg-hover: #202024;
 
-    --kanso-border: #2a2d35;
-    --kanso-border-strong: #3a3e48;
+    --kanso-border: #26262a;
+    --kanso-border-strong: #333338;
 
-    --kanso-fg: #e4e6ea;
-    --kanso-fg-muted: #9ba0a8;
-    --kanso-fg-subtle: #6f747d;
-    --kanso-fg-on-accent: #0e0f12;
+    --kanso-fg: #e8e6e0;
+    --kanso-fg-muted: #9e9a90;
+    --kanso-fg-subtle: #6d6a63;
+    --kanso-fg-on-accent: #131315;
 
-    --kanso-accent: #5b8cff;
-    --kanso-accent-strong: #7ba3ff;
-    --kanso-accent-bg: rgba(91, 140, 255, 0.14);
-    --kanso-accent-ring: rgba(91, 140, 255, 0.28);
+    --kanso-accent: #e8e6e0;
+    --kanso-accent-strong: #ffffff;
+    --kanso-accent-bg: rgba(232, 230, 224, 0.08);
+    --kanso-accent-ring: rgba(232, 230, 224, 0.22);
 
     --kanso-danger: #f87171;
     --kanso-danger-fg: #fca5a5;
@@ -170,8 +174,8 @@
     --kanso-success-fg: #34d399;
     --kanso-success-bg: rgba(52, 211, 153, 0.12);
 
-    --kanso-code-fg: #e4e6ea;
-    --kanso-code-bg: #0a0b0e;
+    --kanso-code-fg: #e8e6e0;
+    --kanso-code-bg: #0d0d0f;
 
     --kanso-overlay: rgba(0, 0, 0, 0.6);
     --kanso-overlay-soft: rgba(0, 0, 0, 0.4);

@@ -8,10 +8,10 @@ use crate::Result;
 /// The four fixed kanban columns, in seed order. Users cannot create,
 /// rename, reorder, or delete columns — every board has exactly these.
 pub const FIXED_COLUMNS: &[(&str, &str)] = &[
-    ("Incoming", "#9CA3AF"),
-    ("Todo", "#3B82F6"),
-    ("In Progress", "#F59E0B"),
-    ("Done", "#10B981"),
+    ("Incoming", "#9c9084"),
+    ("Todo", "#4d6ea9"),
+    ("In Progress", "#c47a2f"),
+    ("Done", "#5c8f6a"),
 ];
 
 pub struct ColumnRepo;

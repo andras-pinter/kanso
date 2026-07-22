@@ -81,7 +81,7 @@ export default function Column({ column, cards }: Props) {
           title="Add task"
           onClick={() => setAdding(true)}
         >
-          +
+          ＋
         </button>
       </header>
       {adding && (

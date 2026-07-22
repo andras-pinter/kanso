@@ -397,8 +397,8 @@ body {
 .kanso-columns {
   flex: 1;
   display: flex;
-  gap: 24px;
-  padding: 16px 24px 24px;
+  gap: 0;
+  padding: 12px 12px 16px;
   overflow-x: auto;
   overflow-y: hidden;
   align-items: stretch;
@@ -417,13 +417,21 @@ body {
   max-width: 360px;
   max-height: 100%;
   box-sizing: border-box;
+  padding: 0 12px;
+}
+
+/* Dashed vertical separator between columns. Kept off the first column
+   so cards align cleanly to the left edge of the board area. */
+.kanso-column + .kanso-column {
+  border-left: 1px dashed var(--kanso-border);
 }
 
 .kanso-column-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0;
+  padding: 0 4px 0 4px;
+  margin-bottom: 2px;
 }
 
 .kanso-column-title {
@@ -434,29 +442,31 @@ body {
 }
 
 .kanso-column-dot {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 999px;
   flex-shrink: 0;
 }
 
 .kanso-column-name {
   margin: 0;
-  font-size: 13px;
-  font-weight: 600;
+  font-family: var(--kanso-font-display);
+  font-size: 14px;
+  font-weight: 500;
   color: var(--kanso-fg);
   letter-spacing: -0.005em;
 }
 
 .kanso-column-count {
+  font-family: var(--kanso-font-mono);
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--kanso-fg-subtle);
-  background: var(--kanso-bg-subtle);
-  border-radius: 999px;
-  padding: 2px 8px;
-  min-width: 18px;
-  text-align: center;
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  min-width: 0;
+  text-align: left;
 }
 
 .kanso-column-count--empty {
@@ -576,9 +586,9 @@ body {
   background: transparent;
   border: none;
   border-radius: var(--kanso-radius-sm, 4px);
-  color: var(--kanso-fg-muted);
+  color: var(--kanso-fg-subtle);
   font: inherit;
-  font-size: 16px;
+  font-size: 14px;
   line-height: 1;
   cursor: pointer;
   flex-shrink: 0;

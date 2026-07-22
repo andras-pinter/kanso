@@ -8,15 +8,19 @@ import ConnectAppsPanel from './connect/ConnectAppsPanel';
 import ThemeToggle from './theme/ThemeToggle';
 
 const EditorDemo = lazy(() => import('./editor/EditorDemo'));
+const EditorLab = lazy(() => import('./editor-lab/Playground'));
 
 // Phase 2 wired BlockSuite into the card drawer. We keep the lazy-import
 // boundary exercised behind a debug flag so the editor chunk path doesn't
 // bit-rot if no card is opened during a session.
 const DEBUG_EDITOR = false;
+// Prototype/editor-swap: side-by-side harness for candidate replacements.
+const DEBUG_EDITOR_LAB = true;
 type View = 'board' | 'connect';
 
 export default function App() {
   const [showEditor, setShowEditor] = useState(false);
+  const [showEditorLab, setShowEditorLab] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
   const [showCliExtConsent, setShowCliExtConsent] = useState(false);
   const [view, setView] = useState<View>('board');
@@ -71,9 +75,22 @@ export default function App() {
               {showEditor ? 'Hide editor demo' : 'Show editor demo'}
             </button>
           )}
+          {DEBUG_EDITOR_LAB && (
+            <button
+              type="button"
+              className="kanso-debug-btn"
+              onClick={() => setShowEditorLab((v) => !v)}
+            >
+              {showEditorLab ? 'Hide editor lab' : 'Editor lab'}
+            </button>
+          )}
         </div>
       </header>
-      {showEditor ? (
+      {showEditorLab ? (
+        <Suspense fallback={<p>Loading editor lab…</p>}>
+          <EditorLab />
+        </Suspense>
+      ) : showEditor ? (
         <Suspense fallback={<p>Loading editor…</p>}>
           <EditorDemo />
         </Suspense>

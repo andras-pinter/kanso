@@ -6,6 +6,7 @@ import CliExtConsentModal from './CliExtConsentModal';
 import { cliExtStatus, isTauri } from './kanban/api/client';
 import ConnectAppsPanel from './connect/ConnectAppsPanel';
 import ThemeToggle from './theme/ThemeToggle';
+import StatusBar from './StatusBar';
 
 type View = 'board' | 'connect';
 
@@ -58,6 +59,7 @@ export default function App() {
         </div>
       </header>
       {view === 'connect' ? <ConnectAppsPanel /> : <KanbanBoard />}
+      <StatusBar />
       {manageOpen && <ManageBoardsDrawer onClose={() => setManageOpen(false)} />}
       {showCliExtConsent && <CliExtConsentModal onDone={() => setShowCliExtConsent(false)} />}
     </div>

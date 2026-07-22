@@ -2061,3 +2061,57 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* ---------- Status bar ---------- */
+
+.kanso-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 12px;
+  font-family: var(--kanso-font);
+  font-size: 10.5px;
+  color: var(--kanso-fg-subtle);
+  border-top: 1px solid var(--kanso-border);
+  background: transparent;
+  flex-shrink: 0;
+}
+
+.kanso-status-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--kanso-fg-subtle);
+  flex-shrink: 0;
+}
+
+.kanso-status-dot--ok {
+  background: var(--kanso-success-fg);
+}
+
+.kanso-status-dot--off {
+  background: var(--kanso-danger);
+}
+
+.kanso-status-mono {
+  font-family: var(--kanso-font-mono);
+}
+
+.kanso-status-hints {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.kanso-kbd {
+  font-family: var(--kanso-font-mono);
+  font-size: 10px;
+  color: var(--kanso-fg-muted);
+  background: var(--kanso-bg-subtle);
+  border: 1px solid var(--kanso-border);
+  border-radius: 3px;
+  padding: 1px 4px;
+  line-height: 1;
+}

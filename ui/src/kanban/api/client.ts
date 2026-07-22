@@ -50,6 +50,8 @@ export const isTauri = (): boolean =>
 
 export const defaultColumn = (): Promise<SeedIds> => invoker('default_column');
 
+export const apiPort = (): Promise<number> => invoker('api_port');
+
 export const cliExtStatus = (): Promise<CliExtStatus> => invoker('cli_ext_status');
 
 export const cliExtSetConsent = (install: boolean): Promise<CliExtStatus> =>

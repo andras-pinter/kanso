@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 import { visualizer } from 'rollup-plugin-visualizer';
 
 const TIPTAP_DEPS = [
@@ -14,6 +15,7 @@ const TIPTAP_DEPS = [
 export default defineConfig({
   plugins: [
     react(),
+    tailwindcss(),
     visualizer({ filename: 'dist/stats.html', gzipSize: true, brotliSize: true }),
   ],
   resolve: { extensions: ['.ts', '.tsx', '.js'] },

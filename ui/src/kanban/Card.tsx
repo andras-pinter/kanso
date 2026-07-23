@@ -15,6 +15,9 @@ interface Props {
 export default function Card({ card }: Props) {
   const selectCard = useKanbanStore((s) => s.selectCard);
   const selected = useKanbanStore((s) => s.selectedCardId === card.id);
+  const columnColor = useKanbanStore(
+    (s) => s.columns.find((c) => c.id === card.column_id)?.color ?? null,
+  );
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: card.id,
     data: { type: 'card', columnId: card.column_id },
@@ -71,6 +74,13 @@ export default function Card({ card }: Props) {
         aria-hidden="true"
         className="kanso-card-grip"
       />
+      {columnColor && (
+        <span
+          className="kanso-card-status-dot"
+          style={{ backgroundColor: columnColor }}
+          aria-hidden="true"
+        />
+      )}
       <div className="kanso-card-title">
         {card.title}
         {hasBody && (
@@ -90,8 +100,18 @@ export default function Card({ card }: Props) {
 // useSortable — overlay manages its own transform/positioning.
 export function CardOverlay({ card }: Props) {
   const hasBody = card.has_body;
+  const columnColor = useKanbanStore(
+    (s) => s.columns.find((c) => c.id === card.column_id)?.color ?? null,
+  );
   return (
     <div className="kanso-card kanso-card--overlay">
+      {columnColor && (
+        <span
+          className="kanso-card-status-dot"
+          style={{ backgroundColor: columnColor }}
+          aria-hidden="true"
+        />
+      )}
       <div className="kanso-card-title">
         {card.title}
         {hasBody && (

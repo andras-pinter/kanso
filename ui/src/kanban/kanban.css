@@ -599,6 +599,19 @@ body {
   );
 }
 
+/* Small column-color dot pinned to the top-left of the card so the
+   column identity is legible at a glance — mirrors the grip on the
+   right side, out of the flex flow so centering isn't affected. */
+.kanso-card-status-dot {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  pointer-events: none;
+}
+
 /* Phase 1: card face carries only title + tags + this "has notes" dot.
    Body preview is dropped; the body itself lives in the card modal. */
 .kanso-card-has-body {

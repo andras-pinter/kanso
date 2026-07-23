@@ -79,18 +79,32 @@ export default function KanbanBoard() {
     }),
   );
 
-  // Composed collision detection: pointerWithin first so an empty
-  // column body (whose bounding rect is narrow relative to a full
-  // column) still wins when the pointer is over it; closestCorners is
-  // the fallback for the common case of dragging over other cards.
-  // Without this, dnd-kit's default closestCorners strategy compares
-  // corner distances and a nearly-empty column's droppable rect ends
-  // up "far" from the dragged card's corners, so cross-column drops
+  // Composed collision detection: use the pointer to pick a target
+  // column (so an empty column's body still wins when the pointer is
+  // over it), then run closestCorners RESTRICTED to that column's
+  // cards. This preserves card-to-card reorder — including drops in
+  // the small gap between cards — while fixing the empty-column case.
+  // Without the pointer-first step, closestCorners compares corner
+  // distances and a nearly-empty column's droppable rect ends up
+  // "far" from the dragged card's corners, so cross-column drops
   // onto empty columns silently fail.
   const collisionDetection = useCallback<CollisionDetection>((args) => {
     const pointerHits = pointerWithin(args);
-    if (pointerHits.length > 0) return pointerHits;
-    return closestCorners(args);
+    const pointerCol = pointerHits.find((h) => String(h.id).startsWith('column:'));
+    if (!pointerCol) {
+      // Pointer isn't over any column — fall back to defaults.
+      return pointerHits.length > 0 ? pointerHits : closestCorners(args);
+    }
+    const targetColumnId = String(pointerCol.id).slice('column:'.length);
+    const cornerHits = closestCorners(args);
+    const inColumnCard = cornerHits.find((h) => {
+      const id = String(h.id);
+      if (id.startsWith('column:')) return false;
+      const droppable = args.droppableContainers.find((c) => c.id === h.id);
+      return droppable?.data.current?.columnId === targetColumnId;
+    });
+    if (inColumnCard) return [inColumnCard];
+    return [pointerCol];
   }, []);
 
   const draggingCard = useMemo<CardListDto | null>(() => {

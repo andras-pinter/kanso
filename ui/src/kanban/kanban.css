@@ -508,7 +508,7 @@ body {
   background: var(--kanso-bg-elevated);
   border: 1px solid var(--kanso-border);
   border-radius: var(--kanso-radius-lg);
-  padding: 12px 14px 10px 14px;
+  padding: 12px 20px 10px 14px;
   box-shadow: var(--kanso-shadow-card);
   cursor: grab;
   user-select: none;

@@ -504,7 +504,7 @@ body {
   justify-content: flex-start;
   align-items: stretch;
   gap: 8px;
-  height: 96px;
+  min-height: 68px;
   background: var(--kanso-bg-elevated);
   border: 1px solid var(--kanso-border);
   border-radius: var(--kanso-radius-lg);
@@ -571,13 +571,12 @@ body {
 }
 
 .kanso-card-title {
-  /* Ghost-fade truncation: reserve a 2-line box so the card keeps a
-     stable 96px height regardless of title length. Long titles get
-     their bottom line ghosted horizontally by the mask instead of
-     hard-ellipsed. */
+  /* Dynamic-height title: the box hugs the natural line count up to
+     two lines. Below that the card sits at its 68px min-height; above
+     that (3+ lines of text) the mask ghosts the bottom of the 2nd
+     line so long titles fade out gracefully. */
   width: 100%;
   padding-left: 14px;
-  min-height: calc(1.4em * 2);
   max-height: calc(1.4em * 2);
   overflow: hidden;
   font-size: 14px;

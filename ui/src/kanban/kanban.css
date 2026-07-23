@@ -367,6 +367,7 @@ body {
 
 .kanso-dialog-input {
   width: 100%;
+  box-sizing: border-box;
   margin-top: 6px;
   padding: 8px 10px;
   border: 1px solid var(--kanso-border);
@@ -500,7 +501,7 @@ body {
   position: relative;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: center;
   gap: 8px;
   min-height: 68px;
@@ -600,12 +601,13 @@ body {
 }
 
 /* Small column-color dot pinned to the top-left of the card so the
-   column identity is legible at a glance — mirrors the grip on the
-   right side, out of the flex flow so centering isn't affected. */
+   column identity is legible at a glance. Vertically aligned with the
+   first line of the title text (see .kanso-card padding-top + title
+   line-height). */
 .kanso-card-status-dot {
   position: absolute;
-  top: 8px;
-  left: 8px;
+  top: 19px;
+  left: 12px;
   width: 8px;
   height: 8px;
   border-radius: 999px;
@@ -1435,6 +1437,32 @@ body {
   border-color: var(--kanso-accent);
   box-shadow: 0 0 0 3px var(--kanso-accent-ring);
   color: var(--kanso-fg);
+}
+
+.kanso-icon-btn--danger:hover {
+  background: var(--kanso-danger-bg, var(--kanso-bg-hover));
+  color: var(--kanso-danger);
+}
+
+/* Chip that doubles as its own rename input in ManageTagsDrawer. Keeps
+   the pill silhouette from .kanso-tag-chip while behaving like a text
+   field on focus. */
+.kanso-tag-chip-input {
+  flex: 1;
+  min-width: 120px;
+  border: 1px solid transparent;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  outline: none;
+  cursor: text;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.kanso-tag-chip-input:focus {
+  border-color: var(--kanso-accent);
+  box-shadow: 0 0 0 3px var(--kanso-accent-ring);
 }
 
 /* Overflow menu on the card-doc header. Reuses .kanso-menu; positioning

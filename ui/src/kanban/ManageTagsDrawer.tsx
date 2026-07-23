@@ -4,6 +4,7 @@
 // longer exposes a color picker.
 
 import { useEffect, useRef, useState } from 'react';
+import { Trash2 } from 'lucide-react';
 import { useKanbanStore } from './hooks/useKanbanStore';
 import { tagChipStyle } from './tagChipStyle';
 import type { TagDto } from './types';
@@ -126,18 +127,13 @@ function TagRow({ tag, onRename, onDelete }: RowProps) {
 
   return (
     <div className="kanso-board-row">
-      <span
-        className="kanso-tag-chip"
-        style={tagChipStyle(tag.id)}
-        aria-hidden="true"
-        title={tag.name}
-      >
-        <span className="kanso-tag-chip-name">{tag.name}</span>
-      </span>
       <input
         ref={nameRef}
-        className="kanso-board-row-name"
+        className="kanso-tag-chip kanso-tag-chip-input"
+        style={tagChipStyle(tag.id)}
         value={name}
+        title={tag.name}
+        aria-label={`Rename tag ${tag.name}`}
         onChange={(e) => setName(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => {
@@ -151,8 +147,14 @@ function TagRow({ tag, onRename, onDelete }: RowProps) {
         }}
       />
       <div className="kanso-board-row-actions">
-        <button type="button" className="kanso-btn kanso-btn--danger" onClick={onDelete}>
-          Delete
+        <button
+          type="button"
+          className="kanso-icon-btn kanso-icon-btn--danger"
+          onClick={onDelete}
+          aria-label={`Delete tag ${tag.name}`}
+          title="Delete tag"
+        >
+          <Trash2 size={14} aria-hidden="true" />
         </button>
       </div>
     </div>

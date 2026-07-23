@@ -504,7 +504,7 @@ body {
   justify-content: flex-start;
   align-items: stretch;
   gap: 8px;
-  height: 96px;
+  height: 68px;
   background: var(--kanso-bg-elevated);
   border: 1px solid var(--kanso-border);
   border-radius: var(--kanso-radius-lg);
@@ -571,31 +571,31 @@ body {
 }
 
 .kanso-card-title {
-  /* Ghost-fade truncation: reserve a fixed 2-line box for the title
-     so cards keep a stable height whether they have a short title,
-     a long title, or an added tag row. Long titles get their bottom
-     line ghosted by the mask instead of hard-ellipsed. */
+  /* Ghost-fade truncation on a single line: the title box is exactly
+     one line tall so long titles get their trailing characters faded
+     out horizontally instead of hard-ellipsed. Cards stay a stable
+     68px whether they have a short title, a long title, or a tag row
+     underneath. */
   width: 100%;
-  min-height: calc(1.4em * 2);
-  max-height: calc(1.4em * 2);
+  min-height: 1.4em;
+  max-height: 1.4em;
   overflow: hidden;
+  white-space: nowrap;
   font-size: 14px;
   font-weight: 500;
   line-height: 1.4;
   color: var(--kanso-fg);
   text-align: left;
-  word-wrap: break-word;
-  overflow-wrap: anywhere;
   -webkit-mask-image: linear-gradient(
-    to bottom,
+    to right,
     black 0,
-    black 55%,
+    black 88%,
     transparent 100%
   );
   mask-image: linear-gradient(
-    to bottom,
+    to right,
     black 0,
-    black 55%,
+    black 88%,
     transparent 100%
   );
 }

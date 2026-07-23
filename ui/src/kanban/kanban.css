@@ -1095,11 +1095,17 @@ body {
 }
 
 .kanso-title-input:focus,
-.kanso-body-textarea:focus,
-.kanso-add-textarea:focus {
+.kanso-body-textarea:focus {
   outline: none;
   border-color: var(--kanso-accent);
   box-shadow: 0 0 0 3px var(--kanso-accent-ring);
+}
+
+/* Inline draft textarea sits inside .kanso-card--draft, which already
+   owns the accent ring; keep the field itself borderless on focus. */
+.kanso-add-textarea:focus {
+  outline: none;
+  box-shadow: none;
 }
 
 .kanso-body-textarea {

@@ -9,8 +9,10 @@ import {
   KeyboardSensor,
   PointerSensor,
   closestCorners,
+  pointerWithin,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
@@ -76,6 +78,20 @@ export default function KanbanBoard() {
       },
     }),
   );
+
+  // Composed collision detection: pointerWithin first so an empty
+  // column body (whose bounding rect is narrow relative to a full
+  // column) still wins when the pointer is over it; closestCorners is
+  // the fallback for the common case of dragging over other cards.
+  // Without this, dnd-kit's default closestCorners strategy compares
+  // corner distances and a nearly-empty column's droppable rect ends
+  // up "far" from the dragged card's corners, so cross-column drops
+  // onto empty columns silently fail.
+  const collisionDetection = useCallback<CollisionDetection>((args) => {
+    const pointerHits = pointerWithin(args);
+    if (pointerHits.length > 0) return pointerHits;
+    return closestCorners(args);
+  }, []);
 
   const draggingCard = useMemo<CardListDto | null>(() => {
     if (!draggingCardId) return null;
@@ -179,7 +195,7 @@ export default function KanbanBoard() {
       </div>
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCorners}
+        collisionDetection={collisionDetection}
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
         onDragCancel={onDragCancel}

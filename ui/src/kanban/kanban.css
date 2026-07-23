@@ -498,17 +498,23 @@ body {
 
 .kanso-card {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 68px;
   background: var(--kanso-bg-elevated);
   border: 1px solid var(--kanso-border);
   border-radius: var(--kanso-radius-lg);
-  padding: 10px;
+  padding: 12px 12px 10px;
   box-shadow: var(--kanso-shadow-card);
   cursor: grab;
   user-select: none;
+  /* NOTE: do NOT transition `transform`. dnd-kit sets transform inline
+     on every pointer frame during a drag; a transition would make cards
+     trail the cursor by 120ms. */
   transition:
     border-color 120ms ease,
-    box-shadow 120ms ease,
-    transform 120ms ease;
+    box-shadow 120ms ease;
 }
 
 .kanso-card:focus {
@@ -540,7 +546,6 @@ body {
 .kanso-card:hover {
   border-color: var(--kanso-border-strong);
   box-shadow: var(--kanso-shadow-card-hover);
-  transform: translateY(-1px);
 }
 
 .kanso-card:active {
@@ -563,9 +568,9 @@ body {
 }
 
 .kanso-card-title {
-  font-size: 13px;
-  font-weight: 400;
-  line-height: 1.375;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
   color: var(--kanso-fg);
   word-wrap: break-word;
 }

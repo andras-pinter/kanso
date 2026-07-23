@@ -508,7 +508,7 @@ body {
   background: var(--kanso-bg-elevated);
   border: 1px solid var(--kanso-border);
   border-radius: var(--kanso-radius-lg);
-  padding: 12px 14px 10px 28px;
+  padding: 12px 14px 10px 14px;
   box-shadow: var(--kanso-shadow-card);
   cursor: grab;
   user-select: none;
@@ -577,12 +577,13 @@ body {
      68px whether they have a short title, a long title, or a tag row
      underneath. */
   width: 100%;
+  padding-left: 14px;
   min-height: 1.4em;
   max-height: 1.4em;
   overflow: hidden;
   white-space: nowrap;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 1.4;
   color: var(--kanso-fg);
   text-align: left;
@@ -1716,6 +1717,8 @@ body {
   flex-wrap: wrap;
   gap: 4px;
   margin-top: auto;
+  padding-top: 6px;
+  border-top: 1px solid var(--kanso-border);
 }
 .kanso-tag-chip {
   display: inline-flex;
